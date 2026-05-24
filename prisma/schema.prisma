@@ -1,9 +1,6 @@
 // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -13,20 +10,107 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model User {
+model Project {
+  id          String    @id @default(cuid())
+  name        String
+  methodology String    @default("IPCC-2023")
+  status      String    @default("Active")
+  areaHa      Float     @default(0)
+  location    String    @default("")
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  plots       Plot[]
+  credits     CarbonCredit[]
+  certificates Certificate[]
+  submissions Submission[]
+  ingestionLogs IngestionLog[]
+}
+
+model Plot {
+  id          String   @id @default(cuid())
+  plotId      String   @unique
+  coordinates String   @default("[]") // JSON array of [lat, lon]
+  ownerInfo   String   @default("")
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id])
+  trackType   String   @default("") // biochar, awd, biogas, solar, forest
+  status      String   @default("REGISTERED")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model IngestionLog {
+  id           String   @id @default(cuid())
+  projectId    String
+  project      Project  @relation(fields: [projectId], references: [id])
+  sourceType   String   // satellite, iot, drone, photo, lidar, etc.
+  activityType String
+  payload      String   @default("{}") // JSON
+  evidenceUrl  String   @default("")
+  integrityHash String  @default("")
+  classification String @default("PUBLIC")
+  isEncrypted  Boolean  @default(false)
+  timestamp    DateTime @default(now())
+}
+
+model CarbonCredit {
   id        String   @id @default(cuid())
-  email     String   @unique
-  name      String?
+  tokenId   String   @unique
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id])
+  amount    Float    @default(0)
+  status    String   @default("Available") // Available, Traded, Retired
+  buyer     String   @default("")
+  metadata  String   @default("{}") // JSON
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
 
-model Post {
+model Certificate {
+  id           String   @id @default(cuid())
+  certId       String   @unique
+  projectId    String
+  project      Project  @relation(fields: [projectId], references: [id])
+  trackType    String
+  status       String   @default("SUBMITTED") // SUBMITTED, APPROVED, REJECTED
+  amountTco2e  Float    @default(0)
+  masterCertId String   @default("")
+  validator    String   @default("System-Auto-Validator")
+  issuedAt     DateTime @default(now())
+}
+
+model Submission {
   id        String   @id @default(cuid())
-  title     String
-  content   String?
-  published Boolean  @default(false)
-  authorId  String
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id])
+  data      String   @default("{}") // JSON
+  status    String   @default("READY_FOR_VERIFICATION")
   createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  agentName  String
+  action     String
+  projectId  String   @default("")
+  details    String   @default("")
+  severity   String   @default("INFO") // INFO, WARNING, ERROR
+  timestamp  DateTime @default(now())
+}
+
+model Alert {
+  id        String   @id @default(cuid())
+  severity  String   @default("INFO") // INFO, WARNING, CRITICAL
+  message   String
+  resolved  Boolean  @default(false)
+  timestamp DateTime @default(now())
+}
+
+model Settlement {
+  id        String   @id @default(cuid())
+  assetId   String
+  amount    Float
+  status    String   @default("processed")
+  timestamp DateTime @default(now())
 }

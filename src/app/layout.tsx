@@ -14,10 +14,10 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Z.ai Code Scaffold - AI-Powered Development",
-  description: "Modern Next.js scaffold optimized for AI-powered development with Z.ai. Built with TypeScript, Tailwind CSS, and shadcn/ui.",
-  keywords: ["Z.ai", "Next.js", "TypeScript", "Tailwind CSS", "shadcn/ui", "AI development", "React"],
-  authors: [{ name: "Z.ai Team" }],
+  title: "dMRV Platform — Carbon Credit Dashboard",
+  description: "Digital Measurement, Reporting & Verification platform for carbon credit management. Built with Next.js, TypeScript, and shadcn/ui.",
+  keywords: ["dMRV", "carbon credits", "T-VER", "emission reduction", "sustainability", "Next.js"],
+  authors: [{ name: "dMRV Platform Team" }],
   icons: {
     icon: "https://z-cdn.chatglm.cn/z-ai/static/logo.svg",
   },
