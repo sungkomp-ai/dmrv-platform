@@ -17,6 +17,12 @@ import {
   Info,
   RefreshCw,
   AlertCircle,
+  Layers,
+  TreePine,
+  Sun,
+  Flame,
+  Droplets,
+  Zap,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -25,6 +31,8 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import ProjectMap, { MapProject, MapPlot } from './ProjectMap';
 
 interface DashboardStats {
   totalProjects: number;
@@ -42,6 +50,16 @@ interface Project {
   methodology: string;
   areaHa: number;
   location: string;
+  plots: Array<{
+    id: string;
+    plotId: string;
+    coordinates: string;
+    ownerInfo: string;
+    trackType: string;
+    status: string;
+  }>;
+  credits: Array<{ amount: number; status: string }>;
+  certificates: Array<{ id: string }>;
 }
 
 interface HealthMetrics {
@@ -172,9 +190,85 @@ function severityToStatus(severity: string): 'success' | 'warning' | 'info' | 'e
   }
 }
 
+// Convert raw project data to MapProject format
+function toMapProjects(projects: Project[]): MapProject[] {
+  return projects.map((project) => {
+    // Collect all plot coordinates to find center
+    const allCoords: [number, number][] = [];
+    const mapPlots: MapPlot[] = project.plots.map((plot) => {
+      let coords: [number, number][] = [];
+      try {
+        const parsed = JSON.parse(plot.coordinates);
+        if (Array.isArray(parsed)) {
+          coords = parsed.map((c: number[]) => [c[0], c[1]] as [number, number]);
+          allCoords.push(...coords);
+        }
+      } catch {
+        // ignore parse errors
+      }
+      return {
+        id: plot.id,
+        plotId: plot.plotId,
+        coordinates: coords,
+        trackType: plot.trackType,
+        status: plot.status,
+        ownerInfo: plot.ownerInfo,
+        projectId: project.id,
+        projectName: project.name,
+        credits: project.credits.reduce((s, c) => s + c.amount, 0),
+        certificates: project.certificates.length,
+      };
+    });
+
+    // Calculate center from coordinates or use location-based defaults
+    let center: [number, number] = [13.75, 100.5]; // Default: Bangkok
+    if (allCoords.length > 0) {
+      const avgLat = allCoords.reduce((s, c) => s + c[0], 0) / allCoords.length;
+      const avgLon = allCoords.reduce((s, c) => s + c[1], 0) / allCoords.length;
+      center = [avgLat, avgLon];
+    } else if (project.location.includes('สมุทรสาคร')) {
+      center = [13.55, 100.27];
+    } else if (project.location.includes('ลพบุรี')) {
+      center = [14.80, 100.65];
+    } else if (project.location.includes('นครราชสีมา')) {
+      center = [14.97, 102.08];
+    }
+
+    return {
+      id: project.id,
+      name: project.name,
+      methodology: project.methodology,
+      status: project.status,
+      areaHa: project.areaHa,
+      location: project.location,
+      center,
+      plots: mapPlots,
+      totalCredits: project.credits.reduce((s, c) => s + c.amount, 0),
+      totalCertificates: project.certificates.length,
+    };
+  });
+}
+
+const trackTypeIcons: Record<string, React.ElementType> = {
+  forest: TreePine,
+  biochar: Flame,
+  awd: Droplets,
+  biogas: Zap,
+  solar: Sun,
+};
+
+const trackTypeColors2: Record<string, string> = {
+  forest: 'bg-emerald-50 text-emerald-700',
+  biochar: 'bg-amber-50 text-amber-700',
+  awd: 'bg-blue-50 text-blue-700',
+  biogas: 'bg-purple-50 text-purple-700',
+  solar: 'bg-red-50 text-red-700',
+};
+
 export default function DashboardView() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [mapProjects, setMapProjects] = useState<MapProject[]>([]);
   const [health, setHealth] = useState<HealthMetrics | null>(null);
   const [activity, setActivity] = useState<ActivityItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -192,13 +286,14 @@ export default function DashboardView() {
       if (!statsRes.ok) throw new Error('Failed to fetch project data');
       const statsData = await statsRes.json();
       setStats(statsData.stats);
-      setProjects(statsData.projects || []);
+      const rawProjects: Project[] = statsData.projects || [];
+      setProjects(rawProjects);
+      setMapProjects(toMapProjects(rawProjects));
 
       if (monitoringRes.ok) {
         const monitoringData = await monitoringRes.json();
         setHealth(monitoringData.health);
 
-        // Convert audit logs to activity items
         const auditLogs: AuditLogEntry[] = monitoringData.recentAuditLogs || [];
         const activityItems: ActivityItem[] = auditLogs.slice(0, 10).map((log) => ({
           id: log.id,
@@ -262,6 +357,20 @@ export default function DashboardView() {
       ]
     : [];
 
+  // Compute track type summary from all projects
+  const trackTypeSummary: Record<string, { count: number; area: number; credits: number }> = {};
+  projects.forEach((p) => {
+    p.plots.forEach((plot) => {
+      const t = plot.trackType || 'unknown';
+      if (!trackTypeSummary[t]) {
+        trackTypeSummary[t] = { count: 0, area: 0, credits: 0 };
+      }
+      trackTypeSummary[t].count++;
+      trackTypeSummary[t].area += p.areaHa / p.plots.length;
+      trackTypeSummary[t].credits += p.credits.reduce((s, c) => s + c.amount, 0) / p.plots.length;
+    });
+  });
+
   return (
     <div className="space-y-6">
       {/* Page Title */}
@@ -302,6 +411,42 @@ export default function DashboardView() {
           ))
         )}
       </div>
+
+      {/* Interactive Map */}
+      <Card className="overflow-hidden">
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Layers className="h-4 w-4 text-emerald-600" />
+                Project & Plot Map
+              </CardTitle>
+              <CardDescription>Geographic overview of all dMRV projects and registered plots in Thailand</CardDescription>
+            </div>
+            <div className="hidden sm:flex items-center gap-2">
+              {Object.entries(trackTypeSummary).map(([type, data]) => {
+                const Icon = trackTypeIcons[type] || MapPin;
+                const colorClass = trackTypeColors2[type] || 'bg-slate-50 text-slate-700';
+                return (
+                  <Badge key={type} variant="secondary" className={`text-[10px] h-6 gap-1 ${colorClass}`}>
+                    <Icon className="h-3 w-3" />
+                    {type} ({data.count})
+                  </Badge>
+                );
+              })}
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="p-0">
+          <div className="h-[450px] lg:h-[500px]">
+            {loading ? (
+              <Skeleton className="w-full h-full" />
+            ) : (
+              <ProjectMap projects={mapProjects} loading={loading} />
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Recent Activity */}
@@ -359,7 +504,7 @@ export default function DashboardView() {
           </CardContent>
         </Card>
 
-        {/* Quick Actions + System Status */}
+        {/* Quick Actions + System Status + Project Summary */}
         <div className="space-y-6">
           {/* Quick Actions */}
           <Card>
@@ -451,6 +596,49 @@ export default function DashboardView() {
                     </Badge>
                   </div>
                 </>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Project Summary by Track Type */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Projects by Type</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {loading ? (
+                <div className="space-y-3">
+                  {Array.from({ length: 3 }).map((_, i) => (
+                    <div key={i} className="flex items-center justify-between">
+                      <Skeleton className="h-4 w-24" />
+                      <Skeleton className="h-4 w-8" />
+                    </div>
+                  ))}
+                </div>
+              ) : Object.entries(trackTypeSummary).length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-4">No plots registered</p>
+              ) : (
+                Object.entries(trackTypeSummary).map(([type, data]) => {
+                  const Icon = trackTypeIcons[type] || MapPin;
+                  const colorClass = trackTypeColors2[type] || 'bg-slate-50 text-slate-700';
+                  return (
+                    <div key={type} className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className={`flex h-7 w-7 items-center justify-center rounded-md ${colorClass}`}>
+                          <Icon className="h-3.5 w-3.5" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium capitalize">{type}</p>
+                          <p className="text-[10px] text-muted-foreground">{Math.round(data.area).toLocaleString()} ha</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm font-semibold">{data.count}</p>
+                        <p className="text-[10px] text-muted-foreground">plots</p>
+                      </div>
+                    </div>
+                  );
+                })
               )}
             </CardContent>
           </Card>
