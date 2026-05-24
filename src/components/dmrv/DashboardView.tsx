@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Leaf,
   FolderKanban,
@@ -15,12 +15,63 @@ import {
   CheckCircle2,
   AlertTriangle,
   Info,
+  RefreshCw,
+  AlertCircle,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+
+interface DashboardStats {
+  totalProjects: number;
+  activeProjects: number;
+  totalAreaHa: number;
+  totalCredits: number;
+  totalCertificates: number;
+  totalPlots: number;
+}
+
+interface Project {
+  id: string;
+  name: string;
+  status: string;
+  methodology: string;
+  areaHa: number;
+  location: string;
+}
+
+interface HealthMetrics {
+  status: string;
+  uptime: string;
+  lastChecked: string;
+  projects: { total: number; active: number };
+  credits: { total: number; available: number };
+  certificates: { total: number; approved: number; pending: number };
+  alerts: { total: number; unresolved: number; critical: number; warning: number };
+  activity: { auditLogsLast24h: number; errorsLast24h: number };
+}
+
+interface AuditLogEntry {
+  id: string;
+  agentName: string;
+  action: string;
+  projectId: string | null;
+  details: string;
+  severity: string;
+  timestamp: string;
+}
+
+interface ActivityItem {
+  id: string;
+  action: string;
+  module: string;
+  timestamp: string;
+  status: 'success' | 'warning' | 'info' | 'error';
+}
 
 interface StatCardProps {
   title: string;
@@ -59,65 +110,22 @@ function StatCard({ title, value, change, trend, icon: Icon, iconBg, iconColor }
   );
 }
 
-const stats: StatCardProps[] = [
-  {
-    title: 'Total Projects',
-    value: '24',
-    change: '+12%',
-    trend: 'up',
-    icon: FolderKanban,
-    iconBg: 'bg-emerald-50',
-    iconColor: 'text-emerald-600',
-  },
-  {
-    title: 'Total Credits (tCO2e)',
-    value: '156,842',
-    change: '+8.3%',
-    trend: 'up',
-    icon: Leaf,
-    iconBg: 'bg-green-50',
-    iconColor: 'text-green-600',
-  },
-  {
-    title: 'Active Plots',
-    value: '1,247',
-    change: '+3.1%',
-    trend: 'up',
-    icon: MapPin,
-    iconBg: 'bg-teal-50',
-    iconColor: 'text-teal-600',
-  },
-  {
-    title: 'Certificates',
-    value: '89',
-    change: '-2.1%',
-    trend: 'down',
-    icon: Award,
-    iconBg: 'bg-amber-50',
-    iconColor: 'text-amber-600',
-  },
-];
-
-interface ActivityItem {
-  id: string;
-  action: string;
-  module: string;
-  timestamp: string;
-  status: 'success' | 'warning' | 'info' | 'error';
+function StatCardSkeleton() {
+  return (
+    <Card>
+      <CardContent className="p-4 lg:p-6">
+        <div className="flex items-start justify-between">
+          <div className="space-y-2 flex-1">
+            <Skeleton className="h-4 w-24" />
+            <Skeleton className="h-8 w-16" />
+            <Skeleton className="h-3 w-32" />
+          </div>
+          <Skeleton className="h-10 w-10 rounded-lg" />
+        </div>
+      </CardContent>
+    </Card>
+  );
 }
-
-const recentActivity: ActivityItem[] = [
-  { id: '1', action: 'Workflow completed for Project RICE-001', module: 'Orchestrator', timestamp: '2 min ago', status: 'success' },
-  { id: '2', action: 'New satellite data ingested (3 images)', module: 'Ingestion', timestamp: '15 min ago', status: 'info' },
-  { id: '3', action: 'T-VER certificate issued #TVER-2024-089', module: 'Certification', timestamp: '1 hr ago', status: 'success' },
-  { id: '4', action: 'Low confidence alert on Biochar calculation', module: 'Orchestrator', timestamp: '2 hr ago', status: 'warning' },
-  { id: '5', action: 'Credit batch #CB-0456 minted (5,000 tCO2e)', module: 'Marketplace', timestamp: '3 hr ago', status: 'success' },
-  { id: '6', action: 'Verification failed for plot P-789', module: 'Verification', timestamp: '4 hr ago', status: 'error' },
-  { id: '7', action: 'Soil GHG audit completed — PASSED', module: 'Audit', timestamp: '5 hr ago', status: 'success' },
-  { id: '8', action: 'New IoT sensor data stream connected', module: 'Ingestion', timestamp: '6 hr ago', status: 'info' },
-  { id: '9', action: 'AWD methodology parameters updated', module: 'Governance', timestamp: '8 hr ago', status: 'info' },
-  { id: '10', action: 'Settlement processed for Trade #TR-1234', module: 'Logistics', timestamp: '10 hr ago', status: 'success' },
-];
 
 const statusIcon = {
   success: CheckCircle2,
@@ -140,22 +148,159 @@ const badgeVariant = {
   error: 'bg-red-50 text-red-700 hover:bg-red-50',
 };
 
+function formatTimestamp(ts: string): string {
+  const date = new Date(ts);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHrs = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+
+  if (diffMins < 1) return 'just now';
+  if (diffMins < 60) return `${diffMins} min ago`;
+  if (diffHrs < 24) return `${diffHrs} hr ago`;
+  return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+}
+
+function severityToStatus(severity: string): 'success' | 'warning' | 'info' | 'error' {
+  switch (severity) {
+    case 'INFO': return 'info';
+    case 'WARNING': return 'warning';
+    case 'ERROR': return 'error';
+    case 'CRITICAL': return 'error';
+    default: return 'success';
+  }
+}
+
 export default function DashboardView() {
+  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [health, setHealth] = useState<HealthMetrics | null>(null);
+  const [activity, setActivity] = useState<ActivityItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [statsRes, monitoringRes] = await Promise.all([
+        fetch('/api/dmrv'),
+        fetch('/api/dmrv/monitoring'),
+      ]);
+
+      if (!statsRes.ok) throw new Error('Failed to fetch project data');
+      const statsData = await statsRes.json();
+      setStats(statsData.stats);
+      setProjects(statsData.projects || []);
+
+      if (monitoringRes.ok) {
+        const monitoringData = await monitoringRes.json();
+        setHealth(monitoringData.health);
+
+        // Convert audit logs to activity items
+        const auditLogs: AuditLogEntry[] = monitoringData.recentAuditLogs || [];
+        const activityItems: ActivityItem[] = auditLogs.slice(0, 10).map((log) => ({
+          id: log.id,
+          action: `${log.agentName}: ${log.action.replace(/_/g, ' ')}`,
+          module: log.agentName.replace(/Agent$/, ''),
+          timestamp: formatTimestamp(log.timestamp),
+          status: severityToStatus(log.severity),
+        }));
+        setActivity(activityItems);
+      }
+    } catch (err) {
+      console.error('Dashboard fetch error:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load dashboard data');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  const statCards: StatCardProps[] = stats
+    ? [
+        {
+          title: 'Total Projects',
+          value: String(stats.totalProjects),
+          change: `+${stats.activeProjects} active`,
+          trend: 'up',
+          icon: FolderKanban,
+          iconBg: 'bg-emerald-50',
+          iconColor: 'text-emerald-600',
+        },
+        {
+          title: 'Total Credits (tCO2e)',
+          value: stats.totalCredits.toLocaleString(),
+          change: health ? `${health.credits.available.toLocaleString()} available` : 'Loading...',
+          trend: 'up',
+          icon: Leaf,
+          iconBg: 'bg-green-50',
+          iconColor: 'text-green-600',
+        },
+        {
+          title: 'Active Plots',
+          value: stats.totalPlots.toLocaleString(),
+          change: `${stats.totalAreaHa.toLocaleString()} ha total`,
+          trend: 'up',
+          icon: MapPin,
+          iconBg: 'bg-teal-50',
+          iconColor: 'text-teal-600',
+        },
+        {
+          title: 'Certificates',
+          value: String(stats.totalCertificates),
+          change: health ? `${health.certificates.pending} pending` : 'Loading...',
+          trend: health && health.certificates.pending > 0 ? 'down' : 'up',
+          icon: Award,
+          iconBg: 'bg-amber-50',
+          iconColor: 'text-amber-600',
+        },
+      ]
+    : [];
+
   return (
     <div className="space-y-6">
       {/* Page Title */}
-      <div>
-        <h2 className="text-2xl font-bold tracking-tight text-gray-900">Dashboard Overview</h2>
-        <p className="text-muted-foreground text-sm mt-1">
-          Monitor your dMRV carbon credit platform at a glance
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight text-gray-900">Dashboard Overview</h2>
+          <p className="text-muted-foreground text-sm mt-1">
+            Monitor your dMRV carbon credit platform at a glance
+          </p>
+        </div>
+        <Button variant="outline" size="sm" onClick={fetchData} className="gap-2">
+          <RefreshCw className="h-3.5 w-3.5" />
+          Refresh
+        </Button>
       </div>
+
+      {/* Error State */}
+      {error && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Error Loading Data</AlertTitle>
+          <AlertDescription>{error}. Click Refresh to try again.</AlertDescription>
+        </Alert>
+      )}
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {stats.map((stat) => (
-          <StatCard key={stat.title} {...stat} />
-        ))}
+        {loading ? (
+          <>
+            <StatCardSkeleton />
+            <StatCardSkeleton />
+            <StatCardSkeleton />
+            <StatCardSkeleton />
+          </>
+        ) : (
+          statCards.map((stat) => (
+            <StatCard key={stat.title} {...stat} />
+          ))
+        )}
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
@@ -168,29 +313,47 @@ export default function DashboardView() {
           <CardContent className="p-0">
             <ScrollArea className="max-h-96">
               <div className="px-6">
-                {recentActivity.map((item, idx) => {
-                  const StatusIcon = statusIcon[item.status];
-                  return (
-                    <React.Fragment key={item.id}>
-                      <div className="flex items-start gap-3 py-3">
-                        <StatusIcon className={`mt-0.5 h-4 w-4 shrink-0 ${statusColor[item.status]}`} />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm leading-snug">{item.action}</p>
-                          <div className="flex items-center gap-2 mt-1">
-                            <Badge variant="secondary" className={`text-[10px] h-5 ${badgeVariant[item.status]}`}>
-                              {item.module}
-                            </Badge>
-                            <span className="text-xs text-muted-foreground flex items-center gap-1">
-                              <Clock className="h-3 w-3" />
-                              {item.timestamp}
-                            </span>
-                          </div>
+                {loading ? (
+                  <div className="space-y-4 py-4">
+                    {Array.from({ length: 5 }).map((_, i) => (
+                      <div key={i} className="flex items-start gap-3">
+                        <Skeleton className="h-4 w-4 rounded-full" />
+                        <div className="flex-1 space-y-2">
+                          <Skeleton className="h-4 w-3/4" />
+                          <Skeleton className="h-3 w-1/3" />
                         </div>
                       </div>
-                      {idx < recentActivity.length - 1 && <Separator />}
-                    </React.Fragment>
-                  );
-                })}
+                    ))}
+                  </div>
+                ) : activity.length === 0 ? (
+                  <div className="py-8 text-center text-sm text-muted-foreground">
+                    No recent activity found
+                  </div>
+                ) : (
+                  activity.map((item, idx) => {
+                    const StatusIcon = statusIcon[item.status];
+                    return (
+                      <React.Fragment key={item.id}>
+                        <div className="flex items-start gap-3 py-3">
+                          <StatusIcon className={`mt-0.5 h-4 w-4 shrink-0 ${statusColor[item.status]}`} />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm leading-snug">{item.action}</p>
+                            <div className="flex items-center gap-2 mt-1">
+                              <Badge variant="secondary" className={`text-[10px] h-5 ${badgeVariant[item.status]}`}>
+                                {item.module}
+                              </Badge>
+                              <span className="text-xs text-muted-foreground flex items-center gap-1">
+                                <Clock className="h-3 w-3" />
+                                {item.timestamp}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                        {idx < activity.length - 1 && <Separator />}
+                      </React.Fragment>
+                    );
+                  })
+                )}
               </div>
             </ScrollArea>
           </CardContent>
@@ -229,31 +392,66 @@ export default function DashboardView() {
               <CardTitle className="text-base">System Status</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Platform Uptime</span>
-                <span className="font-medium text-emerald-600">99.97%</span>
-              </div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Active Agents</span>
-                <span className="font-medium">3 / 8</span>
-              </div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Data Sources</span>
-                <span className="font-medium">9 / 13</span>
-              </div>
-              <Separator />
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Pending Reviews</span>
-                <Badge variant="secondary" className="bg-amber-50 text-amber-700 hover:bg-amber-50">
-                  4
-                </Badge>
-              </div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Open Alerts</span>
-                <Badge variant="secondary" className="bg-red-50 text-red-700 hover:bg-red-50">
-                  2
-                </Badge>
-              </div>
+              {loading ? (
+                <div className="space-y-3">
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <div key={i} className="flex items-center justify-between">
+                      <Skeleton className="h-4 w-24" />
+                      <Skeleton className="h-4 w-12" />
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Platform Status</span>
+                    <Badge
+                      variant="secondary"
+                      className={
+                        health?.status === 'HEALTHY'
+                          ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-50'
+                          : health?.status === 'WARNING'
+                            ? 'bg-amber-50 text-amber-700 hover:bg-amber-50'
+                            : 'bg-red-50 text-red-700 hover:bg-red-50'
+                      }
+                    >
+                      {health?.status || 'Unknown'}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Platform Uptime</span>
+                    <span className="font-medium text-emerald-600">{health?.uptime || '—'}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Active Projects</span>
+                    <span className="font-medium">{health?.projects.active ?? '—'} / {health?.projects.total ?? '—'}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Audit Logs (24h)</span>
+                    <span className="font-medium">{health?.activity.auditLogsLast24h ?? '—'}</span>
+                  </div>
+                  <Separator />
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Pending Certificates</span>
+                    <Badge variant="secondary" className="bg-amber-50 text-amber-700 hover:bg-amber-50">
+                      {health?.certificates.pending ?? 0}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Open Alerts</span>
+                    <Badge
+                      variant="secondary"
+                      className={
+                        (health?.alerts.unresolved ?? 0) > 0
+                          ? 'bg-red-50 text-red-700 hover:bg-red-50'
+                          : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-50'
+                      }
+                    >
+                      {health?.alerts.unresolved ?? 0}
+                    </Badge>
+                  </div>
+                </>
+              )}
             </CardContent>
           </Card>
         </div>

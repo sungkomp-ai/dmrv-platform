@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   LayoutDashboard,
   Workflow,
@@ -22,12 +22,17 @@ import {
   Bell,
   CircleDot,
   ChevronLeft,
+  AlertTriangle,
+  XCircle,
+  Info,
+  RefreshCw,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from '@/components/ui/sheet';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import DashboardView from './DashboardView';
 import OrchestratorView from './OrchestratorView';
 import IngestionView from './IngestionView';
@@ -68,6 +73,22 @@ interface MenuItem {
   label: string;
   icon: React.ElementType;
   badge?: string;
+  badgeColor?: string;
+}
+
+interface Notification {
+  id: string;
+  severity: string;
+  message: string;
+  timestamp: string;
+  resolved: boolean;
+}
+
+interface SystemStatus {
+  status: string;
+  projects: { total: number; active: number };
+  credits: { total: number; available: number };
+  alerts: { total: number; unresolved: number; critical: number; warning: number };
 }
 
 const menuItems: MenuItem[] = [
@@ -112,9 +133,11 @@ interface SidebarContentProps {
   collapsed?: boolean;
   activeModule: ModuleKey;
   onModuleChange: (key: ModuleKey) => void;
+  menuItemsWithBadges?: MenuItem[];
 }
 
-function SidebarContent({ collapsed = false, activeModule, onModuleChange }: SidebarContentProps) {
+function SidebarContent({ collapsed = false, activeModule, onModuleChange, menuItemsWithBadges }: SidebarContentProps) {
+  const items = menuItemsWithBadges || menuItems;
   return (
     <div className="flex h-full flex-col bg-slate-900 text-white">
       {/* Logo Area */}
@@ -133,7 +156,7 @@ function SidebarContent({ collapsed = false, activeModule, onModuleChange }: Sid
       {/* Navigation */}
       <ScrollArea className="flex-1 px-2 py-3">
         <nav className="flex flex-col gap-0.5">
-          {menuItems.map((item) => {
+          {items.map((item) => {
             const isActive = activeModule === item.key;
             const Icon = item.icon;
             return (
@@ -152,13 +175,13 @@ function SidebarContent({ collapsed = false, activeModule, onModuleChange }: Sid
                   <>
                     <span className="truncate">{item.label}</span>
                     {item.badge && (
-                      <Badge className="ml-auto h-5 min-w-[20px] justify-center bg-emerald-600 text-[10px] text-white hover:bg-emerald-600">
+                      <Badge className={`ml-auto h-5 min-w-[20px] justify-center text-[10px] text-white ${item.badgeColor || 'bg-emerald-600 hover:bg-emerald-600'}`}>
                         {item.badge}
                       </Badge>
                     )}
                   </>
                 )}
-                {isActive && !collapsed && (
+                {isActive && !collapsed && !item.badge && (
                   <div className="ml-auto h-1.5 w-1.5 rounded-full bg-emerald-400" />
                 )}
               </button>
@@ -173,7 +196,7 @@ function SidebarContent({ collapsed = false, activeModule, onModuleChange }: Sid
           <div className="flex items-center gap-2 text-xs text-slate-500">
             <CircleDot className="h-3 w-3 text-emerald-500" />
             <span>System Online</span>
-            <span className="ml-auto">v2.4.0</span>
+            <span className="ml-auto">v2.5.0</span>
           </div>
         </div>
       )}
@@ -181,18 +204,133 @@ function SidebarContent({ collapsed = false, activeModule, onModuleChange }: Sid
   );
 }
 
+const severityIcons: Record<string, React.ElementType> = {
+  CRITICAL: XCircle,
+  WARNING: AlertTriangle,
+  INFO: Info,
+};
+
+const severityColors: Record<string, string> = {
+  CRITICAL: 'text-red-500',
+  WARNING: 'text-amber-500',
+  INFO: 'text-slate-400',
+};
+
 export default function DmrvApp() {
   const [activeModule, setActiveModule] = useState<ModuleKey>('dashboard');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [systemStatus, setSystemStatus] = useState<SystemStatus | null>(null);
+  const [itemsWithBadges, setItemsWithBadges] = useState<MenuItem[]>(menuItems);
 
   const ActiveComponent = moduleComponents[activeModule];
   const activeItem = menuItems.find((item) => item.key === activeModule);
+  const unresolvedCount = notifications.filter((n) => !n.resolved).length;
+
+  const fetchSystemData = useCallback(async () => {
+    try {
+      const [monitoringRes, submissionRes, certificationRes] = await Promise.all([
+        fetch('/api/dmrv/monitoring'),
+        fetch('/api/dmrv/submission'),
+        fetch('/api/dmrv/certification'),
+      ]);
+
+      if (monitoringRes.ok) {
+        const monitoringData = await monitoringRes.json();
+        const health = monitoringData.health as SystemStatus;
+        setSystemStatus(health);
+        setNotifications(
+          (monitoringData.alerts || []).map((a: { id: string; severity: string; message: string; timestamp: string; resolved: boolean }) => ({
+            id: a.id,
+            severity: a.severity,
+            message: a.message,
+            timestamp: a.timestamp,
+            resolved: a.resolved,
+          }))
+        );
+
+        // Update sidebar badges based on real data
+        const badges: Partial<Record<ModuleKey, { badge: string; badgeColor: string }>> = {};
+
+        if (health?.alerts?.unresolved > 0) {
+          badges.monitoring = { badge: String(health.alerts.unresolved), badgeColor: health.alerts.critical > 0 ? 'bg-red-600 hover:bg-red-600' : 'bg-amber-600 hover:bg-amber-600' };
+        }
+
+        setItemsWithBadges(
+          menuItems.map((item) => ({
+            ...item,
+            badge: badges[item.key]?.badge,
+            badgeColor: badges[item.key]?.badgeColor,
+          }))
+        );
+      }
+
+      // Add submission/certification badges if available
+      if (submissionRes.ok) {
+        const subData = await submissionRes.json();
+        const pendingSubs = subData.summary?.readyForVerification || 0;
+        if (pendingSubs > 0) {
+          setItemsWithBadges((prev) =>
+            prev.map((item) =>
+              item.key === 'submission'
+                ? { ...item, badge: String(pendingSubs), badgeColor: 'bg-amber-600 hover:bg-amber-600' }
+                : item
+            )
+          );
+        }
+      }
+
+      if (certificationRes.ok) {
+        const certData = await certificationRes.json();
+        const pendingCerts = certData.summary?.submitted || 0;
+        if (pendingCerts > 0) {
+          setItemsWithBadges((prev) =>
+            prev.map((item) =>
+              item.key === 'certification'
+                ? { ...item, badge: String(pendingCerts), badgeColor: 'bg-teal-600 hover:bg-teal-600' }
+                : item
+            )
+          );
+        }
+      }
+    } catch {
+      // Silently fail - the shell should still work
+    }
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      if (!cancelled) await fetchSystemData();
+    };
+    load();
+    const interval = setInterval(() => {
+      if (!cancelled) fetchSystemData();
+    }, 60000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [fetchSystemData]);
 
   const handleModuleChange = (key: ModuleKey) => {
     setActiveModule(key);
     setMobileOpen(false);
   };
+
+  const systemStatusLabel = systemStatus?.status === 'HEALTHY'
+    ? 'System Healthy'
+    : systemStatus?.status === 'WARNING'
+    ? 'Warnings Active'
+    : systemStatus?.status === 'CRITICAL'
+    ? 'Critical Alert'
+    : 'Loading...';
+
+  const statusDotColor = systemStatus?.status === 'HEALTHY'
+    ? 'bg-emerald-500'
+    : systemStatus?.status === 'WARNING'
+    ? 'bg-amber-500'
+    : systemStatus?.status === 'CRITICAL'
+    ? 'bg-red-500'
+    : 'bg-slate-400';
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
@@ -208,7 +346,7 @@ export default function DmrvApp() {
           </SheetTrigger>
           <SheetContent side="left" className="w-72 p-0">
             <SheetTitle className="sr-only">Navigation Menu</SheetTitle>
-            <SidebarContent activeModule={activeModule} onModuleChange={handleModuleChange} />
+            <SidebarContent activeModule={activeModule} onModuleChange={handleModuleChange} menuItemsWithBadges={itemsWithBadges} />
           </SheetContent>
         </Sheet>
 
@@ -225,18 +363,99 @@ export default function DmrvApp() {
         <div className="ml-auto flex items-center gap-3">
           {/* Status Indicators */}
           <div className="hidden sm:flex items-center gap-2 text-xs text-muted-foreground">
-            <div className="flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-emerald-700">
-              <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              <span>3 Agents Active</span>
+            <div className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 ${
+              systemStatus?.status === 'HEALTHY' ? 'bg-emerald-50 text-emerald-700' :
+              systemStatus?.status === 'WARNING' ? 'bg-amber-50 text-amber-700' :
+              systemStatus?.status === 'CRITICAL' ? 'bg-red-50 text-red-700' :
+              'bg-slate-50 text-slate-500'
+            }`}>
+              <div className={`h-1.5 w-1.5 rounded-full ${statusDotColor} animate-pulse`} />
+              <span>{systemStatusLabel}</span>
+              {systemStatus && (
+                <span className="text-[10px] opacity-70">
+                  ({systemStatus.projects.active} proj)
+                </span>
+              )}
             </div>
           </div>
           <Separator orientation="vertical" className="h-6 hidden sm:block" />
-          <Button variant="ghost" size="icon" className="relative">
-            <Bell className="h-4 w-4" />
-            <span className="absolute -top-0.5 -right-0.5 h-3.5 w-3.5 rounded-full bg-red-500 text-[9px] text-white flex items-center justify-center font-bold">
-              2
-            </span>
-          </Button>
+
+          {/* Notification Bell */}
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="ghost" size="icon" className="relative">
+                <Bell className="h-4 w-4" />
+                {unresolvedCount > 0 && (
+                  <span className={`absolute -top-0.5 -right-0.5 h-3.5 w-3.5 rounded-full text-[9px] text-white flex items-center justify-center font-bold ${
+                    notifications.some((n) => n.severity === 'CRITICAL' && !n.resolved) ? 'bg-red-500' : 'bg-amber-500'
+                  }`}>
+                    {unresolvedCount > 9 ? '9+' : unresolvedCount}
+                  </span>
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-80 p-0" align="end">
+              <div className="flex items-center justify-between px-4 py-3 border-b">
+                <h4 className="text-sm font-semibold">Notifications</h4>
+                <Button variant="ghost" size="sm" onClick={fetchSystemData} className="h-7 gap-1 text-xs">
+                  <RefreshCw className="h-3 w-3" />
+                  Refresh
+                </Button>
+              </div>
+              <ScrollArea className="max-h-80">
+                {notifications.length === 0 ? (
+                  <div className="py-8 text-center text-sm text-muted-foreground">
+                    No notifications
+                  </div>
+                ) : (
+                  <div className="px-4">
+                    {notifications.slice(0, 10).map((notif, idx) => {
+                      const Icon = severityIcons[notif.severity] || Info;
+                      return (
+                        <React.Fragment key={notif.id}>
+                          <div className={`flex items-start gap-3 py-3 ${notif.resolved ? 'opacity-50' : ''}`}>
+                            <Icon className={`mt-0.5 h-4 w-4 shrink-0 ${severityColors[notif.severity] || 'text-slate-400'}`} />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs leading-relaxed">{notif.message}</p>
+                              <div className="flex items-center gap-2 mt-1">
+                                <Badge variant="secondary" className={`text-[9px] h-4 ${
+                                  notif.severity === 'CRITICAL' ? 'bg-red-100 text-red-700 hover:bg-red-100' :
+                                  notif.severity === 'WARNING' ? 'bg-amber-100 text-amber-700 hover:bg-amber-100' :
+                                  'bg-slate-100 text-slate-600 hover:bg-slate-100'
+                                }`}>
+                                  {notif.severity}
+                                </Badge>
+                                {notif.resolved && (
+                                  <Badge variant="secondary" className="text-[9px] h-4 bg-emerald-50 text-emerald-600 hover:bg-emerald-50">
+                                    RESOLVED
+                                  </Badge>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                          {idx < Math.min(notifications.length, 10) - 1 && <Separator />}
+                        </React.Fragment>
+                      );
+                    })}
+                  </div>
+                )}
+              </ScrollArea>
+              {unresolvedCount > 0 && (
+                <div className="border-t px-4 py-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="w-full text-xs gap-1"
+                    onClick={() => handleModuleChange('monitoring')}
+                  >
+                    <Activity className="h-3 w-3" />
+                    View All Alerts in Monitoring
+                  </Button>
+                </div>
+              )}
+            </PopoverContent>
+          </Popover>
+
           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 text-xs font-bold">
             AD
           </div>
@@ -250,7 +469,7 @@ export default function DmrvApp() {
             sidebarCollapsed ? 'w-16' : 'w-60'
           }`}
         >
-          <SidebarContent collapsed={sidebarCollapsed} activeModule={activeModule} onModuleChange={handleModuleChange} />
+          <SidebarContent collapsed={sidebarCollapsed} activeModule={activeModule} onModuleChange={handleModuleChange} menuItemsWithBadges={itemsWithBadges} />
           {/* Collapse Toggle */}
           <button
             onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
@@ -266,7 +485,7 @@ export default function DmrvApp() {
         {/* Main Content */}
         <main className="flex-1 overflow-y-auto">
           <div className="p-4 lg:p-6 max-w-7xl mx-auto">
-            <ActiveComponent />
+            <ActiveComponent key={activeModule} />
           </div>
         </main>
       </div>

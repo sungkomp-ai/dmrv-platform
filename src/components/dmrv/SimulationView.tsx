@@ -1,17 +1,28 @@
 'use client';
 
-import React, { useState } from 'react';
-import { FlaskConical, Play, Download } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { FlaskConical, Play, Download, Loader2, Server } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 
 type SimType = 'AWD' | 'Biogas' | 'Solar' | 'Biochar' | 'Footprint';
+
+const simTypeToApi: Record<SimType, string> = {
+  AWD: 'awd',
+  Biogas: 'biogas',
+  Solar: 'solar',
+  Biochar: 'biochar',
+  Footprint: 'footprint',
+};
 
 interface SimResult {
   type: SimType;
@@ -20,6 +31,23 @@ interface SimResult {
   confidence: number;
   certEligible: boolean;
   parameters: Record<string, string>;
+}
+
+interface ApiSimulationYear {
+  year: number;
+  tco2e: number;
+  cumulative: number;
+  details: Record<string, unknown>;
+}
+
+interface ApiSimulationResult {
+  results: ApiSimulationYear[] | Record<string, unknown>;
+  summary: Record<string, unknown>;
+}
+
+interface Project {
+  id: string;
+  name: string;
 }
 
 const simFields: Record<SimType, { key: string; label: string; placeholder: string }[]> = {
@@ -62,8 +90,81 @@ export default function SimulationView() {
   const [isRunning, setIsRunning] = useState(false);
   const [result, setResult] = useState<SimResult | null>(null);
   const [history, setHistory] = useState<SimResult[]>([]);
+  const [apiResult, setApiResult] = useState<ApiSimulationResult | null>(null);
+  const [apiLoading, setApiLoading] = useState(false);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [selectedProjectId, setSelectedProjectId] = useState('');
+  const [loading, setLoading] = useState(true);
 
   const fields = simFields[simType];
+
+  const fetchProjects = useCallback(async () => {
+    try {
+      const res = await fetch('/api/dmrv');
+      if (res.ok) {
+        const data = await res.json();
+        setProjects((data.projects as Project[]).map((p: Project) => ({ id: p.id, name: p.name })));
+      }
+    } catch {
+      // Silently fail — projects are optional for simulation
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchProjects();
+  }, [fetchProjects]);
+
+  const buildApiParams = (): Record<string, unknown> => {
+    const simulationType = simTypeToApi[simType];
+    const years = parseInt(inputs['years'] || '10');
+
+    const base: Record<string, unknown> = { simulationType, years };
+
+    switch (simType) {
+      case 'AWD': {
+        const area = parseFloat(inputs['area'] || '0');
+        base.areaHa = area;
+        base.baselineEmission = 3.5;
+        base.mitigationFactor = 0.5;
+        break;
+      }
+      case 'Biogas': {
+        const ch4 = parseFloat(inputs['ch4Captured'] || '0');
+        const eff = parseFloat(inputs['efficiency'] || '0') / 100;
+        base.ch4CaptureRate = eff;
+        base.animalUnits = Math.round(ch4 / 0.6);
+        base.fuelDisplacementRate = 20;
+        break;
+      }
+      case 'Solar': {
+        const cap = parseFloat(inputs['capacity'] || '0');
+        const cf = parseFloat(inputs['capacityFactor'] || '0') / 100;
+        base.systemCapacityKw = cap * 1000;
+        base.capacityFactor = cf;
+        base.gridEmissionFactor = 0.5086;
+        break;
+      }
+      case 'Biochar': {
+        const biochar = parseFloat(inputs['biocharProduced'] || '0');
+        const sf = parseFloat(inputs['stabilityFactor'] || '0.73');
+        base.biocharMassKg = biochar * 1000;
+        base.carbonFraction = 0.7;
+        base.stabilityFactor = sf;
+        break;
+      }
+      case 'Footprint': {
+        const elec = parseFloat(inputs['electricity'] || '0');
+        const diesel = parseFloat(inputs['diesel'] || '0');
+        base.electricityKwh = elec * 1000;
+        base.dieselLiters = diesel * 1000;
+        break;
+      }
+    }
+
+    return base;
+  };
 
   const runSimulation = async () => {
     const hasEmpty = fields.some((f) => !inputs[f.key]?.trim());
@@ -73,8 +174,9 @@ export default function SimulationView() {
     }
 
     setIsRunning(true);
-    await new Promise((resolve) => setTimeout(resolve, 1500));
+    setApiLoading(true);
 
+    // Client-side simulation (kept as-is)
     let tco2e = 0;
     const pricePerTco2e = parseFloat(inputs['pricePerTco2e'] || '0');
     const years = parseFloat(inputs['years'] || '1');
@@ -127,11 +229,70 @@ export default function SimulationView() {
     setHistory((prev) => [simResult, ...prev]);
     setIsRunning(false);
     toast({ title: 'Simulation Complete', description: `${simType}: ${tco2e.toLocaleString('en-US', { maximumFractionDigits: 0 })} tCO2e over ${years} years` });
+
+    // Also run API simulation
+    try {
+      const apiParams = buildApiParams();
+      const res = await fetch('/api/dmrv/simulation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(apiParams),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setApiResult(data.simulation as ApiSimulationResult);
+      }
+    } catch {
+      // API simulation is optional, don't block
+    } finally {
+      setApiLoading(false);
+    }
   };
 
   const handleExport = () => {
+    if (!result) return;
+    const exportData = {
+      clientResult: result,
+      apiResult,
+      exportedAt: new Date().toISOString(),
+    };
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `simulation-${simType}-${Date.now()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
     toast({ title: 'Snapshot Exported', description: 'Simulation results saved as JSON' });
   };
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <Skeleton className="h-8 w-64" />
+          <Skeleton className="h-4 w-80 mt-2" />
+        </div>
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+          <Card>
+            <CardHeader><Skeleton className="h-5 w-32" /></CardHeader>
+            <CardContent className="space-y-4">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <Skeleton key={i} className="h-10 w-full" />
+              ))}
+            </CardContent>
+          </Card>
+          <Card className="lg:col-span-2">
+            <CardContent className="py-20">
+              <Skeleton className="h-16 w-16 mx-auto mb-4" />
+              <Skeleton className="h-4 w-48 mx-auto" />
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -156,11 +317,23 @@ export default function SimulationView() {
           <CardContent className="space-y-4">
             <div className="space-y-2">
               <Label>Activity Type</Label>
-              <Select value={simType} onValueChange={(v) => { setSimType(v as SimType); setInputs({}); }}>
+              <Select value={simType} onValueChange={(v) => { setSimType(v as SimType); setInputs({}); setApiResult(null); }}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {(Object.keys(simFields) as SimType[]).map((type) => (
                     <SelectItem key={type} value={type}>{type}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Project (optional)</Label>
+              <Select value={selectedProjectId} onValueChange={setSelectedProjectId}>
+                <SelectTrigger><SelectValue placeholder="Select a project" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="_none">No project</SelectItem>
+                  {projects.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -180,7 +353,7 @@ export default function SimulationView() {
               disabled={isRunning}
               className="w-full bg-emerald-600 hover:bg-emerald-700 gap-2"
             >
-              {isRunning ? 'Simulating...' : <><Play className="h-4 w-4" /> Run Simulation</>}
+              {isRunning ? <><Loader2 className="h-4 w-4 animate-spin" /> Simulating...</> : <><Play className="h-4 w-4" /> Run Simulation</>}
             </Button>
           </CardContent>
         </Card>
@@ -261,6 +434,78 @@ export default function SimulationView() {
                 </CardContent>
               </Card>
 
+              {/* API Simulation Results Tab */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Server className="h-4 w-4 text-emerald-600" />
+                    Compare with API
+                  </CardTitle>
+                  <CardDescription>Backend simulation results for comparison</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {apiLoading ? (
+                    <div className="flex items-center gap-2 py-8 justify-center text-muted-foreground text-sm">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Running API simulation...
+                    </div>
+                  ) : apiResult ? (
+                    <Tabs defaultValue="yearly">
+                      <TabsList>
+                        <TabsTrigger value="yearly">Yearly Breakdown</TabsTrigger>
+                        <TabsTrigger value="summary">Summary</TabsTrigger>
+                      </TabsList>
+                      <TabsContent value="yearly">
+                        {Array.isArray(apiResult.results) ? (
+                          <ScrollArea className="max-h-64">
+                            <table className="w-full text-sm">
+                              <thead>
+                                <tr className="border-b">
+                                  <th className="text-left p-2 font-medium text-muted-foreground text-xs">Year</th>
+                                  <th className="text-right p-2 font-medium text-muted-foreground text-xs">tCO2e</th>
+                                  <th className="text-right p-2 font-medium text-muted-foreground text-xs">Cumulative</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {(apiResult.results as ApiSimulationYear[]).map((yr) => (
+                                  <tr key={yr.year} className="border-b last:border-0">
+                                    <td className="p-2 text-xs">Year {yr.year}</td>
+                                    <td className="p-2 text-xs font-mono text-right">{yr.tco2e.toLocaleString()}</td>
+                                    <td className="p-2 text-xs font-mono text-right text-emerald-700 font-semibold">{yr.cumulative.toLocaleString()}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </ScrollArea>
+                        ) : (
+                          <div className="rounded-lg bg-slate-50 p-4">
+                            <pre className="text-xs overflow-auto">{JSON.stringify(apiResult.results, null, 2)}</pre>
+                          </div>
+                        )}
+                      </TabsContent>
+                      <TabsContent value="summary">
+                        <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-4">
+                          <div className="grid grid-cols-2 gap-3">
+                            {Object.entries(apiResult.summary).map(([key, value]) => (
+                              <div key={key} className="flex justify-between text-xs">
+                                <span className="text-emerald-700 capitalize">{key.replace(/([A-Z])/g, ' $1').trim()}</span>
+                                <span className="font-mono font-semibold text-emerald-800">
+                                  {typeof value === 'number' ? value.toLocaleString() : String(value)}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </TabsContent>
+                    </Tabs>
+                  ) : (
+                    <div className="py-6 text-center text-muted-foreground text-sm">
+                      API simulation will run automatically when you run a client-side simulation.
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
               {/* History */}
               {history.length > 1 && (
                 <Card>
@@ -316,7 +561,7 @@ export default function SimulationView() {
               <CardContent className="flex flex-col items-center justify-center py-20 text-muted-foreground">
                 <FlaskConical className="h-16 w-16 mb-4 text-slate-200" />
                 <p className="text-sm">Configure parameters and run a simulation</p>
-                <p className="text-xs mt-1">Results will appear here</p>
+                <p className="text-xs mt-1">Results will appear here with both client-side and API calculations</p>
               </CardContent>
             </Card>
           )}

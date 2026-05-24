@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
-import { Upload, Lock, Unlock, FileUp, Clock, CheckCircle2, AlertCircle } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Upload, Lock, Unlock, FileUp, Clock, CheckCircle2, AlertCircle, RefreshCw, AlertCircle as ErrorIcon } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -12,6 +12,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
 
 const SOURCE_TYPES = [
@@ -32,36 +34,31 @@ const SOURCE_TYPES = [
 
 type SourceType = (typeof SOURCE_TYPES)[number];
 
-interface IngestionLog {
+interface Project {
   id: string;
-  sourceType: SourceType;
-  fileName: string;
-  classification: 'PUBLIC' | 'CONFIDENTIAL';
-  encrypted: boolean;
-  status: 'ingested' | 'processing' | 'failed';
-  timestamp: string;
+  name: string;
+  status: string;
 }
 
-const mockLogs: IngestionLog[] = [
-  { id: '1', sourceType: 'Satellite', fileName: 'sentinel2_2024_bangkok.tif', classification: 'PUBLIC', encrypted: false, status: 'ingested', timestamp: '2024-12-15 14:23' },
-  { id: '2', sourceType: 'IoT', fileName: 'sensor_moisture_001.json', classification: 'CONFIDENTIAL', encrypted: true, status: 'ingested', timestamp: '2024-12-15 14:20' },
-  { id: '3', sourceType: 'Photo', fileName: 'field_plot_047.jpg', classification: 'PUBLIC', encrypted: false, status: 'ingested', timestamp: '2024-12-15 13:55' },
-  { id: '4', sourceType: 'Soil', fileName: 'soil_carbon_core_12.csv', classification: 'CONFIDENTIAL', encrypted: true, status: 'processing', timestamp: '2024-12-15 13:40' },
-  { id: '5', sourceType: 'Weather', fileName: 'weather_station_daily.json', classification: 'PUBLIC', encrypted: false, status: 'ingested', timestamp: '2024-12-15 12:10' },
-  { id: '6', sourceType: 'Drone', fileName: 'drone_ndvi_survey.tif', classification: 'PUBLIC', encrypted: false, status: 'ingested', timestamp: '2024-12-15 11:30' },
-  { id: '7', sourceType: 'Biochar', fileName: 'biochar_production_log.xlsx', classification: 'CONFIDENTIAL', encrypted: true, status: 'failed', timestamp: '2024-12-15 10:15' },
-  { id: '8', sourceType: 'LiDAR', fileName: 'lidar_biomass_scan.las', classification: 'PUBLIC', encrypted: false, status: 'ingested', timestamp: '2024-12-15 09:45' },
-  { id: '9', sourceType: 'Solar', fileName: 'solar_generation_meter.csv', classification: 'PUBLIC', encrypted: false, status: 'ingested', timestamp: '2024-12-15 08:20' },
-  { id: '10', sourceType: 'AWD', fileName: 'awd_water_level_monitor.json', classification: 'CONFIDENTIAL', encrypted: true, status: 'processing', timestamp: '2024-12-15 07:55' },
-];
+interface IngestionLog {
+  id: string;
+  sourceType: string;
+  activityType: string;
+  classification: string;
+  isEncrypted: boolean;
+  integrityHash: string;
+  timestamp: string;
+  projectId: string;
+  project?: { id: string; name: string };
+}
 
-const statusIcons = {
+const statusIcons: Record<string, React.ElementType> = {
   ingested: CheckCircle2,
   processing: Clock,
   failed: AlertCircle,
 };
 
-const statusColors = {
+const statusColors: Record<string, string> = {
   ingested: 'text-emerald-600',
   processing: 'text-amber-600',
   failed: 'text-red-600',
@@ -73,80 +70,194 @@ export default function IngestionView() {
   const [fileName, setFileName] = useState('');
   const [description, setDescription] = useState('');
   const [classification, setClassification] = useState<'PUBLIC' | 'CONFIDENTIAL'>('PUBLIC');
-  const [logs, setLogs] = useState<IngestionLog[]>(mockLogs);
+  const [logs, setLogs] = useState<IngestionLog[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [selectedProjectId, setSelectedProjectId] = useState<string>('');
+  const [projectsLoading, setProjectsLoading] = useState(true);
+
+  // Fetch available projects
+  useEffect(() => {
+    const fetchProjects = async () => {
+      try {
+        const res = await fetch('/api/dmrv');
+        if (res.ok) {
+          const data = await res.json();
+          const projectList: Project[] = (data.projects || []).map((p: Record<string, unknown>) => ({
+            id: p.id as string,
+            name: p.name as string,
+            status: p.status as string,
+          }));
+          setProjects(projectList);
+          if (projectList.length > 0) {
+            setSelectedProjectId(projectList[0].id);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to fetch projects:', err);
+      } finally {
+        setProjectsLoading(false);
+      }
+    };
+    fetchProjects();
+  }, []);
+
+  // Fetch real ingestion logs
+  const fetchLogs = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/dmrv/ingestion');
+      if (!res.ok) throw new Error('Failed to fetch ingestion logs');
+      const data = await res.json();
+      setLogs(data.logs || []);
+    } catch (err) {
+      console.error('Failed to fetch logs:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load ingestion logs');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchLogs();
+  }, [fetchLogs]);
 
   const handleIngest = async () => {
     if (!fileName.trim()) {
       toast({ title: 'Validation Error', description: 'File name is required', variant: 'destructive' });
       return;
     }
+    if (!selectedProjectId) {
+      toast({ title: 'Validation Error', description: 'Please select a project', variant: 'destructive' });
+      return;
+    }
 
     setIsSubmitting(true);
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1200));
+    try {
+      const res = await fetch('/api/dmrv/ingestion', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sourceType: sourceType.toLowerCase(),
+          activityType: 'data_upload',
+          payload: {
+            fileName: fileName.trim(),
+            description: description.trim(),
+            classification,
+          },
+          evidenceUrl: '',
+          projectId: selectedProjectId,
+        }),
+      });
 
-    const newLog: IngestionLog = {
-      id: String(logs.length + 1),
-      sourceType,
-      fileName: fileName.trim(),
-      classification,
-      encrypted: classification === 'CONFIDENTIAL',
-      status: 'ingested',
-      timestamp: new Date().toLocaleString(),
-    };
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || 'Ingestion failed');
+      }
 
-    setLogs((prev) => [newLog, ...prev]);
-    setFileName('');
-    setDescription('');
-    setIsSubmitting(false);
+      const result = await res.json();
+      const newLog: IngestionLog = result.log;
 
-    toast({
-      title: 'Data Ingested',
-      description: `${sourceType} data "${fileName}" ingested successfully as ${classification}`,
-    });
+      setLogs((prev) => [newLog, ...prev]);
+      setFileName('');
+      setDescription('');
+
+      toast({
+        title: 'Data Ingested',
+        description: `${sourceType} data "${fileName}" ingested successfully as ${newLog.classification}`,
+      });
+    } catch (err) {
+      toast({
+        title: 'Ingestion Failed',
+        description: err instanceof Error ? err.message : 'An error occurred',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const publicCount = logs.filter((l) => l.classification === 'PUBLIC').length;
   const confidentialCount = logs.filter((l) => l.classification === 'CONFIDENTIAL').length;
-  const encryptedCount = logs.filter((l) => l.encrypted).length;
+  const encryptedCount = logs.filter((l) => l.isEncrypted).length;
+
+  const formatTimestamp = (ts: string) => {
+    try {
+      return new Date(ts).toLocaleString();
+    } catch {
+      return ts;
+    }
+  };
 
   return (
     <div className="space-y-6">
       {/* Page Title */}
-      <div>
-        <h2 className="text-2xl font-bold tracking-tight text-gray-900">Data Ingestion</h2>
-        <p className="text-muted-foreground text-sm mt-1">
-          Collect and normalize data from 13 source types with automatic classification & encryption
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight text-gray-900">Data Ingestion</h2>
+          <p className="text-muted-foreground text-sm mt-1">
+            Collect and normalize data from 13 source types with automatic classification & encryption
+          </p>
+        </div>
+        <Button variant="outline" size="sm" onClick={fetchLogs} className="gap-2">
+          <RefreshCw className="h-3.5 w-3.5" />
+          Refresh
+        </Button>
       </div>
+
+      {/* Error State */}
+      {error && (
+        <Alert variant="destructive">
+          <ErrorIcon className="h-4 w-4" />
+          <AlertTitle>Error Loading Data</AlertTitle>
+          <AlertDescription>{error}. Click Refresh to try again.</AlertDescription>
+        </Alert>
+      )}
 
       {/* Summary Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="p-4 text-center">
-            <p className="text-2xl font-bold">{logs.length}</p>
-            <p className="text-xs text-muted-foreground">Total Ingested</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 text-center">
-            <p className="text-2xl font-bold text-emerald-600">{publicCount}</p>
-            <p className="text-xs text-muted-foreground">PUBLIC</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 text-center">
-            <p className="text-2xl font-bold text-amber-600">{confidentialCount}</p>
-            <p className="text-xs text-muted-foreground">CONFIDENTIAL</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 text-center">
-            <p className="text-2xl font-bold text-teal-600">{encryptedCount}</p>
-            <p className="text-xs text-muted-foreground">Encrypted</p>
-          </CardContent>
-        </Card>
+        {loading ? (
+          <>
+            {Array.from({ length: 4 }).map((_, i) => (
+              <Card key={i}>
+                <CardContent className="p-4 text-center">
+                  <Skeleton className="h-8 w-12 mx-auto mb-2" />
+                  <Skeleton className="h-3 w-20 mx-auto" />
+                </CardContent>
+              </Card>
+            ))}
+          </>
+        ) : (
+          <>
+            <Card>
+              <CardContent className="p-4 text-center">
+                <p className="text-2xl font-bold">{logs.length}</p>
+                <p className="text-xs text-muted-foreground">Total Ingested</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4 text-center">
+                <p className="text-2xl font-bold text-emerald-600">{publicCount}</p>
+                <p className="text-xs text-muted-foreground">PUBLIC</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4 text-center">
+                <p className="text-2xl font-bold text-amber-600">{confidentialCount}</p>
+                <p className="text-xs text-muted-foreground">CONFIDENTIAL</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4 text-center">
+                <p className="text-2xl font-bold text-teal-600">{encryptedCount}</p>
+                <p className="text-xs text-muted-foreground">Encrypted</p>
+              </CardContent>
+            </Card>
+          </>
+        )}
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
@@ -160,6 +271,26 @@ export default function IngestionView() {
             <CardDescription>Submit data from any of the 13 supported source types</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label>Project</Label>
+              {projectsLoading ? (
+                <Skeleton className="h-9 w-full" />
+              ) : (
+                <Select value={selectedProjectId} onValueChange={setSelectedProjectId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select project" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {projects.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>
+                        {p.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+
             <div className="space-y-2">
               <Label>Source Type</Label>
               <Select value={sourceType} onValueChange={(v) => setSourceType(v as SourceType)}>
@@ -217,7 +348,7 @@ export default function IngestionView() {
 
             <Button
               onClick={handleIngest}
-              disabled={isSubmitting}
+              disabled={isSubmitting || !selectedProjectId}
               className="w-full bg-emerald-600 hover:bg-emerald-700 gap-2"
             >
               {isSubmitting ? (
@@ -241,7 +372,7 @@ export default function IngestionView() {
           <CardContent>
             <div className="grid grid-cols-2 gap-2">
               {SOURCE_TYPES.map((type) => {
-                const count = logs.filter((l) => l.sourceType === type).length;
+                const count = logs.filter((l) => l.sourceType.toLowerCase() === type.toLowerCase()).length;
                 return (
                   <button
                     key={type}
@@ -274,63 +405,85 @@ export default function IngestionView() {
         </CardHeader>
         <CardContent className="p-0">
           <ScrollArea className="max-h-96">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Source</TableHead>
-                  <TableHead>File Name</TableHead>
-                  <TableHead>Classification</TableHead>
-                  <TableHead>Encrypted</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Timestamp</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {logs.map((log) => {
-                  const StatusIcon = statusIcons[log.status];
-                  return (
-                    <TableRow key={log.id}>
-                      <TableCell>
-                        <Badge variant="secondary" className="text-[10px] h-5">
-                          {log.sourceType}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="font-mono text-xs max-w-[200px] truncate">
-                        {log.fileName}
-                      </TableCell>
-                      <TableCell>
-                        <Badge
-                          variant="secondary"
-                          className={`text-[10px] h-5 ${
-                            log.classification === 'PUBLIC'
-                              ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-50'
-                              : 'bg-amber-50 text-amber-700 hover:bg-amber-50'
-                          }`}
-                        >
-                          {log.classification}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        {log.encrypted ? (
-                          <Lock className="h-4 w-4 text-emerald-600" />
-                        ) : (
-                          <Unlock className="h-4 w-4 text-slate-400" />
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-1.5">
-                          <StatusIcon className={`h-3.5 w-3.5 ${statusColors[log.status]}`} />
-                          <span className="text-xs capitalize">{log.status}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-right text-xs text-muted-foreground">
-                        {log.timestamp}
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
+            {loading ? (
+              <div className="p-6 space-y-3">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <div key={i} className="flex items-center gap-4">
+                    <Skeleton className="h-5 w-16" />
+                    <Skeleton className="h-5 w-40" />
+                    <Skeleton className="h-5 w-20" />
+                    <Skeleton className="h-5 w-16" />
+                    <Skeleton className="h-5 w-20 ml-auto" />
+                  </div>
+                ))}
+              </div>
+            ) : logs.length === 0 ? (
+              <div className="py-8 text-center text-sm text-muted-foreground">
+                No ingestion logs found. Submit data to create your first log.
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Source</TableHead>
+                    <TableHead>Activity</TableHead>
+                    <TableHead>Project</TableHead>
+                    <TableHead>Classification</TableHead>
+                    <TableHead>Encrypted</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Timestamp</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {logs.map((log) => {
+                    const StatusIcon = statusIcons['ingested'] || CheckCircle2;
+                    return (
+                      <TableRow key={log.id}>
+                        <TableCell>
+                          <Badge variant="secondary" className="text-[10px] h-5 capitalize">
+                            {log.sourceType}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="font-mono text-xs max-w-[200px] truncate">
+                          {log.activityType}
+                        </TableCell>
+                        <TableCell className="text-xs">
+                          {log.project?.name || log.projectId?.slice(0, 8) || '—'}
+                        </TableCell>
+                        <TableCell>
+                          <Badge
+                            variant="secondary"
+                            className={`text-[10px] h-5 ${
+                              log.classification === 'PUBLIC'
+                                ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-50'
+                                : 'bg-amber-50 text-amber-700 hover:bg-amber-50'
+                            }`}
+                          >
+                            {log.classification}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          {log.isEncrypted ? (
+                            <Lock className="h-4 w-4 text-emerald-600" />
+                          ) : (
+                            <Unlock className="h-4 w-4 text-slate-400" />
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-1.5">
+                            <StatusIcon className={`h-3.5 w-3.5 ${statusColors['ingested']}`} />
+                            <span className="text-xs capitalize">Ingested</span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right text-xs text-muted-foreground">
+                          {formatTimestamp(log.timestamp)}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            )}
           </ScrollArea>
         </CardContent>
       </Card>

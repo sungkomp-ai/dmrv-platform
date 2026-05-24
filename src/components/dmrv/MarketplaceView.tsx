@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
-import { ShoppingCart, Plus, ArrowRightLeft, Ban, Briefcase } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { ShoppingCart, Plus, ArrowRightLeft, Ban, Briefcase, Loader2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -11,32 +11,53 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 
 type CreditStatus = 'Available' | 'Traded' | 'Retired';
 
-interface Credit {
+interface MarketplaceCredit {
   id: string;
-  batchId: string;
-  projectId: string;
-  type: string;
+  tokenId: string;
   amount: number;
-  price: number;
-  status: CreditStatus;
-  certNumber: string;
-  createdAt: string;
+  project: string;
+  methodology: string;
+  location: string;
+  metadata: Record<string, unknown>;
 }
 
-const mockCredits: Credit[] = [
-  { id: '1', batchId: 'CB-0456', projectId: 'RICE-001', type: 'Biochar', amount: 5000, price: 600, status: 'Available', certNumber: 'TVER-2024-089', createdAt: '2024-12-10' },
-  { id: '2', batchId: 'CB-0457', projectId: 'RICE-002', type: 'AWD', amount: 3320, price: 550, status: 'Available', certNumber: 'TVER-2024-088', createdAt: '2024-12-08' },
-  { id: '3', batchId: 'CB-0458', projectId: 'BLUE-005', type: 'Blue Carbon', amount: 10000, price: 750, status: 'Available', certNumber: 'MC-0456', createdAt: '2024-11-28' },
-  { id: '4', batchId: 'CB-0440', projectId: 'RICE-001', type: 'Biochar', amount: 2450, price: 580, status: 'Traded', certNumber: 'TVER-2024-080', createdAt: '2024-11-15' },
-  { id: '5', batchId: 'CB-0435', projectId: 'BIOG-003', type: 'Biogas', amount: 1800, price: 520, status: 'Traded', certNumber: 'TVER-2024-075', createdAt: '2024-11-01' },
-  { id: '6', batchId: 'CB-0420', projectId: 'SOL-004', type: 'Solar', amount: 3200, price: 480, status: 'Retired', certNumber: 'TVER-2024-060', createdAt: '2024-10-15' },
-  { id: '7', batchId: 'CB-0410', projectId: 'RICE-001', type: 'AWD', amount: 1500, price: 550, status: 'Retired', certNumber: 'TVER-2024-050', createdAt: '2024-09-20' },
-];
+interface TradedCredit {
+  id: string;
+  tokenId: string;
+  amount: number;
+  buyer: string | null;
+  project: string;
+  tradedAt: string;
+}
+
+interface RetiredCredit {
+  id: string;
+  tokenId: string;
+  amount: number;
+  buyer: string | null;
+  project: string;
+  retiredAt: string;
+}
+
+interface MarketplaceSummary {
+  totalCredits: number;
+  availableVolume: number;
+  tradedVolume: number;
+  retiredVolume: number;
+  availableCount: number;
+  tradedCount: number;
+  retiredCount: number;
+}
+
+interface Project {
+  id: string;
+  name: string;
+}
 
 const statusStyles: Record<CreditStatus, string> = {
   Available: 'bg-emerald-100 text-emerald-700 hover:bg-emerald-100',
@@ -46,61 +67,170 @@ const statusStyles: Record<CreditStatus, string> = {
 
 export default function MarketplaceView() {
   const { toast } = useToast();
-  const [credits, setCredits] = useState<Credit[]>(mockCredits);
-  const [mintType, setMintType] = useState('Biochar');
-  const [mintAmount, setMintAmount] = useState('');
-  const [mintProjectId, setMintProjectId] = useState('');
-  const [tradeId, setTradeId] = useState('');
-  const [retireId, setRetireId] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [available, setAvailable] = useState<MarketplaceCredit[]>([]);
+  const [traded, setTraded] = useState<TradedCredit[]>([]);
+  const [retired, setRetired] = useState<RetiredCredit[]>([]);
+  const [summary, setSummary] = useState<MarketplaceSummary | null>(null);
+  const [projects, setProjects] = useState<Project[]>([]);
 
-  const handleMint = () => {
+  // Mint form
+  const [mintProjectId, setMintProjectId] = useState('');
+  const [mintTrackType, setMintTrackType] = useState('biochar');
+  const [mintAmount, setMintAmount] = useState('');
+  const [minting, setMinting] = useState(false);
+
+  // Trade form
+  const [tradeId, setTradeId] = useState('');
+  const [tradeBuyer, setTradeBuyer] = useState('');
+  const [trading, setTrading] = useState(false);
+
+  // Retire form
+  const [retireId, setRetireId] = useState('');
+  const [retiring, setRetiring] = useState(false);
+
+  const fetchData = useCallback(async () => {
+    try {
+      const [marketRes, projectsRes] = await Promise.all([
+        fetch('/api/dmrv/marketplace'),
+        fetch('/api/dmrv'),
+      ]);
+      if (!marketRes.ok || !projectsRes.ok) throw new Error('Failed to fetch data');
+
+      const marketData = await marketRes.json();
+      const projectsData = await projectsRes.json();
+
+      setAvailable(marketData.marketplace?.available || []);
+      setTraded(marketData.marketplace?.traded || []);
+      setRetired(marketData.marketplace?.retired || []);
+      setSummary(marketData.summary || null);
+      setProjects((projectsData.projects || []).map((p: { id: string; name: string }) => ({ id: p.id, name: p.name })));
+    } catch (err) {
+      toast({ title: 'Error', description: 'Failed to load marketplace data', variant: 'destructive' });
+    } finally {
+      setLoading(false);
+    }
+  }, [toast]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  const handleMint = async () => {
     const amount = parseFloat(mintAmount);
-    if (!mintProjectId.trim() || isNaN(amount) || amount <= 0) {
-      toast({ title: 'Validation Error', description: 'Project ID and valid amount are required', variant: 'destructive' });
+    if (!mintProjectId || isNaN(amount) || amount <= 0) {
+      toast({ title: 'Validation Error', description: 'Project and valid amount are required', variant: 'destructive' });
       return;
     }
-    const newCredit: Credit = {
-      id: String(credits.length + 1),
-      batchId: `CB-${String(459 + credits.length).padStart(4, '0')}`,
-      projectId: mintProjectId.trim(),
-      type: mintType,
-      amount,
-      price: 500 + Math.floor(Math.random() * 300),
-      status: 'Available',
-      certNumber: `TVER-2024-${String(93 + credits.length).padStart(3, '0')}`,
-      createdAt: new Date().toISOString().split('T')[0],
-    };
-    setCredits((prev) => [newCredit, ...prev]);
-    setMintAmount('');
-    setMintProjectId('');
-    toast({ title: 'Credits Minted', description: `${amount.toLocaleString()} tCO2e minted as ${newCredit.batchId}` });
+    try {
+      setMinting(true);
+      const res = await fetch('/api/dmrv/marketplace', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'mint', projectId: mintProjectId, amount, trackType: mintTrackType }),
+      });
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.error || 'Mint failed');
+      }
+      toast({ title: 'Credits Minted', description: `${amount.toLocaleString()} tCO2e minted successfully` });
+      setMintAmount('');
+      setMintProjectId('');
+      await fetchData();
+    } catch (err) {
+      toast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to mint credits', variant: 'destructive' });
+    } finally {
+      setMinting(false);
+    }
   };
 
-  const handleTrade = () => {
-    const credit = credits.find((c) => c.id === tradeId);
-    if (!credit || credit.status !== 'Available') {
+  const handleTrade = async () => {
+    if (!tradeId) {
+      toast({ title: 'Validation Error', description: 'Select a credit to trade', variant: 'destructive' });
+      return;
+    }
+    if (!tradeBuyer.trim()) {
+      toast({ title: 'Validation Error', description: 'Buyer name is required', variant: 'destructive' });
+      return;
+    }
+    const credit = available.find((c) => c.id === tradeId);
+    if (!credit) {
       toast({ title: 'Cannot Trade', description: 'Only available credits can be traded', variant: 'destructive' });
       return;
     }
-    setCredits((prev) => prev.map((c) => (c.id === tradeId ? { ...c, status: 'Traded' as CreditStatus } : c)));
-    setTradeId('');
-    toast({ title: 'Credit Traded', description: `${credit.batchId} has been traded` });
+    try {
+      setTrading(true);
+      const res = await fetch('/api/dmrv/marketplace', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'trade', projectId: credit.methodology, creditId: tradeId, buyer: tradeBuyer.trim() }),
+      });
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.error || 'Trade failed');
+      }
+      toast({ title: 'Credit Traded', description: `${credit.tokenId} has been traded to ${tradeBuyer.trim()}` });
+      setTradeId('');
+      setTradeBuyer('');
+      await fetchData();
+    } catch (err) {
+      toast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to trade credit', variant: 'destructive' });
+    } finally {
+      setTrading(false);
+    }
   };
 
-  const handleRetire = () => {
-    const credit = credits.find((c) => c.id === retireId);
-    if (!credit || credit.status === 'Retired') {
-      toast({ title: 'Cannot Retire', description: 'Already retired credits cannot be retired again', variant: 'destructive' });
+  const handleRetire = async () => {
+    if (!retireId) {
+      toast({ title: 'Validation Error', description: 'Select a credit to retire', variant: 'destructive' });
       return;
     }
-    setCredits((prev) => prev.map((c) => (c.id === retireId ? { ...c, status: 'Retired' as CreditStatus } : c)));
-    setRetireId('');
-    toast({ title: 'Credit Retired', description: `${credit.batchId} has been retired` });
+    try {
+      setRetiring(true);
+      const credit = [...available, ...traded].find((c) => c.id === retireId);
+      const projectId = credit ? ('methodology' in credit ? (credit as MarketplaceCredit).methodology : (credit as TradedCredit).project) : '';
+      const res = await fetch('/api/dmrv/marketplace', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'retire', projectId: projectId || 'unknown', creditId: retireId }),
+      });
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.error || 'Retire failed');
+      }
+      toast({ title: 'Credit Retired', description: `Credit has been permanently retired` });
+      setRetireId('');
+      await fetchData();
+    } catch (err) {
+      toast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to retire credit', variant: 'destructive' });
+    } finally {
+      setRetiring(false);
+    }
   };
 
-  const available = credits.filter((c) => c.status === 'Available');
-  const traded = credits.filter((c) => c.status === 'Traded');
-  const retired = credits.filter((c) => c.status === 'Retired');
+  const allCredits = [
+    ...available.map((c) => ({ ...c, status: 'Available' as CreditStatus, certNumber: c.tokenId, batchId: c.tokenId, projectId: c.project, type: c.methodology, price: (c.metadata?.price as number) || 0, createdAt: '' })),
+    ...traded.map((c) => ({ ...c, status: 'Traded' as CreditStatus, certNumber: c.tokenId, batchId: c.tokenId, projectId: c.project, type: '', price: 0, createdAt: c.tradedAt })),
+    ...retired.map((c) => ({ ...c, status: 'Retired' as CreditStatus, certNumber: c.tokenId, batchId: c.tokenId, projectId: c.project, type: '', price: 0, createdAt: c.retiredAt })),
+  ];
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight text-gray-900">Marketplace</h2>
+          <p className="text-muted-foreground text-sm mt-1">Mint, trade, and retire carbon credits on the marketplace</p>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <Skeleton className="h-20 w-full" />
+          <Skeleton className="h-20 w-full" />
+          <Skeleton className="h-20 w-full" />
+          <Skeleton className="h-20 w-full" />
+        </div>
+        <Skeleton className="h-64 w-full" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -116,26 +246,26 @@ export default function MarketplaceView() {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <Card>
           <CardContent className="p-4 text-center">
-            <p className="text-2xl font-bold">{available.reduce((s, c) => s + c.amount, 0).toLocaleString()}</p>
+            <p className="text-2xl font-bold">{(summary?.availableVolume ?? 0).toLocaleString()}</p>
             <p className="text-xs text-muted-foreground">Available tCO2e</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4 text-center">
-            <p className="text-2xl font-bold text-teal-600">{traded.reduce((s, c) => s + c.amount, 0).toLocaleString()}</p>
+            <p className="text-2xl font-bold text-teal-600">{(summary?.tradedVolume ?? 0).toLocaleString()}</p>
             <p className="text-xs text-muted-foreground">Traded tCO2e</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4 text-center">
-            <p className="text-2xl font-bold text-slate-500">{retired.reduce((s, c) => s + c.amount, 0).toLocaleString()}</p>
+            <p className="text-2xl font-bold text-slate-500">{(summary?.retiredVolume ?? 0).toLocaleString()}</p>
             <p className="text-xs text-muted-foreground">Retired tCO2e</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4 text-center">
-            <p className="text-2xl font-bold text-emerald-600">฿{(available.reduce((s, c) => s + c.amount * c.price, 0)).toLocaleString()}</p>
-            <p className="text-xs text-muted-foreground">Market Value</p>
+            <p className="text-2xl font-bold text-emerald-600">{(summary?.totalCredits ?? 0).toLocaleString()}</p>
+            <p className="text-xs text-muted-foreground">Total Credits</p>
           </CardContent>
         </Card>
       </div>
@@ -158,33 +288,39 @@ export default function MarketplaceView() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Batch</TableHead>
+                      <TableHead>Token ID</TableHead>
                       <TableHead>Project</TableHead>
-                      <TableHead>Type</TableHead>
+                      <TableHead>Methodology</TableHead>
                       <TableHead>Amount (tCO2e)</TableHead>
-                      <TableHead>Price (฿/tCO2e)</TableHead>
                       <TableHead>Status</TableHead>
-                      <TableHead>Cert</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {credits.map((credit) => (
-                      <TableRow key={credit.id}>
-                        <TableCell className="font-mono text-xs font-semibold">{credit.batchId}</TableCell>
-                        <TableCell className="text-xs">{credit.projectId}</TableCell>
-                        <TableCell>
-                          <Badge variant="secondary" className="text-[10px] h-5">{credit.type}</Badge>
-                        </TableCell>
-                        <TableCell className="font-mono">{credit.amount.toLocaleString()}</TableCell>
-                        <TableCell className="font-mono">฿{credit.price.toLocaleString()}</TableCell>
-                        <TableCell>
-                          <Badge variant="secondary" className={`text-[10px] h-5 ${statusStyles[credit.status]}`}>
-                            {credit.status}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="font-mono text-xs text-muted-foreground">{credit.certNumber}</TableCell>
+                    {allCredits.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={5} className="text-center text-muted-foreground py-8">No credits found</TableCell>
                       </TableRow>
-                    ))}
+                    ) : (
+                      allCredits.map((credit) => (
+                        <TableRow key={credit.id}>
+                          <TableCell className="font-mono text-xs font-semibold">{credit.batchId}</TableCell>
+                          <TableCell className="text-xs">{credit.projectId}</TableCell>
+                          <TableCell>
+                            {credit.type ? (
+                              <Badge variant="secondary" className="text-[10px] h-5">{credit.type}</Badge>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">—</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="font-mono">{credit.amount.toLocaleString()}</TableCell>
+                          <TableCell>
+                            <Badge variant="secondary" className={`text-[10px] h-5 ${statusStyles[credit.status]}`}>
+                              {credit.status}
+                            </Badge>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
                   </TableBody>
                 </Table>
               </ScrollArea>
@@ -204,16 +340,23 @@ export default function MarketplaceView() {
             <CardContent className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="space-y-2">
-                  <Label>Project ID</Label>
-                  <Input placeholder="e.g., RICE-001" value={mintProjectId} onChange={(e) => setMintProjectId(e.target.value)} />
+                  <Label>Project</Label>
+                  <Select value={mintProjectId} onValueChange={setMintProjectId}>
+                    <SelectTrigger><SelectValue placeholder="Select a project" /></SelectTrigger>
+                    <SelectContent>
+                      {projects.map((p) => (
+                        <SelectItem key={p.id} value={p.id}>{p.name} ({p.id})</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label>Credit Type</Label>
-                  <Select value={mintType} onValueChange={setMintType}>
+                  <Label>Track Type</Label>
+                  <Select value={mintTrackType} onValueChange={setMintTrackType}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      {['Biochar', 'AWD', 'Biogas', 'Solar', 'Blue Carbon'].map((t) => (
-                        <SelectItem key={t} value={t}>{t}</SelectItem>
+                      {['biochar', 'awd', 'biogas', 'solar', 'forest'].map((t) => (
+                        <SelectItem key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -223,9 +366,9 @@ export default function MarketplaceView() {
                   <Input type="number" placeholder="e.g., 5000" value={mintAmount} onChange={(e) => setMintAmount(e.target.value)} />
                 </div>
               </div>
-              <Button onClick={handleMint} className="bg-emerald-600 hover:bg-emerald-700 gap-2">
-                <Plus className="h-4 w-4" />
-                Mint Credits
+              <Button onClick={handleMint} disabled={minting} className="bg-emerald-600 hover:bg-emerald-700 gap-2">
+                {minting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                {minting ? 'Minting...' : 'Mint Credits'}
               </Button>
             </CardContent>
           </Card>
@@ -249,15 +392,19 @@ export default function MarketplaceView() {
                     <SelectContent>
                       {available.map((c) => (
                         <SelectItem key={c.id} value={c.id}>
-                          {c.batchId} — {c.amount.toLocaleString()} tCO2e ({c.projectId})
+                          {c.tokenId} — {c.amount.toLocaleString()} tCO2e ({c.project})
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
-                <Button onClick={handleTrade} className="w-full bg-teal-600 hover:bg-teal-700 gap-2">
-                  <ArrowRightLeft className="h-4 w-4" />
-                  Execute Trade
+                <div className="space-y-2">
+                  <Label>Buyer Name</Label>
+                  <Input placeholder="e.g., PTT Public Co." value={tradeBuyer} onChange={(e) => setTradeBuyer(e.target.value)} />
+                </div>
+                <Button onClick={handleTrade} disabled={trading} className="w-full bg-teal-600 hover:bg-teal-700 gap-2">
+                  {trading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRightLeft className="h-4 w-4" />}
+                  {trading ? 'Trading...' : 'Execute Trade'}
                 </Button>
               </CardContent>
             </Card>
@@ -276,17 +423,22 @@ export default function MarketplaceView() {
                   <Select value={retireId} onValueChange={setRetireId}>
                     <SelectTrigger><SelectValue placeholder="Select a credit batch" /></SelectTrigger>
                     <SelectContent>
-                      {credits.filter((c) => c.status !== 'Retired').map((c) => (
+                      {available.map((c) => (
                         <SelectItem key={c.id} value={c.id}>
-                          {c.batchId} — {c.amount.toLocaleString()} tCO2e ({c.status})
+                          {c.tokenId} — {c.amount.toLocaleString()} tCO2e (Available)
+                        </SelectItem>
+                      ))}
+                      {traded.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.tokenId} — {c.amount.toLocaleString()} tCO2e (Traded)
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
-                <Button onClick={handleRetire} variant="destructive" className="w-full gap-2">
-                  <Ban className="h-4 w-4" />
-                  Retire Credits
+                <Button onClick={handleRetire} disabled={retiring} variant="destructive" className="w-full gap-2">
+                  {retiring ? <Loader2 className="h-4 w-4 animate-spin" /> : <Ban className="h-4 w-4" />}
+                  {retiring ? 'Retiring...' : 'Retire Credits'}
                 </Button>
               </CardContent>
             </Card>
@@ -304,19 +456,19 @@ export default function MarketplaceView() {
             <CardContent>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
                 <div className="rounded-lg border p-6 text-center">
-                  <p className="text-3xl font-bold text-emerald-600">{available.reduce((s, c) => s + c.amount, 0).toLocaleString()}</p>
+                  <p className="text-3xl font-bold text-emerald-600">{(summary?.availableVolume ?? 0).toLocaleString()}</p>
                   <p className="text-sm text-muted-foreground mt-1">Available tCO2e</p>
-                  <p className="text-xs text-muted-foreground">{available.length} batches</p>
+                  <p className="text-xs text-muted-foreground">{summary?.availableCount ?? 0} batches</p>
                 </div>
                 <div className="rounded-lg border p-6 text-center">
-                  <p className="text-3xl font-bold text-teal-600">{traded.reduce((s, c) => s + c.amount, 0).toLocaleString()}</p>
+                  <p className="text-3xl font-bold text-teal-600">{(summary?.tradedVolume ?? 0).toLocaleString()}</p>
                   <p className="text-sm text-muted-foreground mt-1">Traded tCO2e</p>
-                  <p className="text-xs text-muted-foreground">{traded.length} batches</p>
+                  <p className="text-xs text-muted-foreground">{summary?.tradedCount ?? 0} batches</p>
                 </div>
                 <div className="rounded-lg border p-6 text-center">
-                  <p className="text-3xl font-bold text-slate-500">{retired.reduce((s, c) => s + c.amount, 0).toLocaleString()}</p>
+                  <p className="text-3xl font-bold text-slate-500">{(summary?.retiredVolume ?? 0).toLocaleString()}</p>
                   <p className="text-sm text-muted-foreground mt-1">Retired tCO2e</p>
-                  <p className="text-xs text-muted-foreground">{retired.length} batches</p>
+                  <p className="text-xs text-muted-foreground">{summary?.retiredCount ?? 0} batches</p>
                 </div>
               </div>
             </CardContent>

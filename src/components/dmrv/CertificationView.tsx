@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
-import { FileCheck, Award, Send, Eye } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { FileCheck, Award, Send, Eye, RefreshCw, CheckCircle, XCircle } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -12,51 +12,107 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 
-type CertStatus = 'Draft' | 'Submitted' | 'Under Review' | 'Issued' | 'Rejected';
+type CertStatus = 'SUBMITTED' | 'APPROVED' | 'REJECTED';
 
 interface Certificate {
   id: string;
+  certId: string;
   projectId: string;
-  certNumber: string;
-  type: string;
-  tco2e: number;
+  trackType: string;
   status: CertStatus;
-  issuedDate: string;
-  registry: string;
+  amountTco2e: number;
+  masterCertId: string;
+  validator: string;
+  issuedAt: string;
+  project: { id: string; name: string; methodology: string };
 }
 
-const mockCertificates: Certificate[] = [
-  { id: '1', projectId: 'RICE-001', certNumber: 'TVER-2024-089', type: 'Biochar', tco2e: 12450, status: 'Issued', issuedDate: '2024-12-10', registry: 'Thailand T-VER' },
-  { id: '2', projectId: 'RICE-002', certNumber: 'TVER-2024-088', type: 'AWD', tco2e: 8320, status: 'Issued', issuedDate: '2024-12-08', registry: 'Thailand T-VER' },
-  { id: '3', projectId: 'BIOG-003', certNumber: 'TVER-2024-090', type: 'Biogas', tco2e: 5600, status: 'Under Review', issuedDate: '-', registry: 'Thailand T-VER' },
-  { id: '4', projectId: 'SOL-004', certNumber: 'TVER-2024-091', type: 'Solar', tco2e: 3200, status: 'Submitted', issuedDate: '-', registry: 'Thailand T-VER' },
-  { id: '5', projectId: 'BLUE-005', certNumber: 'MC-0456', type: 'Blue Carbon', tco2e: 49500, status: 'Issued', issuedDate: '2024-11-28', registry: 'Master Certificate' },
-  { id: '6', projectId: 'RICE-006', certNumber: 'TVER-2024-092', type: 'AWD', tco2e: 4150, status: 'Draft', issuedDate: '-', registry: 'Thailand T-VER' },
-  { id: '7', projectId: 'BIOG-007', certNumber: 'TVER-2024-085', type: 'Biogas', tco2e: 2800, status: 'Rejected', issuedDate: '-', registry: 'Thailand T-VER' },
-];
+interface Project {
+  id: string;
+  name: string;
+  methodology: string;
+}
+
+interface CertSummary {
+  total: number;
+  submitted: number;
+  approved: number;
+  rejected: number;
+  totalTco2e: number;
+}
 
 const statusStyles: Record<CertStatus, string> = {
-  Draft: 'bg-slate-100 text-slate-700 hover:bg-slate-100',
-  Submitted: 'bg-teal-100 text-teal-700 hover:bg-teal-100',
-  'Under Review': 'bg-amber-100 text-amber-700 hover:bg-amber-100',
-  Issued: 'bg-emerald-100 text-emerald-700 hover:bg-emerald-100',
-  Rejected: 'bg-red-100 text-red-700 hover:bg-red-100',
+  SUBMITTED: 'bg-teal-100 text-teal-700 hover:bg-teal-100',
+  APPROVED: 'bg-emerald-100 text-emerald-700 hover:bg-emerald-100',
+  REJECTED: 'bg-red-100 text-red-700 hover:bg-red-100',
 };
+
+const statusLabels: Record<CertStatus, string> = {
+  SUBMITTED: 'Submitted',
+  APPROVED: 'Issued',
+  REJECTED: 'Rejected',
+};
+
+const trackTypeOptions = ['biochar', 'awd', 'biogas', 'solar', 'forest'];
 
 export default function CertificationView() {
   const { toast } = useToast();
-  const [certificates, setCertificates] = useState<Certificate[]>(mockCertificates);
+  const [certificates, setCertificates] = useState<Certificate[]>([]);
+  const [summary, setSummary] = useState<CertSummary | null>(null);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   const [selectedCert, setSelectedCert] = useState<Certificate | null>(null);
   const [formProjectId, setFormProjectId] = useState('');
-  const [formType, setFormType] = useState('Biochar');
+  const [formType, setFormType] = useState('biochar');
   const [formTco2e, setFormTco2e] = useState('');
   const [formNotes, setFormNotes] = useState('');
 
-  const handleSubmit = () => {
-    if (!formProjectId.trim() || !formTco2e.trim()) {
-      toast({ title: 'Validation Error', description: 'Project ID and tCO2e are required', variant: 'destructive' });
+  const fetchCertificates = useCallback(async () => {
+    try {
+      const res = await fetch('/api/dmrv/certification');
+      if (!res.ok) throw new Error('Failed to fetch certificates');
+      const data = await res.json();
+      setCertificates(data.certificates || []);
+      setSummary(data.summary || null);
+    } catch {
+      toast({ title: 'Error', description: 'Failed to load certificates', variant: 'destructive' });
+    }
+  }, [toast]);
+
+  const fetchProjects = useCallback(async () => {
+    try {
+      const res = await fetch('/api/dmrv');
+      if (!res.ok) throw new Error('Failed to fetch projects');
+      const data = await res.json();
+      setProjects(data.projects || []);
+    } catch {
+      toast({ title: 'Error', description: 'Failed to load projects', variant: 'destructive' });
+    }
+  }, [toast]);
+
+  useEffect(() => {
+    const init = async () => {
+      setLoading(true);
+      await Promise.all([fetchCertificates(), fetchProjects()]);
+      setLoading(false);
+    };
+    init();
+  }, [fetchCertificates, fetchProjects]);
+
+  const handleRefresh = async () => {
+    setLoading(true);
+    await fetchCertificates();
+    setLoading(false);
+    toast({ title: 'Refreshed', description: 'Certificate data updated' });
+  };
+
+  const handleSubmit = async () => {
+    if (!formProjectId) {
+      toast({ title: 'Validation Error', description: 'Please select a project', variant: 'destructive' });
       return;
     }
     const tco2e = parseFloat(formTco2e);
@@ -64,56 +120,122 @@ export default function CertificationView() {
       toast({ title: 'Invalid tCO2e', description: 'tCO2e must be a positive number', variant: 'destructive' });
       return;
     }
-    const newCert: Certificate = {
-      id: String(certificates.length + 1),
-      projectId: formProjectId.trim(),
-      certNumber: `TVER-2024-${String(93 + certificates.length).padStart(3, '0')}`,
-      type: formType,
-      tco2e,
-      status: 'Submitted',
-      issuedDate: '-',
-      registry: 'Thailand T-VER',
-    };
-    setCertificates((prev) => [newCert, ...prev]);
-    setFormProjectId('');
-    setFormTco2e('');
-    setFormNotes('');
-    toast({ title: 'Submitted for Certification', description: `${newCert.certNumber} submitted to T-VER registry` });
+    setSubmitting(true);
+    try {
+      const res = await fetch('/api/dmrv/certification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          projectId: formProjectId,
+          trackType: formType,
+          amountTco2e: tco2e,
+          action: 'submit',
+        }),
+      });
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.error || 'Submission failed');
+      }
+      const data = await res.json();
+      toast({ title: 'Submitted for Certification', description: `${data.certificate?.certId || 'Certificate'} submitted to T-VER registry` });
+      setFormProjectId('');
+      setFormTco2e('');
+      setFormNotes('');
+      await fetchCertificates();
+    } catch (err) {
+      toast({ title: 'Error', description: err instanceof Error ? err.message : 'Submission failed', variant: 'destructive' });
+    } finally {
+      setSubmitting(false);
+    }
   };
+
+  const handleAction = async (certId: string, action: 'approve' | 'reject') => {
+    try {
+      const res = await fetch('/api/dmrv/certification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, certId }),
+      });
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.error || `${action} failed`);
+      }
+      const data = await res.json();
+      toast({
+        title: action === 'approve' ? 'Certificate Approved' : 'Certificate Rejected',
+        description: `${certId} has been ${action === 'approve' ? 'approved' : 'rejected'}`,
+        variant: action === 'approve' ? 'default' : 'destructive',
+      });
+      await fetchCertificates();
+    } catch (err) {
+      toast({ title: 'Error', description: err instanceof Error ? err.message : 'Action failed', variant: 'destructive' });
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <Skeleton className="h-8 w-48" />
+          <Skeleton className="h-4 w-80 mt-2" />
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          {[1, 2, 3, 4].map((i) => (
+            <Card key={i}>
+              <CardContent className="p-4 text-center">
+                <Skeleton className="h-8 w-16 mx-auto" />
+                <Skeleton className="h-3 w-20 mx-auto mt-2" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+          <Card><CardContent className="p-6"><Skeleton className="h-64" /></CardContent></Card>
+          <div className="lg:col-span-2"><Card><CardContent className="p-6"><Skeleton className="h-64" /></CardContent></Card></div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
       {/* Page Title */}
-      <div>
-        <h2 className="text-2xl font-bold tracking-tight text-gray-900">Certification</h2>
-        <p className="text-muted-foreground text-sm mt-1">
-          T-VER certification management and Master Certificate issuance
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight text-gray-900">Certification</h2>
+          <p className="text-muted-foreground text-sm mt-1">
+            T-VER certification management and Master Certificate issuance
+          </p>
+        </div>
+        <Button variant="outline" size="sm" onClick={handleRefresh} className="gap-2">
+          <RefreshCw className="h-3.5 w-3.5" />
+          Refresh
+        </Button>
       </div>
 
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <Card>
           <CardContent className="p-4 text-center">
-            <p className="text-2xl font-bold text-emerald-600">{certificates.filter((c) => c.status === 'Issued').length}</p>
+            <p className="text-2xl font-bold text-emerald-600">{summary?.approved ?? 0}</p>
             <p className="text-xs text-muted-foreground">Issued</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4 text-center">
-            <p className="text-2xl font-bold text-amber-600">{certificates.filter((c) => c.status === 'Under Review').length}</p>
-            <p className="text-xs text-muted-foreground">Under Review</p>
+            <p className="text-2xl font-bold text-amber-600">{summary?.submitted ?? 0}</p>
+            <p className="text-xs text-muted-foreground">Pending</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4 text-center">
-            <p className="text-2xl font-bold text-teal-600">{certificates.filter((c) => c.status === 'Submitted').length}</p>
-            <p className="text-xs text-muted-foreground">Submitted</p>
+            <p className="text-2xl font-bold text-red-600">{summary?.rejected ?? 0}</p>
+            <p className="text-xs text-muted-foreground">Rejected</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4 text-center">
-            <p className="text-2xl font-bold">{certificates.filter((c) => c.status === 'Issued').reduce((s, c) => s + c.tco2e, 0).toLocaleString()}</p>
+            <p className="text-2xl font-bold">{(summary?.totalTco2e ?? 0).toLocaleString()}</p>
             <p className="text-xs text-muted-foreground">Certified tCO2e</p>
           </CardContent>
         </Card>
@@ -131,8 +253,19 @@ export default function CertificationView() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label>Project ID</Label>
-              <Input placeholder="e.g., RICE-001" value={formProjectId} onChange={(e) => setFormProjectId(e.target.value)} />
+              <Label>Project</Label>
+              <Select value={formProjectId} onValueChange={setFormProjectId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a project..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {projects.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-2">
               <Label>Credit Type</Label>
@@ -141,8 +274,8 @@ export default function CertificationView() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {['Biochar', 'AWD', 'Biogas', 'Solar', 'Blue Carbon'].map((t) => (
-                    <SelectItem key={t} value={t}>{t}</SelectItem>
+                  {trackTypeOptions.map((t) => (
+                    <SelectItem key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -155,9 +288,9 @@ export default function CertificationView() {
               <Label>Supporting Notes</Label>
               <Textarea placeholder="Additional information for the certifier..." value={formNotes} onChange={(e) => setFormNotes(e.target.value)} rows={3} />
             </div>
-            <Button onClick={handleSubmit} className="w-full bg-emerald-600 hover:bg-emerald-700 gap-2">
+            <Button onClick={handleSubmit} disabled={submitting} className="w-full bg-emerald-600 hover:bg-emerald-700 gap-2">
               <FileCheck className="h-4 w-4" />
-              Submit for T-VER
+              {submitting ? 'Submitting...' : 'Submit for T-VER'}
             </Button>
           </CardContent>
         </Card>
@@ -181,52 +314,86 @@ export default function CertificationView() {
                     <TableHead>Type</TableHead>
                     <TableHead>tCO2e</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead>Actions</TableHead>
                     <TableHead></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {certificates.map((cert) => (
-                    <TableRow key={cert.id}>
-                      <TableCell className="font-mono text-xs font-semibold">{cert.certNumber}</TableCell>
-                      <TableCell className="text-xs">{cert.projectId}</TableCell>
-                      <TableCell>
-                        <Badge variant="secondary" className="text-[10px] h-5">{cert.type}</Badge>
-                      </TableCell>
-                      <TableCell className="font-mono text-sm">{cert.tco2e.toLocaleString()}</TableCell>
-                      <TableCell>
-                        <Badge variant="secondary" className={`text-[10px] h-5 ${statusStyles[cert.status]}`}>
-                          {cert.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Dialog>
-                          <DialogTrigger asChild>
-                            <Button variant="ghost" size="sm" onClick={() => setSelectedCert(cert)}>
-                              <Eye className="h-3.5 w-3.5" />
-                            </Button>
-                          </DialogTrigger>
-                          <DialogContent>
-                            <DialogHeader>
-                              <DialogTitle>Certificate Details</DialogTitle>
-                            </DialogHeader>
-                            {selectedCert && (
-                              <div className="space-y-3">
-                                <div className="grid grid-cols-2 gap-3 text-sm">
-                                  <div><span className="text-muted-foreground">Certificate:</span> <span className="font-mono font-semibold">{selectedCert.certNumber}</span></div>
-                                  <div><span className="text-muted-foreground">Project:</span> {selectedCert.projectId}</div>
-                                  <div><span className="text-muted-foreground">Type:</span> {selectedCert.type}</div>
-                                  <div><span className="text-muted-foreground">tCO2e:</span> <span className="font-semibold text-emerald-700">{selectedCert.tco2e.toLocaleString()}</span></div>
-                                  <div><span className="text-muted-foreground">Status:</span> <Badge variant="secondary" className={`text-[10px] h-5 ${statusStyles[selectedCert.status]}`}>{selectedCert.status}</Badge></div>
-                                  <div><span className="text-muted-foreground">Registry:</span> {selectedCert.registry}</div>
-                                  <div><span className="text-muted-foreground">Issued:</span> {selectedCert.issuedDate}</div>
-                                </div>
-                              </div>
-                            )}
-                          </DialogContent>
-                        </Dialog>
+                  {certificates.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                        No certificates found. Submit one above.
                       </TableCell>
                     </TableRow>
-                  ))}
+                  ) : (
+                    certificates.map((cert) => (
+                      <TableRow key={cert.id}>
+                        <TableCell className="font-mono text-xs font-semibold">{cert.certId}</TableCell>
+                        <TableCell className="text-xs">{cert.project?.name || cert.projectId}</TableCell>
+                        <TableCell>
+                          <Badge variant="secondary" className="text-[10px] h-5">{cert.trackType}</Badge>
+                        </TableCell>
+                        <TableCell className="font-mono text-sm">{cert.amountTco2e.toLocaleString()}</TableCell>
+                        <TableCell>
+                          <Badge variant="secondary" className={`text-[10px] h-5 ${statusStyles[cert.status as CertStatus] || ''}`}>
+                            {statusLabels[cert.status as CertStatus] || cert.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          {cert.status === 'SUBMITTED' && (
+                            <div className="flex gap-1">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleAction(cert.certId, 'approve')}
+                                className="h-7 px-2 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
+                                title="Approve"
+                              >
+                                <CheckCircle className="h-3.5 w-3.5" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleAction(cert.certId, 'reject')}
+                                className="h-7 px-2 text-red-600 hover:text-red-700 hover:bg-red-50"
+                                title="Reject"
+                              >
+                                <XCircle className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <Dialog>
+                            <DialogTrigger asChild>
+                              <Button variant="ghost" size="sm" onClick={() => setSelectedCert(cert)}>
+                                <Eye className="h-3.5 w-3.5" />
+                              </Button>
+                            </DialogTrigger>
+                            <DialogContent>
+                              <DialogHeader>
+                                <DialogTitle>Certificate Details</DialogTitle>
+                              </DialogHeader>
+                              {selectedCert && (
+                                <div className="space-y-3">
+                                  <div className="grid grid-cols-2 gap-3 text-sm">
+                                    <div><span className="text-muted-foreground">Certificate:</span> <span className="font-mono font-semibold">{selectedCert.certId}</span></div>
+                                    <div><span className="text-muted-foreground">Project:</span> {selectedCert.project?.name || selectedCert.projectId}</div>
+                                    <div><span className="text-muted-foreground">Type:</span> {selectedCert.trackType}</div>
+                                    <div><span className="text-muted-foreground">tCO2e:</span> <span className="font-semibold text-emerald-700">{selectedCert.amountTco2e.toLocaleString()}</span></div>
+                                    <div><span className="text-muted-foreground">Status:</span> <Badge variant="secondary" className={`text-[10px] h-5 ${statusStyles[selectedCert.status as CertStatus] || ''}`}>{statusLabels[selectedCert.status as CertStatus] || selectedCert.status}</Badge></div>
+                                    <div><span className="text-muted-foreground">Validator:</span> {selectedCert.validator}</div>
+                                    {selectedCert.masterCertId && <div><span className="text-muted-foreground">Master Cert:</span> <span className="font-mono font-semibold">{selectedCert.masterCertId}</span></div>}
+                                    <div><span className="text-muted-foreground">Issued:</span> {new Date(selectedCert.issuedAt).toLocaleDateString()}</div>
+                                  </div>
+                                </div>
+                              )}
+                            </DialogContent>
+                          </Dialog>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
                 </TableBody>
               </Table>
             </ScrollArea>

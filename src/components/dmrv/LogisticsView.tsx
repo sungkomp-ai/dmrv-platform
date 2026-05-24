@@ -1,91 +1,241 @@
 'use client';
 
-import React, { useState } from 'react';
-import { Truck, Package, Banknote, MapPin } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Truck, Package, Banknote, MapPin, Loader2, Plus } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Progress } from '@/components/ui/progress';
+import { Skeleton } from '@/components/ui/skeleton';
+import { useToast } from '@/hooks/use-toast';
 
-interface TrackingRecord {
-  id: string;
+interface TrackingPosition {
   assetId: string;
-  batchId: string;
-  location: string;
-  status: 'In Transit' | 'Delivered' | 'At Warehouse' | 'Pending Pickup';
-  lastUpdate: string;
+  latitude: number;
+  longitude: number;
+  timestamp: string;
+  status: string;
 }
 
 interface InventoryItem {
-  id: string;
-  product: string;
-  type: string;
-  quantity: number;
+  assetId: string;
+  stock: number;
   unit: string;
-  warehouse: string;
-  status: 'In Stock' | 'Low Stock' | 'Reserved' | 'Out of Stock';
+  lastUpdated: string;
 }
 
 interface SettlementRecord {
   id: string;
-  tradeId: string;
-  buyer: string;
-  seller: string;
+  assetId: string;
   amount: number;
-  currency: string;
-  status: 'Completed' | 'Processing' | 'Pending' | 'Failed';
-  settledAt: string;
+  status: string;
+  timestamp: string;
 }
 
-const trackingRecords: TrackingRecord[] = [
-  { id: '1', assetId: 'AST-001', batchId: 'CB-0456', location: 'Bangkok Distribution Center', status: 'Delivered', lastUpdate: '2 hr ago' },
-  { id: '2', assetId: 'AST-002', batchId: 'CB-0457', location: 'In transit — Ayutthaya → Bangkok', status: 'In Transit', lastUpdate: '30 min ago' },
-  { id: '3', assetId: 'AST-003', batchId: 'CB-0458', location: 'Chiang Mai Warehouse', status: 'At Warehouse', lastUpdate: '1 hr ago' },
-  { id: '4', assetId: 'AST-004', batchId: 'CB-0460', location: 'Pending pickup — Surin Province', status: 'Pending Pickup', lastUpdate: '4 hr ago' },
-  { id: '5', assetId: 'AST-005', batchId: 'CB-0440', location: 'Bangkok Distribution Center', status: 'Delivered', lastUpdate: '1 day ago' },
-];
-
-const inventoryItems: InventoryItem[] = [
-  { id: '1', product: 'Biochar Credits (CB-0456)', type: 'Biochar', quantity: 5000, unit: 'tCO2e', warehouse: 'Bangkok', status: 'In Stock' },
-  { id: '2', product: 'AWD Credits (CB-0457)', type: 'AWD', quantity: 3320, unit: 'tCO2e', warehouse: 'Bangkok', status: 'In Stock' },
-  { id: '3', product: 'Blue Carbon Credits (CB-0458)', type: 'Blue Carbon', quantity: 10000, unit: 'tCO2e', warehouse: 'Chiang Mai', status: 'Reserved' },
-  { id: '4', product: 'Solar Credits (CB-0445)', type: 'Solar', quantity: 150, unit: 'tCO2e', warehouse: 'Bangkok', status: 'Low Stock' },
-  { id: '5', product: 'Biogas Credits (CB-0435)', type: 'Biogas', quantity: 0, unit: 'tCO2e', warehouse: 'Bangkok', status: 'Out of Stock' },
-  { id: '6', product: 'AWD Credits (CB-0420)', type: 'AWD', quantity: 800, unit: 'tCO2e', warehouse: 'Khon Kaen', status: 'In Stock' },
-];
-
-const settlementRecords: SettlementRecord[] = [
-  { id: '1', tradeId: 'TR-1234', buyer: 'PTT Public Co.', seller: 'RICE-001 Project', amount: 2450000, currency: 'THB', status: 'Completed', settledAt: '2024-12-15 14:00' },
-  { id: '2', tradeId: 'TR-1235', buyer: 'CP Group', seller: 'RICE-002 Project', amount: 1826000, currency: 'THB', status: 'Completed', settledAt: '2024-12-15 11:30' },
-  { id: '3', tradeId: 'TR-1236', buyer: 'Bangkok Bank', seller: 'BLUE-005 Project', amount: 3750000, currency: 'THB', status: 'Processing', settledAt: '-' },
-  { id: '4', tradeId: 'TR-1237', buyer: 'SCG Chemicals', seller: 'BIOG-003 Project', amount: 936000, currency: 'THB', status: 'Pending', settledAt: '-' },
-  { id: '5', tradeId: 'TR-1238', buyer: 'Thai Union Group', seller: 'SOL-004 Project', amount: 1536000, currency: 'THB', status: 'Failed', settledAt: '-' },
-];
+interface LogisticsSummary {
+  trackingPoints: number;
+  inventoryItems: number;
+  totalSettlements: number;
+  totalSettlementAmount: number;
+  processedSettlements: number;
+}
 
 const trackingStatusStyles: Record<string, string> = {
+  'in_transit': 'bg-teal-100 text-teal-700 hover:bg-teal-100',
+  'delivered': 'bg-emerald-100 text-emerald-700 hover:bg-emerald-100',
+  'at_warehouse': 'bg-amber-100 text-amber-700 hover:bg-amber-100',
+  'pending_pickup': 'bg-slate-100 text-slate-700 hover:bg-slate-100',
   'In Transit': 'bg-teal-100 text-teal-700 hover:bg-teal-100',
   'Delivered': 'bg-emerald-100 text-emerald-700 hover:bg-emerald-100',
   'At Warehouse': 'bg-amber-100 text-amber-700 hover:bg-amber-100',
   'Pending Pickup': 'bg-slate-100 text-slate-700 hover:bg-slate-100',
 };
 
-const inventoryStatusStyles: Record<string, string> = {
-  'In Stock': 'bg-emerald-100 text-emerald-700 hover:bg-emerald-100',
-  'Low Stock': 'bg-amber-100 text-amber-700 hover:bg-amber-100',
-  'Reserved': 'bg-teal-100 text-teal-700 hover:bg-teal-100',
-  'Out of Stock': 'bg-red-100 text-red-700 hover:bg-red-100',
+const settlementStatusStyles: Record<string, string> = {
+  'processed': 'bg-emerald-100 text-emerald-700 hover:bg-emerald-100',
+  'pending': 'bg-amber-100 text-amber-700 hover:bg-amber-100',
+  'failed': 'bg-red-100 text-red-700 hover:bg-red-100',
 };
 
-const settlementStatusStyles: Record<string, string> = {
-  'Completed': 'bg-emerald-100 text-emerald-700 hover:bg-emerald-100',
-  'Processing': 'bg-amber-100 text-amber-700 hover:bg-amber-100',
-  'Pending': 'bg-slate-100 text-slate-700 hover:bg-slate-100',
-  'Failed': 'bg-red-100 text-red-700 hover:bg-red-100',
-};
+function formatStatus(status: string): string {
+  return status.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
 
 export default function LogisticsView() {
+  const { toast } = useToast();
+  const [loading, setLoading] = useState(true);
+  const [tracking, setTracking] = useState<TrackingPosition[]>([]);
+  const [inventory, setInventory] = useState<InventoryItem[]>([]);
+  const [settlements, setSettlements] = useState<SettlementRecord[]>([]);
+  const [logisticsSummary, setLogisticsSummary] = useState<LogisticsSummary | null>(null);
+
+  // Tracking form
+  const [trackAssetId, setTrackAssetId] = useState('');
+  const [trackLat, setTrackLat] = useState('');
+  const [trackLng, setTrackLng] = useState('');
+  const [trackStatus, setTrackStatus] = useState('in_transit');
+  const [submittingTracking, setSubmittingTracking] = useState(false);
+
+  // Inventory form
+  const [invAssetId, setInvAssetId] = useState('');
+  const [invStock, setInvStock] = useState('');
+  const [invUnit, setInvUnit] = useState('tCO2e');
+  const [submittingInventory, setSubmittingInventory] = useState(false);
+
+  // Settlement form
+  const [settleAssetId, setSettleAssetId] = useState('');
+  const [settleAmount, setSettleAmount] = useState('');
+  const [submittingSettlement, setSubmittingSettlement] = useState(false);
+
+  const fetchData = useCallback(async () => {
+    try {
+      const res = await fetch('/api/dmrv/logistics');
+      if (!res.ok) throw new Error('Failed to fetch logistics data');
+      const data = await res.json();
+      setTracking(data.tracking || []);
+      setInventory(data.inventory || []);
+      setSettlements(data.settlements || []);
+      setLogisticsSummary(data.summary || null);
+    } catch (err) {
+      toast({ title: 'Error', description: 'Failed to load logistics data', variant: 'destructive' });
+    } finally {
+      setLoading(false);
+    }
+  }, [toast]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  const handleAddTracking = async () => {
+    if (!trackAssetId.trim() || !trackLat || !trackLng) {
+      toast({ title: 'Validation Error', description: 'Asset ID, latitude, and longitude are required', variant: 'destructive' });
+      return;
+    }
+    try {
+      setSubmittingTracking(true);
+      const res = await fetch('/api/dmrv/logistics', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'tracking',
+          assetId: trackAssetId.trim(),
+          latitude: parseFloat(trackLat),
+          longitude: parseFloat(trackLng),
+          status: trackStatus,
+        }),
+      });
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.error || 'Failed to update tracking');
+      }
+      toast({ title: 'Tracking Updated', description: `Position updated for ${trackAssetId}` });
+      setTrackAssetId('');
+      setTrackLat('');
+      setTrackLng('');
+      await fetchData();
+    } catch (err) {
+      toast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to update tracking', variant: 'destructive' });
+    } finally {
+      setSubmittingTracking(false);
+    }
+  };
+
+  const handleAddInventory = async () => {
+    if (!invAssetId.trim() || invStock === '') {
+      toast({ title: 'Validation Error', description: 'Asset ID and stock quantity are required', variant: 'destructive' });
+      return;
+    }
+    try {
+      setSubmittingInventory(true);
+      const res = await fetch('/api/dmrv/logistics', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'inventory',
+          assetId: invAssetId.trim(),
+          stock: parseFloat(invStock),
+          unit: invUnit,
+        }),
+      });
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.error || 'Failed to update inventory');
+      }
+      toast({ title: 'Inventory Updated', description: `Stock updated for ${invAssetId}` });
+      setInvAssetId('');
+      setInvStock('');
+      await fetchData();
+    } catch (err) {
+      toast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to update inventory', variant: 'destructive' });
+    } finally {
+      setSubmittingInventory(false);
+    }
+  };
+
+  const handleProcessSettlement = async () => {
+    if (!settleAssetId.trim() || !settleAmount) {
+      toast({ title: 'Validation Error', description: 'Asset ID and amount are required', variant: 'destructive' });
+      return;
+    }
+    try {
+      setSubmittingSettlement(true);
+      const res = await fetch('/api/dmrv/logistics', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'settlement',
+          assetId: settleAssetId.trim(),
+          amount: parseFloat(settleAmount),
+        }),
+      });
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.error || 'Failed to process settlement');
+      }
+      toast({ title: 'Settlement Processed', description: `Settlement processed for ${settleAssetId}` });
+      setSettleAssetId('');
+      setSettleAmount('');
+      await fetchData();
+    } catch (err) {
+      toast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to process settlement', variant: 'destructive' });
+    } finally {
+      setSubmittingSettlement(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight text-gray-900">Logistics</h2>
+          <p className="text-muted-foreground text-sm mt-1">Track assets, manage inventory, and process settlements</p>
+        </div>
+        <Skeleton className="h-10 w-64" />
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <Skeleton className="h-20 w-full" />
+          <Skeleton className="h-20 w-full" />
+          <Skeleton className="h-20 w-full" />
+          <Skeleton className="h-20 w-full" />
+        </div>
+        <Skeleton className="h-64 w-full" />
+      </div>
+    );
+  }
+
+  const inTransit = tracking.filter((t) => t.status === 'in_transit' || t.status === 'In Transit').length;
+  const delivered = tracking.filter((t) => t.status === 'delivered' || t.status === 'Delivered').length;
+  const atWarehouse = tracking.filter((t) => t.status === 'at_warehouse' || t.status === 'At Warehouse').length;
+  const pendingPickup = tracking.filter((t) => t.status === 'pending_pickup' || t.status === 'Pending Pickup').length;
+
+  const processedSettlements = settlements.filter((s) => s.status === 'processed');
+  const totalProcessedAmount = processedSettlements.reduce((sum, s) => sum + s.amount, 0);
+
   return (
     <div className="space-y-6">
       {/* Page Title */}
@@ -104,33 +254,78 @@ export default function LogisticsView() {
         </TabsList>
 
         {/* Tracking Tab */}
-        <TabsContent value="tracking" className="mt-4">
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+        <TabsContent value="tracking" className="mt-4 space-y-6">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <Card>
               <CardContent className="p-4 text-center">
-                <p className="text-2xl font-bold text-teal-600">{trackingRecords.filter((t) => t.status === 'In Transit').length}</p>
+                <p className="text-2xl font-bold text-teal-600">{inTransit}</p>
                 <p className="text-xs text-muted-foreground">In Transit</p>
               </CardContent>
             </Card>
             <Card>
               <CardContent className="p-4 text-center">
-                <p className="text-2xl font-bold text-emerald-600">{trackingRecords.filter((t) => t.status === 'Delivered').length}</p>
+                <p className="text-2xl font-bold text-emerald-600">{delivered}</p>
                 <p className="text-xs text-muted-foreground">Delivered</p>
               </CardContent>
             </Card>
             <Card>
               <CardContent className="p-4 text-center">
-                <p className="text-2xl font-bold text-amber-600">{trackingRecords.filter((t) => t.status === 'At Warehouse').length}</p>
+                <p className="text-2xl font-bold text-amber-600">{atWarehouse}</p>
                 <p className="text-xs text-muted-foreground">At Warehouse</p>
               </CardContent>
             </Card>
             <Card>
               <CardContent className="p-4 text-center">
-                <p className="text-2xl font-bold">{trackingRecords.filter((t) => t.status === 'Pending Pickup').length}</p>
+                <p className="text-2xl font-bold">{pendingPickup}</p>
                 <p className="text-xs text-muted-foreground">Pending Pickup</p>
               </CardContent>
             </Card>
           </div>
+
+          {/* Add Tracking Position */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Plus className="h-4 w-4 text-emerald-600" />
+                Update Tracking Position
+              </CardTitle>
+              <CardDescription>Add or update a tracking position for an asset</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+                <div className="space-y-2">
+                  <Label>Asset ID</Label>
+                  <Input placeholder="e.g., AST-001" value={trackAssetId} onChange={(e) => setTrackAssetId(e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Latitude</Label>
+                  <Input type="number" step="0.0001" placeholder="e.g., 13.7563" value={trackLat} onChange={(e) => setTrackLat(e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Longitude</Label>
+                  <Input type="number" step="0.0001" placeholder="e.g., 100.5018" value={trackLng} onChange={(e) => setTrackLng(e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Status</Label>
+                  <Select value={trackStatus} onValueChange={setTrackStatus}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="in_transit">In Transit</SelectItem>
+                      <SelectItem value="delivered">Delivered</SelectItem>
+                      <SelectItem value="at_warehouse">At Warehouse</SelectItem>
+                      <SelectItem value="pending_pickup">Pending Pickup</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex items-end">
+                  <Button onClick={handleAddTracking} disabled={submittingTracking} className="w-full bg-emerald-600 hover:bg-emerald-700 gap-2">
+                    {submittingTracking ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                    Update
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
 
           <Card>
             <CardHeader>
@@ -142,31 +337,34 @@ export default function LogisticsView() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Asset ID</TableHead>
-                      <TableHead>Batch</TableHead>
-                      <TableHead>Location</TableHead>
+                      <TableHead>Latitude</TableHead>
+                      <TableHead>Longitude</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead className="text-right">Last Update</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {trackingRecords.map((record) => (
-                      <TableRow key={record.id}>
-                        <TableCell className="font-mono text-xs font-semibold">{record.assetId}</TableCell>
-                        <TableCell className="font-mono text-xs">{record.batchId}</TableCell>
-                        <TableCell className="text-xs">
-                          <div className="flex items-center gap-1.5">
-                            <MapPin className="h-3 w-3 text-muted-foreground" />
-                            {record.location}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="secondary" className={`text-[10px] h-5 ${trackingStatusStyles[record.status]}`}>
-                            {record.status}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-right text-xs text-muted-foreground">{record.lastUpdate}</TableCell>
+                    {tracking.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={5} className="text-center text-muted-foreground py-8">No tracking records. Add a position above.</TableCell>
                       </TableRow>
-                    ))}
+                    ) : (
+                      tracking.map((record, idx) => (
+                        <TableRow key={`${record.assetId}-${idx}`}>
+                          <TableCell className="font-mono text-xs font-semibold">{record.assetId}</TableCell>
+                          <TableCell className="font-mono text-xs">{record.latitude.toFixed(4)}</TableCell>
+                          <TableCell className="font-mono text-xs">{record.longitude.toFixed(4)}</TableCell>
+                          <TableCell>
+                            <Badge variant="secondary" className={`text-[10px] h-5 ${trackingStatusStyles[record.status] || 'bg-slate-100 text-slate-700'}`}>
+                              {formatStatus(record.status)}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right text-xs text-muted-foreground">
+                            {new Date(record.timestamp).toLocaleString()}
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
                   </TableBody>
                 </Table>
               </ScrollArea>
@@ -175,45 +373,87 @@ export default function LogisticsView() {
         </TabsContent>
 
         {/* Inventory Tab */}
-        <TabsContent value="inventory" className="mt-4">
+        <TabsContent value="inventory" className="mt-4 space-y-6">
+          {/* Add Inventory */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Plus className="h-4 w-4 text-emerald-600" />
+                Update Inventory
+              </CardTitle>
+              <CardDescription>Add or update inventory stock for an asset</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="space-y-2">
+                  <Label>Asset ID</Label>
+                  <Input placeholder="e.g., CB-0456" value={invAssetId} onChange={(e) => setInvAssetId(e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Stock Quantity</Label>
+                  <Input type="number" placeholder="e.g., 5000" value={invStock} onChange={(e) => setInvStock(e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Unit</Label>
+                  <Select value={invUnit} onValueChange={setInvUnit}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="tCO2e">tCO2e</SelectItem>
+                      <SelectItem value="kg">kg</SelectItem>
+                      <SelectItem value="tonnes">tonnes</SelectItem>
+                      <SelectItem value="units">units</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex items-end">
+                  <Button onClick={handleAddInventory} disabled={submittingInventory} className="w-full bg-emerald-600 hover:bg-emerald-700 gap-2">
+                    {submittingInventory ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                    Update
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Stock Levels</CardTitle>
-              <CardDescription>Current inventory across all warehouses</CardDescription>
+              <CardDescription>Current inventory across all assets</CardDescription>
             </CardHeader>
             <CardContent className="p-0">
               <ScrollArea className="max-h-96">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Product</TableHead>
-                      <TableHead>Type</TableHead>
-                      <TableHead>Quantity</TableHead>
-                      <TableHead>Warehouse</TableHead>
-                      <TableHead>Status</TableHead>
+                      <TableHead>Asset ID</TableHead>
+                      <TableHead>Stock</TableHead>
+                      <TableHead>Unit</TableHead>
+                      <TableHead className="text-right">Last Updated</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {inventoryItems.map((item) => (
-                      <TableRow key={item.id}>
-                        <TableCell className="text-xs font-medium">{item.product}</TableCell>
-                        <TableCell>
-                          <Badge variant="secondary" className="text-[10px] h-5">{item.type}</Badge>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <span className="font-mono text-sm">{item.quantity.toLocaleString()}</span>
-                            <span className="text-xs text-muted-foreground">{item.unit}</span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-xs">{item.warehouse}</TableCell>
-                        <TableCell>
-                          <Badge variant="secondary" className={`text-[10px] h-5 ${inventoryStatusStyles[item.status]}`}>
-                            {item.status}
-                          </Badge>
-                        </TableCell>
+                    {inventory.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={4} className="text-center text-muted-foreground py-8">No inventory items. Add one above.</TableCell>
                       </TableRow>
-                    ))}
+                    ) : (
+                      inventory.map((item, idx) => (
+                        <TableRow key={`${item.assetId}-${idx}`}>
+                          <TableCell className="text-xs font-medium font-mono">{item.assetId}</TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono text-sm">{item.stock.toLocaleString()}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="secondary" className="text-[10px] h-5">{item.unit}</Badge>
+                          </TableCell>
+                          <TableCell className="text-right text-xs text-muted-foreground">
+                            {new Date(item.lastUpdated).toLocaleString()}
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
                   </TableBody>
                 </Table>
               </ScrollArea>
@@ -222,33 +462,62 @@ export default function LogisticsView() {
         </TabsContent>
 
         {/* Settlement Tab */}
-        <TabsContent value="settlement" className="mt-4">
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+        <TabsContent value="settlement" className="mt-4 space-y-6">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <Card>
               <CardContent className="p-4 text-center">
-                <p className="text-2xl font-bold text-emerald-600">฿{(settlementRecords.filter((s) => s.status === 'Completed').reduce((sum, s) => sum + s.amount, 0) / 1000000).toFixed(1)}M</p>
-                <p className="text-xs text-muted-foreground">Completed</p>
+                <p className="text-2xl font-bold text-emerald-600">฿{(totalProcessedAmount).toLocaleString()}</p>
+                <p className="text-xs text-muted-foreground">Processed</p>
               </CardContent>
             </Card>
             <Card>
               <CardContent className="p-4 text-center">
-                <p className="text-2xl font-bold text-amber-600">฿{(settlementRecords.filter((s) => s.status === 'Processing').reduce((sum, s) => sum + s.amount, 0) / 1000000).toFixed(1)}M</p>
-                <p className="text-xs text-muted-foreground">Processing</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-4 text-center">
-                <p className="text-2xl font-bold">฿{(settlementRecords.filter((s) => s.status === 'Pending').reduce((sum, s) => sum + s.amount, 0) / 1000000).toFixed(1)}M</p>
+                <p className="text-2xl font-bold text-amber-600">{settlements.filter((s) => s.status === 'pending').length}</p>
                 <p className="text-xs text-muted-foreground">Pending</p>
               </CardContent>
             </Card>
             <Card>
               <CardContent className="p-4 text-center">
-                <p className="text-2xl font-bold text-red-600">฿{(settlementRecords.filter((s) => s.status === 'Failed').reduce((sum, s) => sum + s.amount, 0) / 1000000).toFixed(1)}M</p>
+                <p className="text-2xl font-bold">{logisticsSummary?.totalSettlements ?? 0}</p>
+                <p className="text-xs text-muted-foreground">Total Settlements</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4 text-center">
+                <p className="text-2xl font-bold text-red-600">{settlements.filter((s) => s.status === 'failed').length}</p>
                 <p className="text-xs text-muted-foreground">Failed</p>
               </CardContent>
             </Card>
           </div>
+
+          {/* Process Settlement */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Plus className="h-4 w-4 text-emerald-600" />
+                Process Settlement
+              </CardTitle>
+              <CardDescription>Create a new settlement for an asset</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label>Asset ID</Label>
+                  <Input placeholder="e.g., TCO2E-xxx" value={settleAssetId} onChange={(e) => setSettleAssetId(e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Amount (THB)</Label>
+                  <Input type="number" placeholder="e.g., 2450000" value={settleAmount} onChange={(e) => setSettleAmount(e.target.value)} />
+                </div>
+                <div className="flex items-end">
+                  <Button onClick={handleProcessSettlement} disabled={submittingSettlement} className="w-full bg-emerald-600 hover:bg-emerald-700 gap-2">
+                    {submittingSettlement ? <Loader2 className="h-4 w-4 animate-spin" /> : <Banknote className="h-4 w-4" />}
+                    Process
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
 
           <Card>
             <CardHeader>
@@ -259,29 +528,35 @@ export default function LogisticsView() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Trade ID</TableHead>
-                      <TableHead>Buyer</TableHead>
-                      <TableHead>Seller</TableHead>
+                      <TableHead>ID</TableHead>
+                      <TableHead>Asset ID</TableHead>
                       <TableHead>Amount</TableHead>
                       <TableHead>Status</TableHead>
-                      <TableHead className="text-right">Settled At</TableHead>
+                      <TableHead className="text-right">Timestamp</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {settlementRecords.map((record) => (
-                      <TableRow key={record.id}>
-                        <TableCell className="font-mono text-xs font-semibold">{record.tradeId}</TableCell>
-                        <TableCell className="text-xs">{record.buyer}</TableCell>
-                        <TableCell className="text-xs">{record.seller}</TableCell>
-                        <TableCell className="font-mono text-sm">฿{record.amount.toLocaleString()}</TableCell>
-                        <TableCell>
-                          <Badge variant="secondary" className={`text-[10px] h-5 ${settlementStatusStyles[record.status]}`}>
-                            {record.status}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-right text-xs text-muted-foreground">{record.settledAt}</TableCell>
+                    {settlements.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={5} className="text-center text-muted-foreground py-8">No settlement records</TableCell>
                       </TableRow>
-                    ))}
+                    ) : (
+                      settlements.map((record) => (
+                        <TableRow key={record.id}>
+                          <TableCell className="font-mono text-xs font-semibold">{record.id}</TableCell>
+                          <TableCell className="text-xs">{record.assetId}</TableCell>
+                          <TableCell className="font-mono text-sm">฿{record.amount.toLocaleString()}</TableCell>
+                          <TableCell>
+                            <Badge variant="secondary" className={`text-[10px] h-5 ${settlementStatusStyles[record.status] || 'bg-slate-100 text-slate-700'}`}>
+                              {formatStatus(record.status)}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right text-xs text-muted-foreground">
+                            {new Date(record.timestamp).toLocaleString()}
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
                   </TableBody>
                 </Table>
               </ScrollArea>

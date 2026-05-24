@@ -1,97 +1,104 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { CheckCircle, Shield, Activity, Hash } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Separator } from '@/components/ui/separator';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 
-const sourceTypes = ['Satellite', 'Photo', 'Drone', 'LiDAR', 'IoT', 'Weather', 'Soil', 'Biochar', 'AWD', 'Fertilizer', 'Biogas', 'Solar', 'Agri-Activity'];
+interface Project {
+  id: string;
+  name: string;
+  methodology: string;
+}
+
+interface SourceBreakdown {
+  sourceType: string;
+  logCount: number;
+  activities: string[];
+}
 
 interface VerificationResult {
   projectId: string;
+  projectName: string;
   integrityScore: number;
-  sourceCoverage: number;
-  sourcesCovered: string[];
-  status: 'PASSED' | 'FAILED';
-  auditHash: string;
-  timestamp: string;
+  integrityGrade: string;
+  hashCoverage: number;
+  recommendation: string;
+  crossValidation: {
+    passed: boolean;
+    requiredSourceTypes: number;
+    actualSourceTypes: number;
+    sourceBreakdown: SourceBreakdown[];
+  };
 }
 
 export default function VerificationView() {
   const { toast } = useToast();
+  const [projects, setProjects] = useState<Project[]>([]);
   const [projectId, setProjectId] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [result, setResult] = useState<VerificationResult | null>(null);
-  const [history, setHistory] = useState<VerificationResult[]>([
-    {
-      projectId: 'RICE-001',
-      integrityScore: 94.7,
-      sourceCoverage: 77,
-      sourcesCovered: ['Satellite', 'IoT', 'Photo', 'Soil', 'Weather', 'Drone', 'Biochar', 'AWD', 'Fertilizer', 'Biogas'],
-      status: 'PASSED',
-      auditHash: '0x7f3a9b2c...c2d1e4f8',
-      timestamp: '2024-12-15 14:30',
-    },
-    {
-      projectId: 'BIOG-003',
-      integrityScore: 87.3,
-      sourceCoverage: 54,
-      sourcesCovered: ['IoT', 'Photo', 'Biogas', 'Weather', 'Soil', 'Drone', 'Fertilizer'],
-      status: 'PASSED',
-      auditHash: '0xa1c8d5e6...3b7f902a',
-      timestamp: '2024-12-15 12:15',
-    },
-    {
-      projectId: 'SOL-004',
-      integrityScore: 71.2,
-      sourceCoverage: 38,
-      sourcesCovered: ['Solar', 'IoT', 'Weather', 'Photo', 'Satellite'],
-      status: 'FAILED',
-      auditHash: '0x2d9f8b4a...e6c1d3f7',
-      timestamp: '2024-12-15 10:45',
-    },
-  ]);
+  const [history, setHistory] = useState<VerificationResult[]>([]);
+
+  const fetchProjects = useCallback(async () => {
+    try {
+      const res = await fetch('/api/dmrv');
+      if (!res.ok) throw new Error('Failed to fetch projects');
+      const data = await res.json();
+      setProjects(data.projects || []);
+    } catch {
+      toast({ title: 'Error', description: 'Failed to load projects', variant: 'destructive' });
+    }
+  }, [toast]);
+
+  useEffect(() => {
+    const init = async () => {
+      setLoading(true);
+      await fetchProjects();
+      setLoading(false);
+    };
+    init();
+  }, [fetchProjects]);
 
   const runVerification = async () => {
-    if (!projectId.trim()) {
-      toast({ title: 'Validation Error', description: 'Project ID is required', variant: 'destructive' });
+    if (!projectId) {
+      toast({ title: 'Validation Error', description: 'Please select a project', variant: 'destructive' });
       return;
     }
 
     setIsVerifying(true);
-    await new Promise((resolve) => setTimeout(resolve, 2000));
+    try {
+      const res = await fetch('/api/dmrv/verification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectId, minimumSourceTypes: 2 }),
+      });
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.error || 'Verification failed');
+      }
+      const data = await res.json();
+      const verification = data.verification as VerificationResult;
 
-    const numSources = 5 + Math.floor(Math.random() * 8);
-    const covered = [...sourceTypes].sort(() => Math.random() - 0.5).slice(0, numSources);
-    const integrity = 65 + Math.random() * 30;
-    const coverage = Math.round((numSources / sourceTypes.length) * 100);
-    const hash = `0x${Array.from({ length: 8 }, () => Math.floor(Math.random() * 16).toString(16)).join('')}...${Array.from({ length: 8 }, () => Math.floor(Math.random() * 16).toString(16)).join('')}`;
-
-    const newResult: VerificationResult = {
-      projectId: projectId.trim(),
-      integrityScore: parseFloat(integrity.toFixed(1)),
-      sourceCoverage: coverage,
-      sourcesCovered: covered,
-      status: integrity >= 80 ? 'PASSED' : 'FAILED',
-      auditHash: hash,
-      timestamp: new Date().toLocaleString(),
-    };
-
-    setResult(newResult);
-    setHistory((prev) => [newResult, ...prev]);
-    setIsVerifying(false);
-    toast({
-      title: newResult.status === 'PASSED' ? 'Verification Passed' : 'Verification Failed',
-      description: `Integrity: ${newResult.integrityScore}% | Coverage: ${newResult.sourceCoverage}%`,
-      variant: newResult.status === 'PASSED' ? 'default' : 'destructive',
-    });
+      setResult(verification);
+      setHistory((prev) => [verification, ...prev]);
+      toast({
+        title: verification.crossValidation.passed ? 'Verification Passed' : 'Verification Failed',
+        description: `Integrity: ${verification.integrityScore}% | Grade: ${verification.integrityGrade} | Sources: ${verification.crossValidation.actualSourceTypes}`,
+        variant: verification.crossValidation.passed ? 'default' : 'destructive',
+      });
+    } catch (err) {
+      toast({ title: 'Error', description: err instanceof Error ? err.message : 'Verification failed', variant: 'destructive' });
+    } finally {
+      setIsVerifying(false);
+    }
   };
 
   const scoreColor = (score: number) => {
@@ -107,6 +114,28 @@ export default function VerificationView() {
     if (score >= 70) return '[&>div]:bg-amber-500';
     return '[&>div]:bg-red-500';
   };
+
+  const gradeColor = (grade: string) => {
+    if (grade === 'A') return 'bg-emerald-100 text-emerald-700 hover:bg-emerald-100';
+    if (grade === 'B') return 'bg-green-100 text-green-700 hover:bg-green-100';
+    if (grade === 'C') return 'bg-amber-100 text-amber-700 hover:bg-amber-100';
+    return 'bg-red-100 text-red-700 hover:bg-red-100';
+  };
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <Skeleton className="h-8 w-64" />
+          <Skeleton className="h-4 w-80 mt-2" />
+        </div>
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+          <Card><CardContent className="p-6"><Skeleton className="h-48" /></CardContent></Card>
+          <div className="lg:col-span-2"><Card><CardContent className="p-6"><Skeleton className="h-64" /></CardContent></Card></div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -130,8 +159,19 @@ export default function VerificationView() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label>Project ID</Label>
-              <Input placeholder="e.g., RICE-001" value={projectId} onChange={(e) => setProjectId(e.target.value)} />
+              <Label>Project</Label>
+              <Select value={projectId} onValueChange={setProjectId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a project..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {projects.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <Button
               onClick={runVerification}
@@ -148,76 +188,79 @@ export default function VerificationView() {
           <CardHeader>
             <CardTitle className="text-base">Verification Result</CardTitle>
             <CardDescription>
-              {result ? `Results for ${result.projectId}` : 'Run a verification to see results'}
+              {result ? `Results for ${result.projectName || result.projectId}` : 'Run a verification to see results'}
             </CardDescription>
           </CardHeader>
           <CardContent>
             {result ? (
               <div className="space-y-6">
                 {/* Status Banner */}
-                <div className={`rounded-lg p-4 text-center ${result.status === 'PASSED' ? 'bg-emerald-50 border border-emerald-200' : 'bg-red-50 border border-red-200'}`}>
-                  <span className={`text-3xl font-bold ${result.status === 'PASSED' ? 'text-emerald-700' : 'text-red-700'}`}>
-                    {result.status}
+                <div className={`rounded-lg p-4 text-center ${result.crossValidation.passed ? 'bg-emerald-50 border border-emerald-200' : 'bg-red-50 border border-red-200'}`}>
+                  <span className={`text-3xl font-bold ${result.crossValidation.passed ? 'text-emerald-700' : 'text-red-700'}`}>
+                    {result.crossValidation.passed ? 'PASSED' : 'FAILED'}
                   </span>
                 </div>
 
-                {/* Integrity Score */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium">Integrity Score</span>
-                    <span className={`text-lg font-bold ${scoreColor(result.integrityScore)}`}>
-                      {result.integrityScore}%
-                    </span>
+                {/* Integrity Score & Grade */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium">Integrity Score</span>
+                      <span className={`text-lg font-bold ${scoreColor(result.integrityScore)}`}>
+                        {result.integrityScore}%
+                      </span>
+                    </div>
+                    <Progress value={result.integrityScore} className={`h-3 ${scoreBarColor(result.integrityScore)}`} />
                   </div>
-                  <Progress value={result.integrityScore} className={`h-3 ${scoreBarColor(result.integrityScore)}`} />
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium">Integrity Grade</span>
+                      <Badge className={`text-lg px-3 py-1 ${gradeColor(result.integrityGrade)}`}>
+                        {result.integrityGrade}
+                      </Badge>
+                    </div>
+                    <Progress value={result.hashCoverage} className={`h-3 ${scoreBarColor(result.hashCoverage)}`} />
+                    <div className="flex justify-between text-xs text-muted-foreground">
+                      <span>Hash Coverage</span>
+                      <span>{result.hashCoverage}%</span>
+                    </div>
+                  </div>
                 </div>
 
                 {/* Source Coverage */}
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium">Source Type Coverage</span>
-                    <span className={`text-lg font-bold ${scoreColor(result.sourceCoverage)}`}>
-                      {result.sourceCoverage}%
+                    <span className="text-sm font-medium">
+                      Source Types ({result.crossValidation.actualSourceTypes}/{result.crossValidation.requiredSourceTypes} minimum)
                     </span>
                   </div>
-                  <Progress value={result.sourceCoverage} className={`h-3 ${scoreBarColor(result.sourceCoverage)}`} />
-                </div>
-
-                {/* Sources Covered */}
-                <div>
-                  <span className="text-sm font-medium">Sources Covered ({result.sourcesCovered.length}/13)</span>
                   <div className="flex flex-wrap gap-1.5 mt-2">
-                    {sourceTypes.map((st) => {
-                      const covered = result.sourcesCovered.includes(st);
-                      return (
-                        <Badge
-                          key={st}
-                          variant="secondary"
-                          className={`text-[10px] h-5 ${
-                            covered
-                              ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-100'
-                              : 'bg-slate-100 text-slate-400 hover:bg-slate-100 line-through'
-                          }`}
-                        >
-                          {st}
-                        </Badge>
-                      );
-                    })}
+                    {result.crossValidation.sourceBreakdown.map((sb) => (
+                      <Badge
+                        key={sb.sourceType}
+                        variant="secondary"
+                        className="text-[10px] h-5 bg-emerald-100 text-emerald-700 hover:bg-emerald-100"
+                      >
+                        {sb.sourceType} ({sb.logCount})
+                      </Badge>
+                    ))}
+                    {result.crossValidation.sourceBreakdown.length === 0 && (
+                      <span className="text-xs text-muted-foreground">No data sources found</span>
+                    )}
                   </div>
                 </div>
 
-                {/* Audit Hash */}
-                <div className="flex items-center gap-2 text-xs bg-slate-50 rounded-lg p-3">
-                  <Hash className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                  <span className="text-muted-foreground">Audit Hash:</span>
-                  <span className="font-mono font-semibold">{result.auditHash}</span>
+                {/* Recommendation */}
+                <div className="bg-slate-50 rounded-lg p-3">
+                  <span className="text-xs font-medium text-muted-foreground">Recommendation:</span>
+                  <p className="text-sm mt-1">{result.recommendation}</p>
                 </div>
               </div>
             ) : (
               <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
                 <Activity className="h-12 w-12 mb-3 text-slate-300" />
                 <p className="text-sm">No verification results yet</p>
-                <p className="text-xs">Enter a Project ID and run verification</p>
+                <p className="text-xs">Select a project and run verification</p>
               </div>
             )}
           </CardContent>
@@ -225,51 +268,57 @@ export default function VerificationView() {
       </div>
 
       {/* Verification History */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Verification History</CardTitle>
-          <CardDescription>Previous verification attempts</CardDescription>
-        </CardHeader>
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b">
-                  <th className="text-left p-3 font-medium text-muted-foreground">Project</th>
-                  <th className="text-left p-3 font-medium text-muted-foreground">Integrity</th>
-                  <th className="text-left p-3 font-medium text-muted-foreground">Coverage</th>
-                  <th className="text-left p-3 font-medium text-muted-foreground">Status</th>
-                  <th className="text-left p-3 font-medium text-muted-foreground">Audit Hash</th>
-                  <th className="text-right p-3 font-medium text-muted-foreground">Time</th>
-                </tr>
-              </thead>
-              <tbody>
-                {history.map((h, idx) => (
-                  <tr key={idx} className="border-b last:border-0">
-                    <td className="p-3 font-medium">{h.projectId}</td>
-                    <td className={`p-3 font-semibold ${scoreColor(h.integrityScore)}`}>{h.integrityScore}%</td>
-                    <td className="p-3">{h.sourceCoverage}%</td>
-                    <td className="p-3">
-                      <Badge
-                        variant="secondary"
-                        className={`text-[10px] h-5 ${
-                          h.status === 'PASSED'
-                            ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-100'
-                            : 'bg-red-100 text-red-700 hover:bg-red-100'
-                        }`}
-                      >
-                        {h.status}
-                      </Badge>
-                    </td>
-                    <td className="p-3 font-mono text-xs text-muted-foreground">{h.auditHash}</td>
-                    <td className="p-3 text-right text-xs text-muted-foreground">{h.timestamp}</td>
+      {history.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Verification History</CardTitle>
+            <CardDescription>Previous verification attempts in this session</CardDescription>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b">
+                    <th className="text-left p-3 font-medium text-muted-foreground">Project</th>
+                    <th className="text-left p-3 font-medium text-muted-foreground">Score</th>
+                    <th className="text-left p-3 font-medium text-muted-foreground">Grade</th>
+                    <th className="text-left p-3 font-medium text-muted-foreground">Sources</th>
+                    <th className="text-left p-3 font-medium text-muted-foreground">Status</th>
+                    <th className="text-left p-3 font-medium text-muted-foreground">Hash Coverage</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
+                </thead>
+                <tbody>
+                  {history.map((h, idx) => (
+                    <tr key={idx} className="border-b last:border-0">
+                      <td className="p-3 font-medium">{h.projectName || h.projectId}</td>
+                      <td className={`p-3 font-semibold ${scoreColor(h.integrityScore)}`}>{h.integrityScore}%</td>
+                      <td className="p-3">
+                        <Badge variant="secondary" className={`text-[10px] h-5 ${gradeColor(h.integrityGrade)}`}>
+                          {h.integrityGrade}
+                        </Badge>
+                      </td>
+                      <td className="p-3">{h.crossValidation.actualSourceTypes}</td>
+                      <td className="p-3">
+                        <Badge
+                          variant="secondary"
+                          className={`text-[10px] h-5 ${
+                            h.crossValidation.passed
+                              ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-100'
+                              : 'bg-red-100 text-red-700 hover:bg-red-100'
+                          }`}
+                        >
+                          {h.crossValidation.passed ? 'PASSED' : 'FAILED'}
+                        </Badge>
+                      </td>
+                      <td className="p-3 font-mono text-xs text-muted-foreground">{h.hashCoverage}%</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

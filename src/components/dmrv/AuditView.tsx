@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
-import { Search, CheckCircle2, XCircle, Clock, AlertTriangle } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Search, CheckCircle2, XCircle, Clock, AlertTriangle, Loader2, Info } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -10,21 +10,63 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 
 type AuditType = 'Biogas' | 'Blue Carbon' | 'Renewable' | 'Soil GHG' | 'Overlap' | 'Footprint';
+
+const auditTypeToDomain: Record<AuditType, string> = {
+  Biogas: 'biogas',
+  'Blue Carbon': 'blue_carbon',
+  Renewable: 'renewable',
+  'Soil GHG': 'soil_ghg',
+  Overlap: 'overlap',
+  Footprint: 'footprint',
+};
 
 interface AuditInput {
   [key: string]: string;
 }
 
+interface AuditCheck {
+  checkId: string;
+  description: string;
+  severity: string;
+  passed: boolean;
+  details: string;
+}
+
 interface AuditResult {
-  type: AuditType;
+  auditId: string;
   projectId: string;
-  status: 'PASSED' | 'FAILED';
-  score: number;
-  details: string[];
+  projectName: string;
+  domain: string;
+  domainName: string;
   timestamp: string;
+  checks: AuditCheck[];
+  overallPassed: boolean;
+  auditScore: number;
+  summary: {
+    totalChecks: number;
+    passed: number;
+    failed: number;
+    mandatoryFailed: number;
+  };
+}
+
+interface AuditLogEntry {
+  id: string;
+  agentName: string;
+  action: string;
+  projectId: string | null;
+  details: string;
+  severity: string;
+  timestamp: string;
+}
+
+interface Project {
+  id: string;
+  name: string;
 }
 
 const auditFields: Record<AuditType, { key: string; label: string; placeholder: string }[]> = {
@@ -66,86 +108,117 @@ export default function AuditView() {
   const [projectId, setProjectId] = useState('');
   const [inputs, setInputs] = useState<AuditInput>({});
   const [isRunning, setIsRunning] = useState(false);
-  const [results, setResults] = useState<AuditResult[]>([
-    {
-      type: 'Soil GHG',
-      projectId: 'RICE-001',
-      status: 'PASSED',
-      score: 92,
-      details: ['N2O calculation within acceptable range', 'Fertilizer application verified', 'Soil carbon baseline confirmed'],
-      timestamp: '2024-12-15 13:00',
-    },
-    {
-      type: 'Biogas',
-      projectId: 'BIOG-003',
-      status: 'FAILED',
-      score: 68,
-      details: ['CH4 leakage exceeds threshold (8% > 5%)', 'Capture efficiency below minimum', 'Missing monitoring data for Q3'],
-      timestamp: '2024-12-15 10:30',
-    },
-    {
-      type: 'Overlap',
-      projectId: 'RICE-001 / RICE-002',
-      status: 'PASSED',
-      score: 95,
-      details: ['No geographic overlap detected', 'No double-counting of emission reductions', 'Boundary verification complete'],
-      timestamp: '2024-12-14 16:00',
-    },
-  ]);
+  const [loading, setLoading] = useState(true);
+  const [auditResults, setAuditResults] = useState<AuditResult[]>([]);
+  const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [error, setError] = useState<string | null>(null);
 
   const fields = auditFields[auditType];
 
-  const handleRunAudit = async () => {
-    if (!projectId.trim()) {
-      toast({ title: 'Validation Error', description: 'Project ID is required', variant: 'destructive' });
-      return;
-    }
+  const fetchData = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
 
-    const hasEmpty = fields.some((f) => !inputs[f.key]?.trim());
-    if (hasEmpty) {
-      toast({ title: 'Validation Error', description: 'All fields are required', variant: 'destructive' });
+      const [auditRes, projectsRes] = await Promise.all([
+        fetch('/api/dmrv/audit'),
+        fetch('/api/dmrv'),
+      ]);
+
+      if (!auditRes.ok || !projectsRes.ok) {
+        throw new Error('Failed to fetch data');
+      }
+
+      const auditData = await auditRes.json();
+      const projectsData = await projectsRes.json();
+
+      setAuditLogs((auditData.logs as AuditLogEntry[]) || []);
+      setProjects((projectsData.projects as Project[]).map((p: Project) => ({ id: p.id, name: p.name })));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load audit data');
+      toast({ title: 'Error', description: 'Failed to load audit data', variant: 'destructive' });
+    } finally {
+      setLoading(false);
+    }
+  }, [toast]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  const handleRunAudit = async () => {
+    if (!projectId) {
+      toast({ title: 'Validation Error', description: 'Please select a project', variant: 'destructive' });
       return;
     }
 
     setIsRunning(true);
-    await new Promise((resolve) => setTimeout(resolve, 1800));
+    try {
+      const domain = auditTypeToDomain[auditType];
+      const res = await fetch('/api/dmrv/audit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectId, domain }),
+      });
 
-    const score = 55 + Math.floor(Math.random() * 45);
-    const passed = score >= 80;
-    const detailOptions = {
-      passed: [
-        'All input parameters within acceptable range',
-        'Emission calculations verified against methodology',
-        'Data source integrity confirmed',
-        'No anomalies detected in the submission',
-      ],
-      failed: [
-        'Input parameters exceed acceptable thresholds',
-        'Emission calculation discrepancy detected',
-        'Missing or inconsistent data sources',
-        'Confidence score below minimum requirement',
-      ],
-    };
-    const details = passed ? detailOptions.passed.slice(0, 2 + Math.floor(Math.random() * 3)) : detailOptions.failed.slice(0, 2 + Math.floor(Math.random() * 3));
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.error || 'Audit failed');
+      }
 
-    const result: AuditResult = {
-      type: auditType,
-      projectId: projectId.trim(),
-      status: passed ? 'PASSED' : 'FAILED',
-      score,
-      details,
-      timestamp: new Date().toLocaleString(),
-    };
+      const data = await res.json();
+      const auditResult = data.audit as AuditResult;
+      setAuditResults((prev) => [auditResult, ...prev]);
 
-    setResults((prev) => [result, ...prev]);
-    setIsRunning(false);
-    setInputs({});
-    toast({
-      title: result.status === 'PASSED' ? 'Audit Passed' : 'Audit Failed',
-      description: `${auditType} audit for ${projectId}: Score ${score}%`,
-      variant: result.status === 'PASSED' ? 'default' : 'destructive',
-    });
+      toast({
+        title: auditResult.overallPassed ? 'Audit Passed' : 'Audit Failed',
+        description: `${auditType} audit for ${auditResult.projectName}: Score ${auditResult.auditScore}%`,
+        variant: auditResult.overallPassed ? 'default' : 'destructive',
+      });
+
+      // Refresh audit logs
+      await fetchData();
+    } catch (err) {
+      toast({
+        title: 'Audit Error',
+        description: err instanceof Error ? err.message : 'Audit execution failed',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsRunning(false);
+      setInputs({});
+    }
   };
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <Skeleton className="h-8 w-64" />
+          <Skeleton className="h-4 w-80 mt-2" />
+        </div>
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+          <Card>
+            <CardHeader><Skeleton className="h-5 w-24" /></CardHeader>
+            <CardContent className="space-y-4">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <Skeleton key={i} className="h-10 w-full" />
+              ))}
+            </CardContent>
+          </Card>
+          <Card className="lg:col-span-2">
+            <CardHeader><Skeleton className="h-5 w-40" /></CardHeader>
+            <CardContent>
+              {Array.from({ length: 3 }).map((_, i) => (
+                <Skeleton key={i} className="h-20 w-full mb-3" />
+              ))}
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -154,6 +227,15 @@ export default function AuditView() {
         <h2 className="text-2xl font-bold tracking-tight text-gray-900">Domain-Specific Audit</h2>
         <p className="text-muted-foreground text-sm mt-1">Run specialized audits for different carbon credit domains</p>
       </div>
+
+      {/* Error Banner */}
+      {error && (
+        <Card className="border-red-200 bg-red-50">
+          <CardContent className="p-4 text-sm text-red-700">
+            Failed to load data. <Button variant="link" className="h-auto p-0 text-red-700 underline" onClick={fetchData}>Retry</Button>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Audit Form */}
@@ -178,8 +260,15 @@ export default function AuditView() {
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>Project ID</Label>
-              <Input placeholder="e.g., RICE-001" value={projectId} onChange={(e) => setProjectId(e.target.value)} />
+              <Label>Project</Label>
+              <Select value={projectId} onValueChange={setProjectId}>
+                <SelectTrigger><SelectValue placeholder="Select a project" /></SelectTrigger>
+                <SelectContent>
+                  {projects.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             {fields.map((field) => (
               <div key={field.key} className="space-y-2">
@@ -196,7 +285,7 @@ export default function AuditView() {
               disabled={isRunning}
               className="w-full bg-emerald-600 hover:bg-emerald-700 gap-2"
             >
-              {isRunning ? 'Running Audit...' : <><Search className="h-4 w-4" /> Run Audit</>}
+              {isRunning ? <><Loader2 className="h-4 w-4 animate-spin" /> Running Audit...</> : <><Search className="h-4 w-4" /> Run Audit</>}
             </Button>
           </CardContent>
         </Card>
@@ -210,12 +299,19 @@ export default function AuditView() {
           <CardContent className="p-0">
             <ScrollArea className="max-h-[600px]">
               <div className="px-6">
-                {results.map((result, idx) => (
-                  <React.Fragment key={idx}>
+                {auditResults.length === 0 && auditLogs.length === 0 && (
+                  <div className="py-12 text-center text-muted-foreground text-sm">
+                    No audit results yet. Run an audit to see results.
+                  </div>
+                )}
+
+                {/* Show audit results from API */}
+                {auditResults.map((result, idx) => (
+                  <React.Fragment key={`result-${idx}`}>
                     <div className="py-4">
                       <div className="flex items-start gap-3">
                         <div className="mt-0.5">
-                          {result.status === 'PASSED' ? (
+                          {result.overallPassed ? (
                             <CheckCircle2 className="h-5 w-5 text-emerald-600" />
                           ) : (
                             <XCircle className="h-5 w-5 text-red-600" />
@@ -223,45 +319,104 @@ export default function AuditView() {
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap mb-1">
-                            <span className="font-semibold text-sm">{result.type} Audit</span>
+                            <span className="font-semibold text-sm">{result.domainName}</span>
                             <Badge variant="secondary" className={`text-[10px] h-5 ${
-                              result.status === 'PASSED'
+                              result.overallPassed
                                 ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-100'
                                 : 'bg-red-100 text-red-700 hover:bg-red-100'
                             }`}>
-                              {result.status}
+                              {result.overallPassed ? 'PASSED' : 'FAILED'}
                             </Badge>
                             <Badge variant="secondary" className={`text-[10px] h-5 ${
-                              result.score >= 80
+                              result.auditScore >= 80
                                 ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-50'
-                                : result.score >= 60
+                                : result.auditScore >= 60
                                 ? 'bg-amber-50 text-amber-700 hover:bg-amber-50'
                                 : 'bg-red-50 text-red-700 hover:bg-red-50'
                             }`}>
-                              Score: {result.score}%
+                              Score: {result.auditScore}%
                             </Badge>
                           </div>
                           <p className="text-xs text-muted-foreground mb-2">
-                            Project: {result.projectId} | {result.timestamp}
+                            Project: {result.projectName} | {new Date(result.timestamp).toLocaleString()}
                           </p>
                           <div className="rounded-lg bg-slate-50 p-2.5 space-y-1">
-                            {result.details.map((detail, didx) => (
-                              <div key={didx} className="flex items-start gap-2 text-xs">
-                                {result.status === 'PASSED' ? (
+                            {result.checks.map((check) => (
+                              <div key={check.checkId} className="flex items-start gap-2 text-xs">
+                                {check.passed ? (
                                   <CheckCircle2 className="h-3 w-3 mt-0.5 text-emerald-500 shrink-0" />
                                 ) : (
                                   <AlertTriangle className="h-3 w-3 mt-0.5 text-red-500 shrink-0" />
                                 )}
-                                <span>{detail}</span>
+                                <span>
+                                  <span className="font-medium">{check.description}</span>
+                                  {check.details && <span className="text-muted-foreground"> — {check.details}</span>}
+                                </span>
+                                <Badge variant="secondary" className={`text-[8px] h-4 shrink-0 ${
+                                  check.severity === 'MANDATORY' ? 'bg-red-50 text-red-600 hover:bg-red-50'
+                                    : check.severity === 'WARNING' ? 'bg-amber-50 text-amber-600 hover:bg-amber-50'
+                                    : 'bg-slate-100 text-slate-600 hover:bg-slate-100'
+                                }`}>
+                                  {check.severity}
+                                </Badge>
                               </div>
                             ))}
+                          </div>
+                          <div className="flex gap-4 mt-2 text-xs text-muted-foreground">
+                            <span>Total: {result.summary.totalChecks}</span>
+                            <span className="text-emerald-600">Passed: {result.summary.passed}</span>
+                            <span className="text-red-600">Failed: {result.summary.failed}</span>
+                            {result.summary.mandatoryFailed > 0 && (
+                              <span className="text-red-600 font-semibold">Mandatory Failed: {result.summary.mandatoryFailed}</span>
+                            )}
                           </div>
                         </div>
                       </div>
                     </div>
-                    {idx < results.length - 1 && <Separator />}
+                    {idx < auditResults.length - 1 && <Separator />}
                   </React.Fragment>
                 ))}
+
+                {/* Show audit log entries from database */}
+                {auditLogs.length > 0 && auditResults.length > 0 && (
+                  <Separator />
+                )}
+                {auditLogs.length > 0 && (
+                  <div className="py-4">
+                    <h4 className="text-sm font-semibold mb-3 flex items-center gap-2">
+                      <Clock className="h-4 w-4 text-emerald-600" />
+                      Audit Log History
+                    </h4>
+                    <div className="space-y-2">
+                      {auditLogs.slice(0, 10).map((log) => (
+                        <div key={log.id} className="flex items-start gap-2 text-xs rounded-lg bg-slate-50 p-2.5">
+                          {log.severity === 'INFO' ? (
+                            <Info className="h-3 w-3 mt-0.5 text-blue-500 shrink-0" />
+                          ) : log.severity === 'WARNING' ? (
+                            <AlertTriangle className="h-3 w-3 mt-0.5 text-amber-500 shrink-0" />
+                          ) : (
+                            <XCircle className="h-3 w-3 mt-0.5 text-red-500 shrink-0" />
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium">{log.agentName}</span>
+                              <Badge variant="secondary" className={`text-[8px] h-4 ${
+                                log.severity === 'INFO' ? 'bg-blue-50 text-blue-600 hover:bg-blue-50'
+                                  : log.severity === 'WARNING' ? 'bg-amber-50 text-amber-600 hover:bg-amber-50'
+                                  : 'bg-red-50 text-red-600 hover:bg-red-50'
+                              }`}>
+                                {log.severity}
+                              </Badge>
+                            </div>
+                            <span className="text-muted-foreground">{log.action}</span>
+                            {log.projectId && <span className="text-muted-foreground ml-1">| {log.projectId}</span>}
+                            <span className="text-muted-foreground ml-1">| {new Date(log.timestamp).toLocaleString()}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             </ScrollArea>
           </CardContent>

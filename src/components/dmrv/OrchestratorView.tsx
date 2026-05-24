@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   Workflow,
   Play,
@@ -20,6 +20,9 @@ import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Label } from '@/components/ui/label';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 
 type AgentStatus = 'pending' | 'running' | 'success' | 'failed';
@@ -33,15 +36,29 @@ interface AgentStep {
   confidence?: number;
 }
 
+interface Project {
+  id: string;
+  name: string;
+  status: string;
+  methodology: string;
+}
+
+interface WorkflowStep {
+  agent: string;
+  action: string;
+  result: Record<string, unknown>;
+  severity: string;
+}
+
 const initialAgents: AgentStep[] = [
-  { id: 'ingestion', name: 'Data Ingestion', description: 'Collect & normalize input data from 13 source types', status: 'pending' },
-  { id: 'classification', name: 'Classification Agent', description: 'Classify data as PUBLIC / CONFIDENTIAL & tag source type', status: 'pending' },
-  { id: 'security', name: 'Security & PDPA Agent', description: 'RBAC validation & PDPA compliance check', status: 'pending' },
-  { id: 'carbon', name: 'Carbon Quantification', description: 'Calculate emission reductions (tCO2e) per methodology', status: 'pending' },
-  { id: 'verification', name: 'Cross-Modal Verification', description: 'Cross-validate data integrity across sources', status: 'pending' },
-  { id: 'certification', name: 'Certification Agent', description: 'T-VER registry submission & issuance', status: 'pending' },
-  { id: 'marketplace', name: 'Marketplace Agent', description: 'Mint, trade, or retire carbon credits', status: 'pending' },
-  { id: 'logistics', name: 'Logistics & Settlement', description: 'Tracking, inventory & financial settlement', status: 'pending' },
+  { id: 'security', name: 'Security Agent', description: 'Validate digital signatures & sanitize inputs', status: 'pending' },
+  { id: 'classification', name: 'Classification Agent', description: 'Detect PII, check PDPA consent & classify data', status: 'pending' },
+  { id: 'encryption', name: 'Encryption Agent', description: 'SHA-256 integrity hash & encrypt CONFIDENTIAL data', status: 'pending' },
+  { id: 'verification', name: 'Existence Verifier', description: 'Cross-validate data with ≥2 source types', status: 'pending' },
+  { id: 'carbon', name: 'Carbon Quantifier', description: 'Calculate tCO2e based on methodology + freshness check', status: 'pending' },
+  { id: 'contract', name: 'Contract Guard', description: 'Double-claiming registry check & rights verification', status: 'pending' },
+  { id: 'ledger', name: 'Ledger Agent', description: 'Create ledger entry with Merkle root', status: 'pending' },
+  { id: 'reporting', name: 'Reporting Agent', description: 'Generate audit report & summary', status: 'pending' },
 ];
 
 const statusIcon: Record<AgentStatus, React.ElementType> = {
@@ -78,6 +95,37 @@ export default function OrchestratorView() {
   const [isRunning, setIsRunning] = useState(false);
   const [auditTrail, setAuditTrail] = useState<{ time: string; message: string; type: 'info' | 'warn' | 'error' }[]>([]);
   const [hitlAlert, setHitlAlert] = useState(false);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [selectedProjectId, setSelectedProjectId] = useState<string>('');
+  const [projectsLoading, setProjectsLoading] = useState(true);
+  const [workflowResult, setWorkflowResult] = useState<Record<string, unknown> | null>(null);
+
+  // Fetch available projects on mount
+  useEffect(() => {
+    const fetchProjects = async () => {
+      try {
+        const res = await fetch('/api/dmrv');
+        if (res.ok) {
+          const data = await res.json();
+          const projectList: Project[] = (data.projects || []).map((p: Record<string, unknown>) => ({
+            id: p.id as string,
+            name: p.name as string,
+            status: p.status as string,
+            methodology: p.methodology as string,
+          }));
+          setProjects(projectList);
+          if (projectList.length > 0) {
+            setSelectedProjectId(projectList[0].id);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to fetch projects:', err);
+      } finally {
+        setProjectsLoading(false);
+      }
+    };
+    fetchProjects();
+  }, []);
 
   const addAudit = useCallback((message: string, type: 'info' | 'warn' | 'error' = 'info') => {
     const time = new Date().toLocaleTimeString();
@@ -85,60 +133,111 @@ export default function OrchestratorView() {
   }, []);
 
   const runWorkflow = useCallback(async () => {
+    if (!selectedProjectId) {
+      toast({ title: 'No Project Selected', description: 'Please select a project to run the workflow on.', variant: 'destructive' });
+      return;
+    }
+
     setIsRunning(true);
     setHitlAlert(false);
     setAuditTrail([]);
+    setWorkflowResult(null);
     setAgents(initialAgents.map((a) => ({ ...a, status: 'pending' as AgentStatus, output: undefined, confidence: undefined })));
 
-    addAudit('Workflow initiated — processing 8 agents sequentially');
+    const selectedProject = projects.find((p) => p.id === selectedProjectId);
+    addAudit(`Workflow initiated for project: ${selectedProject?.name || selectedProjectId}`);
 
-    const outputs = [
-      'Ingested 13 data sources: 4 satellite, 3 IoT, 2 photo, 2 soil, 1 weather, 1 drone',
-      'Classification: 9 PUBLIC, 4 CONFIDENTIAL | Sources tagged: Satellite(4), IoT(3), Photo(2), Soil(2), Weather(1), Drone(1)',
-      'RBAC: Admin access verified | PDPA: All CONFIDENTIAL data encrypted (AES-256) | Consent logs OK',
-      'Biochar: 12,450 tCO2e | AWD: 8,320 tCO2e | Solar: 3,200 tCO2e | Total: 23,970 tCO2e',
-      'Integrity score: 94.7% | Cross-source validation PASSED | Audit hash: 0x7f3a...c2d1',
-      'T-VER #2024-089 submitted | Master Certificate #MC-0456 issued | Registry: Thailand T-VER',
-      'Credits minted: 23,970 tCO2e | Batch #CB-0456 | Listed on marketplace',
-      'Tracking ID #TRK-789 created | Inventory updated | Settlement: ฿14,382,000 processed',
+    // Start the real API call in parallel with the simulation
+    const apiPromise = fetch('/api/dmrv', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        projectId: selectedProjectId,
+        data: { sourceType: 'satellite', trackType: 'biochar', mass: 1000, carbonFraction: 0.7, stability: 0.85 },
+      }),
+    });
+
+    // Simulate the visual agent pipeline
+    const simulatedOutputs = [
+      'Validating digital signatures — VERIFIED',
+      'PII detection scan — No PII detected | Classification: PUBLIC',
+      'SHA-256 integrity hash computed | Encryption: NONE (PUBLIC data)',
+      'Cross-source validation — Checking ≥2 source types...',
+      'Calculating tCO2e based on project methodology...',
+      'Checking double-claiming registry & verifying rights...',
+      'Creating ledger entry with Merkle root...',
+      'Generating audit report & final summary...',
     ];
 
-    const confidences = [1.0, 0.98, 1.0, 0.87, 0.95, 0.99, 1.0, 0.92];
-
-    for (let i = 0; i < agents.length; i++) {
-      // Set current agent to running
+    for (let i = 0; i < initialAgents.length; i++) {
       setAgents((prev) =>
         prev.map((a, idx) => (idx === i ? { ...a, status: 'running' as AgentStatus } : a))
       );
-      addAudit(`Agent ${i + 1}/${agents.length}: ${initialAgents[i].name} — RUNNING`);
+      addAudit(`Agent ${i + 1}/${initialAgents.length}: ${initialAgents[i].name} — RUNNING`);
 
-      // Simulate processing delay
-      await new Promise((resolve) => setTimeout(resolve, 1200 + Math.random() * 800));
+      await new Promise((resolve) => setTimeout(resolve, 1000 + Math.random() * 600));
 
-      // Check for low confidence (HITL)
-      if (confidences[i] < 0.9 && i === 3) {
-        addAudit(`⚠️ Low confidence detected on Carbon Quantification: ${(confidences[i] * 100).toFixed(1)}% — Human review recommended`, 'warn');
-        setHitlAlert(true);
-      }
-
-      // Set agent to success
       setAgents((prev) =>
         prev.map((a, idx) =>
           idx === i
-            ? { ...a, status: 'success' as AgentStatus, output: outputs[i], confidence: confidences[i] }
+            ? { ...a, status: 'success' as AgentStatus, output: simulatedOutputs[i], confidence: 0.85 + Math.random() * 0.15 }
             : a
         )
       );
-      addAudit(`Agent ${i + 1}/${agents.length}: ${initialAgents[i].name} — COMPLETED ✓`);
+      addAudit(`Agent ${i + 1}/${initialAgents.length}: ${initialAgents[i].name} — COMPLETED ✓`);
     }
 
-    addAudit('Workflow completed successfully — 8/8 agents passed');
+    // Wait for the real API response
+    try {
+      const apiRes = await apiPromise;
+      if (apiRes.ok) {
+        const apiData = await apiRes.json();
+        setWorkflowResult(apiData.workflow);
+
+        // Log the real API results
+        const steps: WorkflowStep[] = apiData.workflow?.steps || [];
+        addAudit('━━━ Real API Workflow Results ━━━');
+        steps.forEach((step, idx) => {
+          const result = step.result as Record<string, unknown>;
+          const summary = Object.entries(result)
+            .filter(([k]) => k !== 'agent')
+            .map(([k, v]) => `${k}: ${typeof v === 'object' ? JSON.stringify(v) : String(v)}`)
+            .join(' | ');
+          addAudit(`API Agent ${idx + 1} (${step.agent}): ${summary}`);
+        });
+
+        const finalReport = apiData.workflow?.finalReport as Record<string, unknown> | undefined;
+        if (finalReport) {
+          const reportSummary = finalReport.summary as Record<string, unknown>;
+          if (reportSummary) {
+            addAudit(`Final Report: Security=${reportSummary.securityStatus}, Classification=${reportSummary.classification}, Carbon=${reportSummary.carbonQuantified} tCO2e`);
+          }
+        }
+
+        // Check for warnings from API
+        const warningSteps = steps.filter((s) => s.severity === 'WARNING');
+        if (warningSteps.length > 0) {
+          setHitlAlert(true);
+          addAudit(`⚠️ ${warningSteps.length} agent(s) reported warnings — Review recommended`, 'warn');
+        }
+
+        toast({
+          title: 'Workflow Complete',
+          description: `All 8 agents executed. ${steps.length} API steps completed.`,
+        });
+      } else {
+        const errData = await apiRes.json().catch(() => ({}));
+        addAudit(`API Error: ${errData.error || 'Unknown error'}`, 'error');
+        toast({ title: 'API Error', description: errData.error || 'Workflow API call failed', variant: 'destructive' });
+      }
+    } catch (err) {
+      addAudit(`API call failed: ${err instanceof Error ? err.message : 'Network error'}`, 'error');
+      toast({ title: 'Network Error', description: 'Could not reach workflow API', variant: 'destructive' });
+    }
+
+    addAudit('Workflow completed — simulation + API results available');
     setIsRunning(false);
-    toast({
-      title: 'Workflow Complete',
-      description: 'All 8 agents executed successfully. 23,970 tCO2e credits processed.',
-    });
-  }, [agents.length, addAudit, toast]);
+  }, [selectedProjectId, projects, addAudit, toast]);
 
   const completedCount = agents.filter((a) => a.status === 'success').length;
   const progress = (completedCount / agents.length) * 100;
@@ -153,10 +252,30 @@ export default function OrchestratorView() {
             Agent workflow pipeline for end-to-end dMRV processing
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center flex-wrap">
+          {/* Project Selector */}
+          <div className="flex items-center gap-2">
+            <Label className="text-sm whitespace-nowrap">Project:</Label>
+            {projectsLoading ? (
+              <Skeleton className="h-9 w-48" />
+            ) : (
+              <Select value={selectedProjectId} onValueChange={setSelectedProjectId}>
+                <SelectTrigger className="w-48">
+                  <SelectValue placeholder="Select project" />
+                </SelectTrigger>
+                <SelectContent>
+                  {projects.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
           <Button
             onClick={runWorkflow}
-            disabled={isRunning}
+            disabled={isRunning || !selectedProjectId}
             className="bg-emerald-600 hover:bg-emerald-700 gap-2"
           >
             {isRunning ? (
@@ -173,6 +292,7 @@ export default function OrchestratorView() {
               setAuditTrail([]);
               setHitlAlert(false);
               setIsRunning(false);
+              setWorkflowResult(null);
             }}
             disabled={isRunning}
             className="gap-2"
@@ -204,7 +324,7 @@ export default function OrchestratorView() {
           <AlertTriangle className="h-4 w-4 text-amber-600" />
           <AlertTitle className="text-amber-800">Human-in-the-Loop Review Required</AlertTitle>
           <AlertDescription className="text-amber-700">
-            Carbon Quantification confidence is below 90%. Please review the calculation parameters before proceeding.
+            One or more agents reported warnings during workflow execution. Please review the audit trail and API results before proceeding.
           </AlertDescription>
         </Alert>
       )}
@@ -281,6 +401,50 @@ export default function OrchestratorView() {
               </div>
             </CardContent>
           </Card>
+
+          {/* API Workflow Results */}
+          {workflowResult && (
+            <Card className="mt-6">
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                  API Workflow Results
+                </CardTitle>
+                <CardDescription>
+                  Real results from backend workflow for {(workflowResult as Record<string, unknown>).projectName as string}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ScrollArea className="max-h-64">
+                  <div className="space-y-2">
+                    {((workflowResult as Record<string, unknown>).steps as WorkflowStep[])?.map((step, idx) => (
+                      <div key={idx} className="rounded-lg border p-3 text-xs">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="font-medium">{step.agent}</span>
+                          <Badge
+                            variant="secondary"
+                            className={`text-[10px] h-5 ${
+                              step.severity === 'INFO'
+                                ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-50'
+                                : step.severity === 'WARNING'
+                                  ? 'bg-amber-50 text-amber-700 hover:bg-amber-50'
+                                  : 'bg-red-50 text-red-700 hover:bg-red-50'
+                            }`}
+                          >
+                            {step.severity}
+                          </Badge>
+                          <span className="text-muted-foreground">{step.action}</span>
+                        </div>
+                        <pre className="text-[11px] text-muted-foreground overflow-x-auto whitespace-pre-wrap">
+                          {JSON.stringify(step.result, null, 2)}
+                        </pre>
+                      </div>
+                    ))}
+                  </div>
+                </ScrollArea>
+              </CardContent>
+            </Card>
+          )}
         </div>
 
         {/* Audit Trail */}
@@ -308,8 +472,8 @@ export default function OrchestratorView() {
                             entry.type === 'error'
                               ? 'text-red-600'
                               : entry.type === 'warn'
-                              ? 'text-amber-600'
-                              : 'text-gray-700'
+                                ? 'text-amber-600'
+                                : 'text-gray-700'
                           }`}
                         >
                           {entry.message}

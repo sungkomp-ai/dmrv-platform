@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
-import { Activity, AlertTriangle, CheckCircle2, XCircle, Bell, Plus } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { Activity, AlertTriangle, CheckCircle2, XCircle, Bell, Plus, RefreshCw } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -11,77 +11,130 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 
-type Severity = 'critical' | 'warning' | 'info';
+type Severity = 'CRITICAL' | 'WARNING' | 'INFO';
 
 interface AlertItem {
   id: string;
-  title: string;
-  description: string;
-  severity: Severity;
-  module: string;
+  severity: string;
+  message: string;
+  resolved: boolean;
   timestamp: string;
-  acknowledged: boolean;
+  acknowledged?: boolean;
 }
 
-const mockAlerts: AlertItem[] = [
-  { id: '1', title: 'Agent Pipeline Stalled', description: 'Orchestrator agent #5 has not responded for 10 minutes', severity: 'critical', module: 'Orchestrator', timestamp: '5 min ago', acknowledged: false },
-  { id: '2', title: 'Low Confidence Score', description: 'Biochar carbon calculation confidence dropped below 85%', severity: 'warning', module: 'Carbon', timestamp: '20 min ago', acknowledged: false },
-  { id: '3', title: 'IoT Sensor Offline', description: 'Sensor moisture_012 has been offline for 2 hours', severity: 'warning', module: 'Ingestion', timestamp: '1 hr ago', acknowledged: false },
-  { id: '4', title: 'New Data Ingested', description: '3 satellite images ingested from Sentinel-2', severity: 'info', module: 'Ingestion', timestamp: '2 hr ago', acknowledged: true },
-  { id: '5', title: 'Certificate Expired', description: 'TVER-2024-078 has expired and requires renewal', severity: 'warning', module: 'Certification', timestamp: '3 hr ago', acknowledged: true },
-  { id: '6', title: 'Verification Failed', description: 'Plot P-789 verification integrity below threshold', severity: 'critical', module: 'Verification', timestamp: '4 hr ago', acknowledged: true },
-  { id: '7', title: 'Settlement Completed', description: 'Trade #TR-1234 settlement processed successfully', severity: 'info', module: 'Logistics', timestamp: '5 hr ago', acknowledged: true },
-  { id: '8', title: 'Database Backup Complete', description: 'Daily backup completed at 02:00 UTC', severity: 'info', module: 'System', timestamp: '6 hr ago', acknowledged: true },
-];
+interface HealthMetrics {
+  status: string;
+  uptime: string;
+  lastChecked: string;
+  projects: { total: number; active: number };
+  credits: { total: number; available: number };
+  certificates: { total: number; approved: number; pending: number };
+  alerts: { total: number; unresolved: number; critical: number; warning: number };
+  activity: { auditLogsLast24h: number; errorsLast24h: number };
+}
 
-const severityStyles: Record<Severity, string> = {
-  critical: 'bg-red-100 text-red-700 hover:bg-red-100',
-  warning: 'bg-amber-100 text-amber-700 hover:bg-amber-100',
-  info: 'bg-slate-100 text-slate-700 hover:bg-slate-100',
+const severityStyles: Record<string, string> = {
+  CRITICAL: 'bg-red-100 text-red-700 hover:bg-red-100',
+  WARNING: 'bg-amber-100 text-amber-700 hover:bg-amber-100',
+  INFO: 'bg-slate-100 text-slate-700 hover:bg-slate-100',
 };
 
-const severityIcons: Record<Severity, React.ElementType> = {
-  critical: XCircle,
-  warning: AlertTriangle,
-  info: Bell,
+const severityIcons: Record<string, React.ElementType> = {
+  CRITICAL: XCircle,
+  WARNING: AlertTriangle,
+  INFO: Bell,
 };
 
-const severityColors: Record<Severity, string> = {
-  critical: 'text-red-600',
-  warning: 'text-amber-600',
-  info: 'text-slate-500',
+const severityColors: Record<string, string> = {
+  CRITICAL: 'text-red-600',
+  WARNING: 'text-amber-600',
+  INFO: 'text-slate-500',
 };
 
 export default function MonitoringView() {
   const { toast } = useToast();
-  const [alerts, setAlerts] = useState<AlertItem[]>(mockAlerts);
+  const [alerts, setAlerts] = useState<AlertItem[]>([]);
+  const [health, setHealth] = useState<HealthMetrics | null>(null);
+  const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [creating, setCreating] = useState(false);
   const [newAlertTitle, setNewAlertTitle] = useState('');
   const [newAlertDesc, setNewAlertDesc] = useState('');
-  const [newAlertSeverity, setNewAlertSeverity] = useState<Severity>('warning');
-  const [newAlertModule, setNewAlertModule] = useState('System');
+  const [newAlertSeverity, setNewAlertSeverity] = useState<string>('WARNING');
+  const pollRef = useRef<NodeJS.Timeout | null>(null);
 
-  const handleCreateAlert = () => {
+  const fetchData = useCallback(async (showLoading = false) => {
+    if (showLoading) setLoading(true);
+    try {
+      const res = await fetch('/api/dmrv/monitoring');
+      if (!res.ok) throw new Error('Failed to fetch monitoring data');
+      const data = await res.json();
+      // Preserve acknowledged state from local state
+      setAlerts((prev) => {
+        const acknowledgedIds = new Set(prev.filter((a) => a.acknowledged).map((a) => a.id));
+        return (data.alerts || []).map((a: AlertItem) => ({
+          ...a,
+          acknowledged: acknowledgedIds.has(a.id) || a.resolved,
+        }));
+      });
+      setHealth(data.health || null);
+    } catch {
+      toast({ title: 'Error', description: 'Failed to load monitoring data', variant: 'destructive' });
+    } finally {
+      if (showLoading) setLoading(false);
+    }
+  }, [toast]);
+
+  useEffect(() => {
+    fetchData(true);
+    // Auto-refresh every 30 seconds
+    pollRef.current = setInterval(() => {
+      fetchData(false);
+    }, 30000);
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
+  }, [fetchData]);
+
+  const handleRefresh = async () => {
+    setLoading(true);
+    await fetchData(false);
+    setLoading(false);
+    toast({ title: 'Refreshed', description: 'Monitoring data updated' });
+  };
+
+  const handleCreateAlert = async () => {
     if (!newAlertTitle.trim()) {
       toast({ title: 'Validation Error', description: 'Alert title is required', variant: 'destructive' });
       return;
     }
-    const alert: AlertItem = {
-      id: String(alerts.length + 1),
-      title: newAlertTitle.trim(),
-      description: newAlertDesc.trim(),
-      severity: newAlertSeverity,
-      module: newAlertModule,
-      timestamp: 'Just now',
-      acknowledged: false,
-    };
-    setAlerts((prev) => [alert, ...prev]);
-    setNewAlertTitle('');
-    setNewAlertDesc('');
-    setShowForm(false);
-    toast({ title: 'Alert Created', description: `${newAlertSeverity.toUpperCase()}: ${alert.title}` });
+    setCreating(true);
+    try {
+      const res = await fetch('/api/dmrv/monitoring', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          severity: newAlertSeverity,
+          message: `${newAlertTitle.trim()}${newAlertDesc.trim() ? ': ' + newAlertDesc.trim() : ''}`,
+        }),
+      });
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.error || 'Failed to create alert');
+      }
+      toast({ title: 'Alert Created', description: `${newAlertSeverity}: ${newAlertTitle.trim()}` });
+      setNewAlertTitle('');
+      setNewAlertDesc('');
+      setShowForm(false);
+      await fetchData(false);
+    } catch (err) {
+      toast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to create alert', variant: 'destructive' });
+    } finally {
+      setCreating(false);
+    }
   };
 
   const acknowledgeAlert = (id: string) => {
@@ -89,9 +142,46 @@ export default function MonitoringView() {
     toast({ title: 'Alert Acknowledged' });
   };
 
-  const criticalCount = alerts.filter((a) => a.severity === 'critical' && !a.acknowledged).length;
-  const warningCount = alerts.filter((a) => a.severity === 'warning' && !a.acknowledged).length;
-  const infoCount = alerts.filter((a) => a.severity === 'info' && !a.acknowledged).length;
+  const criticalCount = alerts.filter((a) => a.severity === 'CRITICAL' && !a.acknowledged).length;
+  const warningCount = alerts.filter((a) => a.severity === 'WARNING' && !a.acknowledged).length;
+  const infoCount = alerts.filter((a) => a.severity === 'INFO' && !a.acknowledged).length;
+
+  const statusColor = (status: string) => {
+    if (status === 'HEALTHY') return 'text-emerald-600';
+    if (status === 'WARNING') return 'text-amber-600';
+    return 'text-red-600';
+  };
+
+  const statusBg = (status: string) => {
+    if (status === 'HEALTHY') return 'bg-emerald-50';
+    if (status === 'WARNING') return 'bg-amber-50';
+    return 'bg-red-50';
+  };
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <Skeleton className="h-8 w-48" />
+          <Skeleton className="h-4 w-64 mt-2" />
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          {[1, 2, 3, 4].map((i) => (
+            <Card key={i}>
+              <CardContent className="p-4 flex items-center gap-3">
+                <Skeleton className="h-10 w-10 rounded-lg" />
+                <div>
+                  <Skeleton className="h-6 w-16" />
+                  <Skeleton className="h-3 w-16 mt-1" />
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+        <Card><CardContent className="p-6"><Skeleton className="h-64" /></CardContent></Card>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -101,22 +191,30 @@ export default function MonitoringView() {
           <h2 className="text-2xl font-bold tracking-tight text-gray-900">Monitoring</h2>
           <p className="text-muted-foreground text-sm mt-1">System health, metrics, and alert management</p>
         </div>
-        <Button onClick={() => setShowForm(!showForm)} className="gap-2 bg-emerald-600 hover:bg-emerald-700">
-          <Plus className="h-4 w-4" />
-          Create Alert
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={handleRefresh} className="gap-2">
+            <RefreshCw className="h-3.5 w-3.5" />
+            Refresh
+          </Button>
+          <Button onClick={() => setShowForm(!showForm)} className="gap-2 bg-emerald-600 hover:bg-emerald-700">
+            <Plus className="h-4 w-4" />
+            Create Alert
+          </Button>
+        </div>
       </div>
 
       {/* System Health */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <Card>
           <CardContent className="p-4 flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-50">
-              <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+            <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${health ? statusBg(health.status) : 'bg-emerald-50'}`}>
+              <CheckCircle2 className={`h-5 w-5 ${health ? statusColor(health.status) : 'text-emerald-600'}`} />
             </div>
             <div>
-              <p className="text-xl font-bold">99.97%</p>
-              <p className="text-xs text-muted-foreground">Uptime</p>
+              <p className={`text-xl font-bold ${health ? statusColor(health.status) : ''}`}>
+                {health?.status || 'N/A'}
+              </p>
+              <p className="text-xs text-muted-foreground">System Status</p>
             </div>
           </CardContent>
         </Card>
@@ -126,8 +224,8 @@ export default function MonitoringView() {
               <Activity className="h-5 w-5 text-teal-600" />
             </div>
             <div>
-              <p className="text-xl font-bold">3 / 8</p>
-              <p className="text-xs text-muted-foreground">Active Agents</p>
+              <p className="text-xl font-bold">{health?.projects?.active ?? 0} / {health?.projects?.total ?? 0}</p>
+              <p className="text-xs text-muted-foreground">Active Projects</p>
             </div>
           </CardContent>
         </Card>
@@ -137,7 +235,7 @@ export default function MonitoringView() {
               <AlertTriangle className="h-5 w-5 text-amber-600" />
             </div>
             <div>
-              <p className="text-xl font-bold">{warningCount}</p>
+              <p className="text-xl font-bold text-amber-600">{warningCount}</p>
               <p className="text-xs text-muted-foreground">Warnings</p>
             </div>
           </CardContent>
@@ -148,12 +246,42 @@ export default function MonitoringView() {
               <XCircle className="h-5 w-5 text-red-600" />
             </div>
             <div>
-              <p className="text-xl font-bold">{criticalCount}</p>
+              <p className="text-xl font-bold text-red-600">{criticalCount}</p>
               <p className="text-xs text-muted-foreground">Critical</p>
             </div>
           </CardContent>
         </Card>
       </div>
+
+      {/* Additional Health Metrics */}
+      {health && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <Card>
+            <CardContent className="p-4 text-center">
+              <p className="text-lg font-bold">{health.credits.total.toLocaleString('en-US', { maximumFractionDigits: 1 })}</p>
+              <p className="text-xs text-muted-foreground">Total Credits (tCO2e)</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4 text-center">
+              <p className="text-lg font-bold text-emerald-600">{health.certificates.approved}</p>
+              <p className="text-xs text-muted-foreground">Approved Certificates</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4 text-center">
+              <p className="text-lg font-bold text-amber-600">{health.certificates.pending}</p>
+              <p className="text-xs text-muted-foreground">Pending Certificates</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4 text-center">
+              <p className="text-lg font-bold">{health.activity.auditLogsLast24h}</p>
+              <p className="text-xs text-muted-foreground">Audit Logs (24h)</p>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {/* Create Alert Form */}
       {showForm && (
@@ -169,12 +297,12 @@ export default function MonitoringView() {
               </div>
               <div className="space-y-2">
                 <Label>Severity</Label>
-                <Select value={newAlertSeverity} onValueChange={(v) => setNewAlertSeverity(v as Severity)}>
+                <Select value={newAlertSeverity} onValueChange={setNewAlertSeverity}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="critical">Critical</SelectItem>
-                    <SelectItem value="warning">Warning</SelectItem>
-                    <SelectItem value="info">Info</SelectItem>
+                    <SelectItem value="CRITICAL">Critical</SelectItem>
+                    <SelectItem value="WARNING">Warning</SelectItem>
+                    <SelectItem value="INFO">Info</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -184,7 +312,9 @@ export default function MonitoringView() {
               <Textarea placeholder="Describe the alert condition..." value={newAlertDesc} onChange={(e) => setNewAlertDesc(e.target.value)} rows={2} />
             </div>
             <div className="flex gap-2">
-              <Button onClick={handleCreateAlert} className="bg-emerald-600 hover:bg-emerald-700">Create</Button>
+              <Button onClick={handleCreateAlert} disabled={creating} className="bg-emerald-600 hover:bg-emerald-700">
+                {creating ? 'Creating...' : 'Create'}
+              </Button>
               <Button variant="outline" onClick={() => setShowForm(false)}>Cancel</Button>
             </div>
           </CardContent>
@@ -200,40 +330,47 @@ export default function MonitoringView() {
         <CardContent className="p-0">
           <ScrollArea className="max-h-96">
             <div className="px-6">
-              {alerts.map((alert, idx) => {
-                const Icon = severityIcons[alert.severity];
-                return (
-                  <React.Fragment key={alert.id}>
-                    <div className={`flex items-start gap-3 py-3 ${alert.acknowledged ? 'opacity-60' : ''}`}>
-                      <Icon className={`mt-0.5 h-4 w-4 shrink-0 ${severityColors[alert.severity]}`} />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-sm font-medium">{alert.title}</span>
-                          <Badge variant="secondary" className={`text-[10px] h-5 ${severityStyles[alert.severity]}`}>
-                            {alert.severity.toUpperCase()}
-                          </Badge>
-                          <Badge variant="secondary" className="text-[10px] h-5">
-                            {alert.module}
-                          </Badge>
-                          {alert.acknowledged && (
-                            <Badge variant="secondary" className="text-[10px] h-5 bg-emerald-50 text-emerald-600 hover:bg-emerald-50">
-                              ACK
+              {alerts.length === 0 ? (
+                <div className="py-8 text-center text-muted-foreground text-sm">
+                  No alerts found. System is healthy.
+                </div>
+              ) : (
+                alerts.map((alert, idx) => {
+                  const Icon = severityIcons[alert.severity] || Bell;
+                  return (
+                    <React.Fragment key={alert.id}>
+                      <div className={`flex items-start gap-3 py-3 ${alert.acknowledged ? 'opacity-60' : ''}`}>
+                        <Icon className={`mt-0.5 h-4 w-4 shrink-0 ${severityColors[alert.severity] || ''}`} />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-sm font-medium">{alert.message.split(':')[0]}</span>
+                            <Badge variant="secondary" className={`text-[10px] h-5 ${severityStyles[alert.severity] || ''}`}>
+                              {alert.severity}
                             </Badge>
+                            {alert.acknowledged && (
+                              <Badge variant="secondary" className="text-[10px] h-5 bg-emerald-50 text-emerald-600 hover:bg-emerald-50">
+                                ACK
+                              </Badge>
+                            )}
+                          </div>
+                          {alert.message.includes(':') && (
+                            <p className="text-xs text-muted-foreground mt-0.5">{alert.message.split(':').slice(1).join(':').trim()}</p>
                           )}
+                          <span className="text-[10px] text-muted-foreground">
+                            {new Date(alert.timestamp).toLocaleString()}
+                          </span>
                         </div>
-                        <p className="text-xs text-muted-foreground mt-0.5">{alert.description}</p>
-                        <span className="text-[10px] text-muted-foreground">{alert.timestamp}</span>
+                        {!alert.acknowledged && (
+                          <Button variant="ghost" size="sm" onClick={() => acknowledgeAlert(alert.id)} className="shrink-0 text-xs">
+                            Acknowledge
+                          </Button>
+                        )}
                       </div>
-                      {!alert.acknowledged && (
-                        <Button variant="ghost" size="sm" onClick={() => acknowledgeAlert(alert.id)} className="shrink-0 text-xs">
-                          Acknowledge
-                        </Button>
-                      )}
-                    </div>
-                    {idx < alerts.length - 1 && <Separator />}
-                  </React.Fragment>
-                );
-              })}
+                      {idx < alerts.length - 1 && <Separator />}
+                    </React.Fragment>
+                  );
+                })
+              )}
             </div>
           </ScrollArea>
         </CardContent>
