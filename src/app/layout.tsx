@@ -14,24 +14,12 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "dMRV Platform — Carbon Credit Dashboard",
-  description: "Digital Measurement, Reporting & Verification platform for carbon credit management. Built with Next.js, TypeScript, and shadcn/ui.",
-  keywords: ["dMRV", "carbon credits", "T-VER", "emission reduction", "sustainability", "Next.js"],
-  authors: [{ name: "dMRV Platform Team" }],
+  title: "GeoDashboard — Global Operations Map",
+  description: "Interactive map dashboard for global operations monitoring with real-time analytics and location tracking.",
+  keywords: ["map", "dashboard", "analytics", "operations", "geo"],
+  authors: [{ name: "GeoDashboard Team" }],
   icons: {
     icon: "https://z-cdn.chatglm.cn/z-ai/static/logo.svg",
-  },
-  openGraph: {
-    title: "Z.ai Code Scaffold",
-    description: "AI-powered development with modern React stack",
-    url: "https://chat.z.ai",
-    siteName: "Z.ai",
-    type: "website",
-  },
-  twitter: {
-    card: "summary_large_image",
-    title: "Z.ai Code Scaffold",
-    description: "AI-powered development with modern React stack",
   },
 };
 

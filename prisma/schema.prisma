@@ -10,107 +10,19 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model Project {
-  id          String    @id @default(cuid())
-  name        String
-  methodology String    @default("IPCC-2023")
-  status      String    @default("Active")
-  areaHa      Float     @default(0)
-  location    String    @default("")
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-
-  plots       Plot[]
-  credits     CarbonCredit[]
-  certificates Certificate[]
-  submissions Submission[]
-  ingestionLogs IngestionLog[]
-}
-
-model Plot {
+model Location {
   id          String   @id @default(cuid())
-  plotId      String   @unique
-  coordinates String   @default("[]") // JSON array of [lat, lon]
-  ownerInfo   String   @default("")
-  projectId   String
-  project     Project  @relation(fields: [projectId], references: [id])
-  trackType   String   @default("") // biochar, awd, biogas, solar, forest
-  status      String   @default("REGISTERED")
+  name        String
+  category    String   @default("office") // office, factory, warehouse, renewable, datacenter
+  lat         Float
+  lng         Float
+  description String   @default("")
+  status      String   @default("active") // active, inactive, maintenance
+  value       Float    @default(0)
+  region      String   @default("")
+  country     String   @default("")
+  employees   Int      @default(0)
+  revenue     Float    @default(0)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-}
-
-model IngestionLog {
-  id           String   @id @default(cuid())
-  projectId    String
-  project      Project  @relation(fields: [projectId], references: [id])
-  sourceType   String   // satellite, iot, drone, photo, lidar, etc.
-  activityType String
-  payload      String   @default("{}") // JSON
-  evidenceUrl  String   @default("")
-  integrityHash String  @default("")
-  classification String @default("PUBLIC")
-  isEncrypted  Boolean  @default(false)
-  timestamp    DateTime @default(now())
-}
-
-model CarbonCredit {
-  id        String   @id @default(cuid())
-  tokenId   String   @unique
-  projectId String
-  project   Project  @relation(fields: [projectId], references: [id])
-  amount    Float    @default(0)
-  status    String   @default("Available") // Available, Traded, Retired
-  buyer     String   @default("")
-  metadata  String   @default("{}") // JSON
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-model Certificate {
-  id           String   @id @default(cuid())
-  certId       String   @unique
-  projectId    String
-  project      Project  @relation(fields: [projectId], references: [id])
-  trackType    String
-  status       String   @default("SUBMITTED") // SUBMITTED, APPROVED, REJECTED
-  amountTco2e  Float    @default(0)
-  masterCertId String   @default("")
-  validator    String   @default("System-Auto-Validator")
-  issuedAt     DateTime @default(now())
-}
-
-model Submission {
-  id        String   @id @default(cuid())
-  projectId String
-  project   Project  @relation(fields: [projectId], references: [id])
-  data      String   @default("{}") // JSON
-  status    String   @default("READY_FOR_VERIFICATION")
-  createdAt DateTime @default(now())
-}
-
-model AuditLog {
-  id         String   @id @default(cuid())
-  agentName  String
-  action     String
-  projectId  String   @default("")
-  details    String   @default("")
-  severity   String   @default("INFO") // INFO, WARNING, ERROR
-  timestamp  DateTime @default(now())
-}
-
-model Alert {
-  id        String   @id @default(cuid())
-  severity  String   @default("INFO") // INFO, WARNING, CRITICAL
-  message   String
-  resolved  Boolean  @default(false)
-  timestamp DateTime @default(now())
-}
-
-model Settlement {
-  id        String   @id @default(cuid())
-  assetId   String
-  amount    Float
-  status    String   @default("processed")
-  timestamp DateTime @default(now())
 }
