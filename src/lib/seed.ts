@@ -868,4 +868,272 @@ async function seedAll() {
   for (const rule of methodologyRules) {
     await db.methodologyRule.create({ data: rule });
   }
+
+  // ── ENTERPRISE: Create AI Generation Sessions ─────────────────────────
+  const aiSessions = [
+    {
+      prompt: 'Generate carbon sequestration formula for mangrove restoration per Verra VM0033 methodology',
+      methodology: 'T-VER-FOREST',
+      trackType: 'forest',
+      generatedFormula: JSON.stringify({
+        expression: 'ΔC_mangrove = Σ(A_i × G_wp × (1 - UF)) + B_soil',
+        variables: { 'ΔC_mangrove': 'Total mangrove carbon sequestration (tCO₂e)', 'A_i': 'Area of mangrove stratum i (ha)', 'G_wp': 'Growth rate woody pools (tC/ha/yr)', 'UF': 'Uncertainty factor', 'B_soil': 'Soil carbon stock change (tCO₂e)' },
+      }),
+      generatedParams: JSON.stringify([
+        { name: 'mangrove_species', type: 'enum', values: ['rhizophora', 'avicennia', 'sonneratia', 'mixed'], required: true },
+        { name: 'age_of_stand', type: 'number', min: 1, max: 100, unit: 'years', required: true },
+        { name: 'tidal_inundation_class', type: 'enum', values: ['fringe', 'riverine', 'basin', 'overwash'], required: true },
+        { name: 'soil_carbon_factor', type: 'number', default: 0.37, description: 'Soil organic carbon fraction' },
+      ]),
+      generatedConditions: JSON.stringify([
+        { field: 'area_ha', operator: '>=', value: 0.5, message: 'Minimum mangrove area 0.5 ha' },
+        { field: 'uncertainty_discount', operator: '<=', value: 0.3, message: 'Maximum uncertainty discount 30%' },
+      ]),
+      generatedNodes: JSON.stringify([
+        { id: 'n1', type: 'input', label: 'Mangrove Area Data', x: 50, y: 50 },
+        { id: 'n2', type: 'process', label: 'Carbon Stock Assessment', x: 250, y: 50 },
+        { id: 'n3', type: 'process', label: 'Growth Rate Application', x: 250, y: 150 },
+        { id: 'n4', type: 'process', label: 'Uncertainty Discount', x: 450, y: 100 },
+        { id: 'n5', type: 'output', label: 'ΔC_mangrove Result', x: 650, y: 100 },
+      ]),
+      status: 'APPLIED',
+      aiModel: 'z-ai-llm',
+      ruleId: 'applied-rule-1',
+      feedback: 'Excellent formula generation. Accurate to Verra VM0033 standard.',
+      createdBy: 'Admin',
+    },
+    {
+      prompt: 'Create emission reduction formula for improved cookstove project replacing charcoal with LPG',
+      methodology: 'CDM',
+      trackType: 'biochar',
+      generatedFormula: JSON.stringify({
+        expression: 'ER = N_stoves × (EF_charcoal - EF_LPG) × D_cooking × GWP_CO2',
+        variables: { 'ER': 'Emission reduction (tCO₂e/yr)', 'N_stoves': 'Number of cookstoves', 'EF_charcoal': 'Emission factor charcoal (kgCO₂/GJ)', 'EF_LPG': 'Emission factor LPG (kgCO₂/GJ)', 'D_cooking': 'Annual cooking energy demand (GJ)', 'GWP_CO2': 'GWP for CO₂' },
+      }),
+      generatedParams: JSON.stringify([
+        { name: 'stove_efficiency_new', type: 'number', min: 0.3, max: 0.95, default: 0.55, required: true },
+        { name: 'stove_efficiency_old', type: 'number', min: 0.1, max: 0.4, default: 0.2, required: true },
+        { name: 'household_size', type: 'number', default: 4.5 },
+      ]),
+      generatedConditions: JSON.stringify([
+        { field: 'stove_efficiency_new', operator: '>', value: 0.3, message: 'New stove must exceed 30% efficiency' },
+      ]),
+      generatedNodes: JSON.stringify([
+        { id: 'n1', type: 'input', label: 'Cookstove Data', x: 50, y: 50 },
+        { id: 'n2', type: 'process', label: 'Baseline Emissions', x: 250, y: 50 },
+        { id: 'n3', type: 'process', label: 'Project Emissions', x: 250, y: 150 },
+        { id: 'n4', type: 'process', label: 'Net Reduction', x: 450, y: 100 },
+        { id: 'n5', type: 'output', label: 'ER Result', x: 650, y: 100 },
+      ]),
+      status: 'COMPLETED',
+      aiModel: 'z-ai-llm',
+      ruleId: '',
+      feedback: '',
+      createdBy: 'Admin',
+    },
+    {
+      prompt: 'Generate REDD+ deforestation avoidance calculation for Thailand Northern watershed',
+      methodology: 'T-VER-FOREST',
+      trackType: 'forest',
+      generatedFormula: JSON.stringify({
+        expression: 'ER_REDD = (D_baseline - D_project) × C_stock × (44/12) × UF_REDD',
+        variables: { 'ER_REDD': 'REDD+ emission reduction (tCO₂e)', 'D_baseline': 'Baseline deforestation rate (ha/yr)', 'D_project': 'Project deforestation rate (ha/yr)', 'C_stock': 'Average carbon stock (tC/ha)', 'UF_REDD': 'REDD+ uncertainty factor' },
+      }),
+      generatedParams: JSON.stringify([
+        { name: 'deforestation_driver', type: 'enum', values: ['agriculture', 'logging', 'infrastructure', 'fire'], required: true },
+        { name: 'reference_period_yrs', type: 'number', min: 5, max: 20, default: 10 },
+      ]),
+      generatedConditions: JSON.stringify([
+        { field: 'reference_period_yrs', operator: '>=', value: 5, message: 'Minimum reference period 5 years' },
+      ]),
+      generatedNodes: JSON.stringify([]),
+      status: 'FAILED',
+      aiModel: 'z-ai-llm',
+      ruleId: '',
+      feedback: 'Generation failed - insufficient reference data for Northern watershed',
+      createdBy: 'Admin',
+    },
+  ];
+
+  for (const session of aiSessions) {
+    await db.aIGenerationSession.create({ data: session });
+  }
+
+  // ── ENTERPRISE: Create Cross-Chain Bridges ────────────────────────────
+  const bridges = [
+    {
+      name: 'Verra Registry (VCS)',
+      registryType: 'VERRA',
+      endpoint: 'https://registry.verra.org/api/v1',
+      apiKeyRef: 'vault:verra-api-key-prod',
+      accountId: 'VCS-TH-00412',
+      accountName: 'Thailand T-VER Bridge Account',
+      bridgeProtocol: 'API',
+      status: 'CONNECTED',
+      lastSyncAt: new Date(Date.now() - 3600000),
+      syncInterval: 1800,
+      totalCreditsSynced: rand(5000, 25000),
+      metadata: JSON.stringify({
+        supportedStandards: ['VCS', 'CCB', 'SD VISTA'],
+        apiVersion: 'v1',
+        webhookEnabled: true,
+        autoSync: true,
+      }),
+    },
+    {
+      name: 'Gold Standard Registry',
+      registryType: 'GOLD_STANDARD',
+      endpoint: 'https://registry.goldstandard.org/api/v2',
+      apiKeyRef: 'vault:gs-api-key-prod',
+      accountId: 'GS-TH-02158',
+      accountName: 'TGO Gold Standard Account',
+      bridgeProtocol: 'API',
+      status: 'CONNECTED',
+      lastSyncAt: new Date(Date.now() - 7200000),
+      syncInterval: 3600,
+      totalCreditsSynced: rand(2000, 10000),
+      metadata: JSON.stringify({
+        supportedStandards: ['GS', 'GS-CER', 'GS-VER'],
+        apiVersion: 'v2',
+        webhookEnabled: true,
+        autoSync: false,
+      }),
+    },
+    {
+      name: 'I-REC Standard Bridge',
+      registryType: 'I_REC',
+      endpoint: 'https://irec.registry.org/api/v1',
+      apiKeyRef: 'vault:irec-api-key',
+      accountId: 'IREC-TH-00087',
+      accountName: 'Thailand Renewable Energy Bridge',
+      bridgeProtocol: 'API',
+      status: 'SYNCING',
+      lastSyncAt: new Date(Date.now() - 86400000),
+      syncInterval: 7200,
+      totalCreditsSynced: rand(1000, 5000),
+      metadata: JSON.stringify({
+        supportedStandards: ['I-REC(E)', 'I-REC(G)'],
+        apiVersion: 'v1',
+        syncInProgress: true,
+      }),
+    },
+    {
+      name: 'Polygon Blockchain Bridge',
+      registryType: 'CUSTOM',
+      endpoint: 'https://bridge.dmrv-th.org/polygon',
+      apiKeyRef: 'vault:polygon-bridge-key',
+      accountId: '0x7a3B...e9F2',
+      accountName: 'dMRV Polygon Mumbai Testnet',
+      bridgeProtocol: 'POLYGON_BRIDGE',
+      status: 'PENDING',
+      syncInterval: 0,
+      totalCreditsSynced: 0,
+      metadata: JSON.stringify({
+        chainId: 80001,
+        contractAddress: '0xAb5801a7...7dE85',
+        network: 'mumbai',
+        gasLimit: 500000,
+      }),
+    },
+    {
+      name: 'Ethereum Mainnet Bridge',
+      registryType: 'CUSTOM',
+      endpoint: 'https://bridge.dmrv-th.org/ethereum',
+      apiKeyRef: 'vault:eth-bridge-key',
+      accountId: '0x1f9E...4aC8',
+      accountName: 'dMRV Ethereum Mainnet',
+      bridgeProtocol: 'ETHEREUM_BRIDGE',
+      status: 'DISCONNECTED',
+      syncInterval: 0,
+      totalCreditsSynced: 0,
+      metadata: JSON.stringify({
+        chainId: 1,
+        contractAddress: '0xNotDeployed',
+        network: 'mainnet',
+        pendingDeployment: true,
+      }),
+    },
+  ];
+
+  const createdBridges = [];
+  for (const bridge of bridges) {
+    const b = await db.crossChainBridge.create({ data: bridge });
+    createdBridges.push(b);
+  }
+
+  // ── ENTERPRISE: Create Bridge Transactions ────────────────────────────
+  const bridgeTxs = [
+    {
+      bridgeId: createdBridges[0]?.id || '',
+      txType: 'MINT',
+      direction: 'INBOUND',
+      creditAmount: rand(500, 2000),
+      creditTokenId: 'TCO2E-VCS-001',
+      externalRef: 'VCS-VCU-12345-2024',
+      externalStatus: 'ISSUED',
+      txHash: '0xabc123...def456',
+      status: 'CONFIRMED',
+      metadata: JSON.stringify({ vintage: 'V2024', projectName: 'Chiang Mai Forest' }),
+      initiatedBy: 'Admin',
+    },
+    {
+      bridgeId: createdBridges[0]?.id || '',
+      txType: 'TRANSFER',
+      direction: 'OUTBOUND',
+      creditAmount: rand(200, 800),
+      creditTokenId: 'TCO2E-VCS-002',
+      externalRef: 'VCS-VCU-12346-2024',
+      externalStatus: 'RETIRED',
+      txHash: '0x789ghi...jkl012',
+      status: 'CONFIRMED',
+      metadata: JSON.stringify({ buyer: 'PTT Public Company Limited', purpose: 'Carbon Neutral 2024' }),
+      initiatedBy: 'Admin',
+    },
+    {
+      bridgeId: createdBridges[1]?.id || '',
+      txType: 'SYNC',
+      direction: 'INBOUND',
+      creditAmount: rand(100, 500),
+      creditTokenId: '',
+      externalRef: 'GS-SYNC-2024-Q1',
+      externalStatus: 'COMPLETED',
+      txHash: '',
+      status: 'CONFIRMED',
+      metadata: JSON.stringify({ syncedRecords: 42, period: 'Q1-2024' }),
+      initiatedBy: 'System',
+    },
+    {
+      bridgeId: createdBridges[2]?.id || '',
+      txType: 'VERIFY',
+      direction: 'INBOUND',
+      creditAmount: rand(50, 300),
+      creditTokenId: '',
+      externalRef: 'IREC-VERIFY-0087',
+      externalStatus: 'PENDING',
+      txHash: '',
+      status: 'PENDING',
+      metadata: JSON.stringify({ verificationType: 'certificate_authenticity' }),
+      initiatedBy: 'Admin',
+    },
+    {
+      bridgeId: createdBridges[0]?.id || '',
+      txType: 'RETIRE',
+      direction: 'OUTBOUND',
+      creditAmount: rand(100, 600),
+      creditTokenId: 'TCO2E-VCS-003',
+      externalRef: 'VCS-RETIRE-9876',
+      externalStatus: 'FAILED',
+      txHash: '',
+      status: 'FAILED',
+      errorMessage: 'External registry timeout: credit retirement could not be confirmed within 30s',
+      metadata: JSON.stringify({ retiree: 'SCG Chemicals', beneficiary: 'Climate Action Thailand' }),
+      initiatedBy: 'Admin',
+    },
+  ];
+
+  for (const tx of bridgeTxs) {
+    if (tx.bridgeId) {
+      await db.bridgeTransaction.create({ data: tx });
+    }
+  }
 }

@@ -68,6 +68,7 @@ import BufferPoolView from './BufferPoolView';
 import ForwardContractsView from './ForwardContractsView';
 import DevApiPortalView from './DevApiPortalView';
 import MethodologyStudioView from './MethodologyStudioView';
+import CrossChainBridgeView from './CrossChainBridgeView';
 
 type ModuleKey =
   | 'dashboard'
@@ -94,7 +95,8 @@ type ModuleKey =
   | 'buffer'
   | 'forward'
   | 'devportal'
-  | 'methodology';
+  | 'methodology'
+  | 'bridge';
 
 interface MenuItem {
   key: ModuleKey;
@@ -158,9 +160,12 @@ const menuItems: MenuItem[] = [
   { key: 'buffer', label: 'Buffer Pool', icon: Landmark },
   { key: 'forward', label: 'Forward Contracts', icon: Server },
 
-  // Enterprise: Integration
+  // Enterprise: AI & Intelligence
+  { key: 'methodology', label: 'AI Methodology Studio', icon: BookOpen, section: 'AI & INTELLIGENCE' },
+
+  // Enterprise: Integration & Bridge
+  { key: 'bridge', label: 'Cross-Chain Bridge', icon: Layers, section: 'INTEGRATION' },
   { key: 'devportal', label: 'Developer API', icon: Terminal },
-  { key: 'methodology', label: 'Methodology Studio', icon: BookOpen },
 ];
 
 const moduleComponents: Record<ModuleKey, React.ComponentType> = {
@@ -189,6 +194,7 @@ const moduleComponents: Record<ModuleKey, React.ComponentType> = {
   forward: ForwardContractsView,
   devportal: DevApiPortalView,
   methodology: MethodologyStudioView,
+  bridge: CrossChainBridgeView,
 };
 
 interface SidebarContentProps {
@@ -218,7 +224,7 @@ function SidebarContent({ collapsed = false, activeModule, onModuleChange, menuI
         {!collapsed && (
           <div className="flex flex-col overflow-hidden">
             <span className="text-sm font-bold tracking-tight">dMRV Platform</span>
-            <span className="text-[11px] text-slate-400">Enterprise v3.0</span>
+            <span className="text-[11px] text-slate-400">Enterprise v4.0</span>
           </div>
         )}
       </div>
@@ -278,7 +284,7 @@ function SidebarContent({ collapsed = false, activeModule, onModuleChange, menuI
           <div className="flex items-center gap-2 text-xs text-slate-500">
             <CircleDot className="h-3 w-3 text-emerald-500" />
             <span>System Online</span>
-            <span className="ml-auto">v3.0.0</span>
+            <span className="ml-auto">v4.0.0</span>
           </div>
         </div>
       )}

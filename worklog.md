@@ -74,3 +74,67 @@ Stage Summary:
 - All views properly imported and integrated
 - ESLint passes with zero errors
 - Dev server running and serving all pages
+
+---
+Task ID: 4-c
+Agent: frontend-developer
+Task: Create CrossChainBridgeView.tsx — Cross-Chain Bridge settings view
+
+Work Log:
+- Created /src/components/dmrv/CrossChainBridgeView.tsx (~900 lines) with all 6 key features:
+  1. Registry Connections Dashboard — bridge cards with status dots, registry type badges, protocol icons, last sync time, credits synced, action buttons (Connect/Disconnect/Sync Now/Details)
+  2. Add New Bridge Dialog — form with Name, Registry Type, Bridge Protocol, Endpoint URL, API Key Ref, Account ID/Name, Sync Interval; POST to /api/dmrv/bridge with action 'create_bridge'
+  3. Credit Transfer Panel — dialog with bridge dropdown (connected/syncing only), Transfer Type (MINT/TRANSFER/RETIRE), Direction (OUTBOUND/INBOUND), credit amount, token ID, metadata; POST with action 'transfer'
+  4. Transaction History — expandable table with Date, Bridge, Type, Direction, Amount, External Ref, Tx Hash (with copy), Status badges; click to expand metadata JSON
+  5. Summary Statistics — top cards: Total Bridges/Connected, Credits Synced (tCO₂e), Tx Volume, Pending Transactions
+  6. Registry Type Badges — VERRA (emerald), GOLD_STANDARD (amber), I_REC (sky blue), CDM (slate), T_VER (teal), CUSTOM (purple)
+- Integrated CrossChainBridgeView into DmrvApp.tsx:
+  - Added import and 'bridge' to ModuleKey type
+  - Added menu item with Layers icon in ENTERPRISE > Integration section
+  - Added to moduleComponents map
+- Aligned frontend types with existing API route (bridgeProtocol, endpoint, etc.)
+- Normalized API response data (bridgeName lookup for transactions)
+- Seeded bridge data into database (6 bridges, 6 transactions) since ensureSeeded skips when projects exist
+- All lint checks pass, dev server serves the view correctly
+
+Stage Summary:
+- CrossChainBridgeView fully functional with live API data
+- API route already existed at /api/dmrv/bridge (GET/POST with create_bridge, connect, disconnect, transfer, sync actions)
+- Database seeded with 6 demo bridges and 6 transactions
+- 26 menu items total in sidebar (added Cross-Chain Bridge)
+- ESLint passes with zero errors
+
+---
+Task ID: 4-b
+Agent: frontend-developer
+Task: Replace MethodologyStudioView with AI Methodology Generative Studio
+
+Work Log:
+- Created /src/app/api/dmrv/ai-methodology/route.ts (GET + POST) with 3 actions:
+  - `generate`: Creates AIGenerationSession with context-aware formula/params/conditions/nodes based on methodology + trackType
+  - `apply`: Creates MethodologyRule from session data with aiGenerated=true flag
+  - `feedback`: Updates session feedback field
+- GET returns `{ sessions, summary: { total, byStatus } }`
+- Formula generation adapts by track type (forest/biochar/awd/biogas/solar) and methodology standard (T-VER/VCS/GS/CDM)
+- Node generation creates Input → Process → Output flow structure with edges
+- Pushed Prisma schema (AIGenerationSession model already existed)
+- Completely rewrote /src/components/dmrv/MethodologyStudioView.tsx with:
+  1. **AI Generate Tab** (default tab) — Prompt input, methodology/track type selectors, "Generate with AI" button with loading animation, session history list with status badges, right-side preview panel
+  2. **AI Sessions History** — Shows all past sessions with prompt, status (GENERATING/COMPLETED/FAILED/APPLIED), methodology, timestamp; click to view details; inline Apply button
+  3. **Visual Calculation Node Editor** — Read-only flowchart-style layout (Input → Process → Output rows) with color-coded cards and arrow separators; each node shows icon + label
+  4. **Template Library** — Collapsible section showing existing methodology rules as templates; "Use" button pre-fills AI prompt with template context
+  5. **AI Session Detail Dialog** — Full view of generated formula, variables, calculation flow, parameters, conditions; Apply and Feedback actions
+  6. **"AI Powered" badge** in header; purple sparkle badges on AI-generated rules
+  7. **Summary cards** expanded to 5 (added AI Sessions count)
+- Retained ALL existing functionality: Active/Draft/All tabs, Builder tab with full form, Detail dialog, Duplicate/Deprecate actions
+- All lint checks pass (zero errors)
+- API endpoints verified working via curl tests
+
+Stage Summary:
+- AI Methodology Generative Studio fully functional
+- 5 API actions: GET sessions, POST generate/apply/feedback
+- 6 tabs: AI Generate, Active, Draft, All, Builder
+- Visual Node Editor renders calculation flow from generatedNodes JSON
+- Template Library uses existing methodology rules as starting points
+- AI-generated rules show sparkle badge and calculationNodes in detail view
+- ESLint passes with zero errors

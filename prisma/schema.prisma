@@ -296,17 +296,83 @@ model Webhook {
 }
 
 model MethodologyRule {
-  id          String   @id @default(cuid())
-  name        String
-  methodology String   @default("T-VER")
-  trackType   String   @default("forest")
-  version     String   @default("1.0")
-  description String   @default("")
-  formula     String   @default("{}") // JSON: formula definition with variables
-  parameters  String   @default("[]") // JSON: parameter definitions
-  conditions  String   @default("[]") // JSON: validation conditions
-  status      String   @default("DRAFT") // DRAFT, ACTIVE, DEPRECATED
-  createdBy   String   @default("")
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id                String   @id @default(cuid())
+  name              String
+  methodology       String   @default("T-VER")
+  trackType         String   @default("forest")
+  version           String   @default("1.0")
+  description       String   @default("")
+  formula           String   @default("{}") // JSON: formula definition with variables
+  parameters        String   @default("[]") // JSON: parameter definitions
+  conditions        String   @default("[]") // JSON: validation conditions
+  status            String   @default("DRAFT") // DRAFT, ACTIVE, DEPRECATED
+  createdBy         String   @default("")
+  aiGenerated       Boolean  @default(false) // Whether AI helped generate this rule
+  aiGenerationId    String   @default("") // Reference to AI generation session
+  sourceTemplate    String   @default("") // Template used for generation (e.g., VERRA-VM0042)
+  calculationNodes  String   @default("[]") // JSON: visual node definitions for No-Code editor
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+// ─── AI Methodology Generative Studio ────────────────────────────────────
+
+model AIGenerationSession {
+  id              String   @id @default(cuid())
+  prompt          String   // User's natural language description
+  methodology     String   @default("T-VER")
+  trackType       String   @default("forest")
+  generatedFormula String  @default("{}") // JSON: AI-generated formula
+  generatedParams String   @default("[]") // JSON: AI-generated parameters
+  generatedConditions String @default("[]") // JSON: AI-generated conditions
+  generatedNodes  String   @default("[]") // JSON: AI-generated calculation nodes
+  aiModel         String   @default("z-ai-llm") // AI model used
+  status          String   @default("GENERATING") // GENERATING, COMPLETED, FAILED, APPLIED
+  ruleId          String   @default("") // Applied MethodologyRule ID if status=APPLIED
+  feedback        String   @default("") // User feedback on generation
+  createdBy       String   @default("")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+// ─── Cross-Chain Bridge & Registry Link ──────────────────────────────────
+
+model CrossChainBridge {
+  id                String   @id @default(cuid())
+  name              String   // Connection name
+  registryType      String   // VERRA, GOLD_STANDARD, I_REC, CDM, T_VER, CUSTOM
+  endpoint          String   @default("") // API endpoint URL
+  apiKeyRef         String   @default("") // Reference to stored API key (encrypted)
+  accountId         String   @default("") // Account ID at external registry
+  accountName       String   @default("") // Account display name
+  bridgeProtocol    String   @default("API") // API, POLYGON_BRIDGE, ETHEREUM_BRIDGE, COSMOS_IBC, CUSTOM
+  status            String   @default("PENDING") // PENDING, CONNECTED, SYNCING, ERROR, DISCONNECTED
+  lastSyncAt        DateTime? // Last successful synchronization
+  syncInterval      Int      @default(3600) // Sync interval in seconds
+  totalCreditsSynced Float   @default(0) // Total credits synced through this bridge
+  metadata          String   @default("{}") // JSON: additional config
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  transactions BridgeTransaction[]
+}
+
+model BridgeTransaction {
+  id              String   @id @default(cuid())
+  bridgeId        String   // Reference to CrossChainBridge
+  txType          String   // MINT, TRANSFER, RETIRE, SYNC, VERIFY
+  direction       String   // OUTBOUND, INBOUND // OUTBOUND = from our platform to external, INBOUND = from external to our platform
+  creditAmount    Float    @default(0) // tCO2e
+  creditTokenId   String   @default("") // Our platform token ID
+  externalRef     String   @default("") // External registry reference/ID
+  externalStatus  String   @default("") // Status at external registry
+  txHash          String   @default("") // Blockchain tx hash (if applicable)
+  status          String   @default("PENDING") // PENDING, SUBMITTED, CONFIRMED, FAILED, ROLLED_BACK
+  errorMessage    String   @default("")
+  metadata        String   @default("{}") // JSON: additional transaction data
+  initiatedBy     String   @default("")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  bridge CrossChainBridge @relation(fields: [bridgeId], references: [id], onDelete: Cascade)
 }
