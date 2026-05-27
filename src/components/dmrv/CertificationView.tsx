@@ -26,7 +26,7 @@ interface Certificate {
   amountTco2e: number;
   masterCertId: string;
   validator: string;
-  issuedAt: string;
+  createdAt: string;
   project: { id: string; name: string; methodology: string };
 }
 
@@ -384,7 +384,7 @@ export default function CertificationView() {
                                     <div><span className="text-muted-foreground">Status:</span> <Badge variant="secondary" className={`text-[10px] h-5 ${statusStyles[selectedCert.status as CertStatus] || ''}`}>{statusLabels[selectedCert.status as CertStatus] || selectedCert.status}</Badge></div>
                                     <div><span className="text-muted-foreground">Validator:</span> {selectedCert.validator}</div>
                                     {selectedCert.masterCertId && <div><span className="text-muted-foreground">Master Cert:</span> <span className="font-mono font-semibold">{selectedCert.masterCertId}</span></div>}
-                                    <div><span className="text-muted-foreground">Issued:</span> {new Date(selectedCert.issuedAt).toLocaleDateString()}</div>
+                                    <div><span className="text-muted-foreground">Issued:</span> {new Date(selectedCert.createdAt).toLocaleDateString()}</div>
                                   </div>
                                 </div>
                               )}

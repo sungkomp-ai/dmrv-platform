@@ -297,17 +297,27 @@ async function seedAll() {
   const createdCerts: { id: string; projectId: string; certNumber: string }[] = [];
   for (let i = 0; i < createdProjects.length; i++) {
     const project = createdProjects[i];
+    const trackType = TRACK_TYPES[i];
     const certCount = randInt(1, 2);
     for (let c = 0; c < certCount; c++) {
       const status = c === 0 ? 'APPROVED' : pick(certStatuses);
       const validFrom = new Date(project.startDate.getTime() + randInt(30, 180) * 86400000);
       const validUntil = new Date(validFrom.getTime() + 365 * 86400000);
       const certNumber = `TGO-CERT-${project.province.substring(0, 3)}-${2024 + c}`;
+      const certId = `TVER-${Date.now()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+      const amountTco2e = rand(200, 5000);
+      const validator = pick(['TGO-VVB-Auto', 'Bureau Veritas', 'SGS Thailand', 'TÜV SÜD']);
+      const masterCertId = status === 'APPROVED' ? `MCERT-${Date.now()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}` : '';
       const cert = await db.certificate.create({
         data: {
           projectId: project.id,
+          certId,
+          trackType,
           status,
+          amountTco2e: Math.round(amountTco2e * 100) / 100,
           issuedBy: 'TGO',
+          validator,
+          masterCertId,
           certificateNumber: certNumber,
           validFrom,
           validUntil,

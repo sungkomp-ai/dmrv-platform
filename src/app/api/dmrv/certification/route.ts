@@ -6,7 +6,7 @@ export async function GET() {
   try {
     const certificates = await db.certificate.findMany({
       include: { project: { select: { id: true, name: true, methodology: true } } },
-      orderBy: { issuedAt: 'desc' },
+      orderBy: { createdAt: 'desc' },
     });
 
     const summary = {

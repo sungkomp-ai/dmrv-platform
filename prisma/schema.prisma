@@ -75,8 +75,13 @@ model CarbonCredit {
 model Certificate {
   id                String   @id @default(cuid())
   projectId         String
+  certId            String   @default("") // T-VER certificate reference ID
+  trackType         String   @default("forest") // forest, biochar, awd, biogas, solar
   status            String   @default("SUBMITTED") // SUBMITTED, APPROVED, REJECTED, REVOKED
+  amountTco2e       Float    @default(0) // Certified emission reductions in tCO2e
   issuedBy          String   @default("TGO")
+  validator         String   @default("") // VVB or T-VER validator name
+  masterCertId      String   @default("") // Master certificate ID issued on approval
   certificateNumber String   @default("")
   validFrom         DateTime @default(now())
   validUntil        DateTime @default(now())
