@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   RefreshCw,
   Flag,
@@ -62,6 +62,7 @@ interface DataSource {
 
 interface ConflictCase {
   id: string;
+  projectId: string;
   title: string;
   severity: ConflictSeverity;
   status: ConflictStatus;
@@ -150,6 +151,7 @@ const MOCK_DATA: ConflictData = {
   cases: [
     {
       id: 'CON-001',
+      projectId: 'PROJ-BIO-001',
       title: 'CH4 emission factor mismatch in biogas project',
       severity: 'CRITICAL',
       status: 'FLAGGED',
@@ -166,6 +168,7 @@ const MOCK_DATA: ConflictData = {
     },
     {
       id: 'CON-002',
+      projectId: 'PROJ-SOL-002',
       title: 'Electricity generation exceeds capacity factor threshold',
       severity: 'HIGH',
       status: 'IN_REVIEW',
@@ -182,6 +185,7 @@ const MOCK_DATA: ConflictData = {
     },
     {
       id: 'CON-003',
+      projectId: 'PROJ-RICE-003',
       title: 'Hash integrity failure in audit trail',
       severity: 'CRITICAL',
       status: 'ESCALATED',
@@ -198,6 +202,7 @@ const MOCK_DATA: ConflictData = {
     },
     {
       id: 'CON-004',
+      projectId: 'PROJ-REFO-004',
       title: 'GPS boundary coordinates overlap with neighboring project',
       severity: 'MEDIUM',
       status: 'FLAGGED',
@@ -214,6 +219,7 @@ const MOCK_DATA: ConflictData = {
     },
     {
       id: 'CON-005',
+      projectId: 'PROJ-RICE-003',
       title: 'N2O emission rate below detection threshold',
       severity: 'LOW',
       status: 'RESOLVED',
@@ -230,6 +236,7 @@ const MOCK_DATA: ConflictData = {
     },
     {
       id: 'CON-006',
+      projectId: 'PROJ-BIOCHAR-006',
       title: 'Carbon content discrepancy in biochar production records',
       severity: 'HIGH',
       status: 'IN_REVIEW',
@@ -292,6 +299,7 @@ export default function ConflictResolverView() {
   const [resolvedByField, setResolvedByField] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState<string[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Create form state
   const [newTitle, setNewTitle] = useState('');
@@ -343,31 +351,30 @@ export default function ConflictResolverView() {
     }
     setIsSubmitting(true);
     try {
-      await new Promise((r) => setTimeout(r, 800));
-      const updatedCase: ConflictCase = {
-        ...selectedCase,
-        status: 'RESOLVED',
-        resolutionNotes,
-        resolvedBy: resolvedByField || 'Current User',
-        evidenceFiles: uploadedFiles,
-        updatedAt: new Date().toISOString(),
-      };
-      setData((prev) => prev ? {
-        ...prev,
-        cases: prev.cases.map((c) => c.id === selectedCase.id ? updatedCase : c),
-        summary: {
-          ...prev.summary,
-          byStatus: {
-            ...prev.summary.byStatus,
-            [selectedCase.status]: Math.max(0, (prev.summary.byStatus[selectedCase.status] || 0) - 1),
-            RESOLVED: (prev.summary.byStatus.RESOLVED || 0) + 1,
-          },
-        },
-      } : prev);
-      setSelectedCase(updatedCase);
-      toast({ title: 'Case Resolved', description: `Case ${selectedCase.id} has been resolved` });
+      const res = await fetch('/api/dmrv/conflict', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'resolve',
+          caseId: selectedCase.id,
+          projectId: selectedCase.projectId,
+          resolution: resolutionNotes,
+          resolvedBy: resolvedByField || 'เจ้าหน้าที่ตรวจสอบระบบ',
+          evidenceUrl: uploadedFiles.length > 0 ? `https://evidence.dmrv-th.org/conflict/${selectedCase.id}/ground-truth` : '',
+        }),
+      });
+      if (res.ok) {
+        toast({ title: 'Case resolved', description: 'Conflict case has been resolved successfully' });
+        setResolutionNotes('');
+        setUploadedFiles([]);
+        setSelectedCase(null);
+        setDetailOpen(false);
+        fetchData();
+      } else {
+        toast({ title: 'Error', description: 'Failed to resolve case', variant: 'destructive' });
+      }
     } catch {
-      toast({ title: 'Error', description: 'Failed to resolve case', variant: 'destructive' });
+      toast({ title: 'Error', description: 'Network error', variant: 'destructive' });
     } finally {
       setIsSubmitting(false);
     }
@@ -377,28 +384,25 @@ export default function ConflictResolverView() {
     if (!selectedCase) return;
     setIsSubmitting(true);
     try {
-      await new Promise((r) => setTimeout(r, 800));
-      const updatedCase: ConflictCase = {
-        ...selectedCase,
-        status: 'ESCALATED',
-        updatedAt: new Date().toISOString(),
-      };
-      setData((prev) => prev ? {
-        ...prev,
-        cases: prev.cases.map((c) => c.id === selectedCase.id ? updatedCase : c),
-        summary: {
-          ...prev.summary,
-          byStatus: {
-            ...prev.summary.byStatus,
-            [selectedCase.status]: Math.max(0, (prev.summary.byStatus[selectedCase.status] || 0) - 1),
-            ESCALATED: (prev.summary.byStatus.ESCALATED || 0) + 1,
-          },
-        },
-      } : prev);
-      setSelectedCase(updatedCase);
-      toast({ title: 'Case Escalated', description: `Case ${selectedCase.id} has been escalated`, variant: 'destructive' });
+      const res = await fetch('/api/dmrv/conflict', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'escalate',
+          caseId: selectedCase.id,
+          projectId: selectedCase.projectId,
+        }),
+      });
+      if (res.ok) {
+        toast({ title: 'Case escalated', description: 'Conflict case has been escalated to CRITICAL severity', variant: 'destructive' });
+        setSelectedCase(null);
+        setDetailOpen(false);
+        fetchData();
+      } else {
+        toast({ title: 'Error', description: 'Failed to escalate case', variant: 'destructive' });
+      }
     } catch {
-      toast({ title: 'Error', description: 'Failed to escalate case', variant: 'destructive' });
+      toast({ title: 'Error', description: 'Network error', variant: 'destructive' });
     } finally {
       setIsSubmitting(false);
     }
@@ -408,19 +412,41 @@ export default function ConflictResolverView() {
     if (!selectedCase) return;
     setIsSubmitting(true);
     try {
-      await new Promise((r) => setTimeout(r, 800));
-      toast({ title: 'Ground Truth Requested', description: `Ground truth verification requested for case ${selectedCase.id}` });
+      const res = await fetch('/api/dmrv/conflict', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'escalate',
+          caseId: selectedCase.id,
+          projectId: selectedCase.projectId,
+        }),
+      });
+      if (res.ok) {
+        toast({ title: 'Ground-truth requested', description: 'Field verification request has been sent. Case escalated for review.' });
+        setSelectedCase(null);
+        setDetailOpen(false);
+        fetchData();
+      }
     } catch {
-      toast({ title: 'Error', description: 'Failed to request ground truth', variant: 'destructive' });
+      toast({ title: 'Error', description: 'Failed to request ground-truth', variant: 'destructive' });
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleSimulateUpload = () => {
-    const fileName = `evidence_${Date.now()}.pdf`;
-    setUploadedFiles((prev) => [...prev, fileName]);
-    toast({ title: 'File Uploaded', description: `${fileName} attached to case` });
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    const newFiles: string[] = [];
+    for (let i = 0; i < files.length; i++) {
+      newFiles.push(files[i].name);
+    }
+    setUploadedFiles((prev) => [...prev, ...newFiles]);
+    toast({ title: 'File(s) Uploaded', description: `${newFiles.length} file(s) attached to case` });
+    // Reset the input so the same file can be re-selected
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
   };
 
   const handleCreateCase = async () => {
@@ -430,38 +456,46 @@ export default function ConflictResolverView() {
     }
     setIsSubmitting(true);
     try {
-      await new Promise((r) => setTimeout(r, 800));
-      const newCase: ConflictCase = {
-        id: `CON-${String((data?.cases.length || 0) + 1).padStart(3, '0')}`,
-        title: newTitle,
-        severity: newSeverity,
-        status: 'FLAGGED',
-        conflictType: newConflictType,
-        sourceA: { sourceType: newSourceAType, sourceId: `SRC-A-${Date.now()}`, value: newSourceAValue, unit: 'N/A', timestamp: new Date().toISOString() },
-        sourceB: { sourceType: newSourceBType, sourceId: `SRC-B-${Date.now()}`, value: newSourceBValue, unit: 'N/A', timestamp: new Date().toISOString() },
-        projectName: newProject,
-        projectProvince: 'Bangkok',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        resolvedBy: null,
-        resolutionNotes: null,
-        evidenceFiles: [],
-      };
-      setData((prev) => prev ? {
-        cases: [newCase, ...prev.cases],
-        summary: {
-          ...prev.summary,
-          total: prev.summary.total + 1,
-          bySeverity: { ...prev.summary.bySeverity, [newSeverity]: (prev.summary.bySeverity[newSeverity] || 0) + 1 },
-          byStatus: { ...prev.summary.byStatus, FLAGGED: (prev.summary.byStatus.FLAGGED || 0) + 1 },
-          byConflictType: { ...prev.summary.byConflictType, [newConflictType]: (prev.summary.byConflictType[newConflictType] || 0) + 1 },
-        },
-      } : prev);
-      setCreateOpen(false);
-      resetCreateForm();
-      toast({ title: 'Case Created', description: `New conflict case ${newCase.id} has been created` });
+      // Find the projectId from the fetched data by matching project name
+      const matchedCase = data?.cases.find((c) => c.projectName === newProject);
+      const projectId = matchedCase?.projectId || '';
+      const sourceAJson = JSON.stringify({
+        sourceType: newSourceAType,
+        sourceId: `SRC-A-${Date.now()}`,
+        value: newSourceAValue,
+        unit: 'N/A',
+        timestamp: new Date().toISOString(),
+      });
+      const sourceBJson = JSON.stringify({
+        sourceType: newSourceBType,
+        sourceId: `SRC-B-${Date.now()}`,
+        value: newSourceBValue,
+        unit: 'N/A',
+        timestamp: new Date().toISOString(),
+      });
+      const res = await fetch('/api/dmrv/conflict', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'create',
+          projectId,
+          title: newTitle,
+          sourceA: sourceAJson,
+          sourceB: sourceBJson,
+          conflictType: newConflictType,
+          severity: newSeverity,
+        }),
+      });
+      if (res.ok) {
+        setCreateOpen(false);
+        resetCreateForm();
+        fetchData();
+        toast({ title: 'Case Created', description: 'New conflict case has been created' });
+      } else {
+        toast({ title: 'Error', description: 'Failed to create case', variant: 'destructive' });
+      }
     } catch {
-      toast({ title: 'Error', description: 'Failed to create case', variant: 'destructive' });
+      toast({ title: 'Error', description: 'Network error', variant: 'destructive' });
     } finally {
       setIsSubmitting(false);
     }
@@ -957,15 +991,25 @@ export default function ConflictResolverView() {
                     ) : (
                       <p className="text-xs text-muted-foreground">No evidence files attached</p>
                     )}
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="mt-3 gap-1.5 text-xs"
-                      onClick={handleSimulateUpload}
-                    >
-                      <Upload className="h-3.5 w-3.5" />
-                      Upload Evidence
-                    </Button>
+                    <div className="mt-3">
+                      <input
+                        type="file"
+                        ref={fileInputRef}
+                        onChange={handleFileUpload}
+                        multiple
+                        className="hidden"
+                        accept=".pdf,.docx,.xlsx,.csv,.png,.jpg,.jpeg"
+                      />
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-1.5 text-xs"
+                        onClick={() => fileInputRef.current?.click()}
+                      >
+                        <Upload className="h-3.5 w-3.5" />
+                        Upload Evidence
+                      </Button>
+                    </div>
                   </CardContent>
                 </Card>
 

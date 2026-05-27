@@ -18,6 +18,16 @@ import {
   Loader2,
   ChevronRight,
   AlertTriangle,
+  Copy,
+  Check,
+  AlertCircle,
+  MapPin,
+  CalendarDays,
+  FileBadge,
+  ChevronDown,
+  ChevronUp,
+  XCircle,
+  Layers,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -34,6 +44,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { useToast } from '@/hooks/use-toast';
 
 // ─── Types ────────────────────────────────────────────────────────────────
@@ -123,6 +134,11 @@ function truncateHash(hash: string, chars = 8): string {
   return `${hash.slice(0, chars)}...${hash.slice(-chars)}`;
 }
 
+function truncateHashShort(hash: string): string {
+  if (!hash || hash.length <= 16) return hash;
+  return `${hash.slice(0, 8)}...${hash.slice(-4)}`;
+}
+
 function formatRelativeTime(dateStr: string): string {
   const now = new Date();
   const date = new Date(dateStr);
@@ -159,6 +175,11 @@ export default function PublicRegistryView() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searching, setSearching] = useState(false);
   const [searchResult, setSearchResult] = useState<SearchResult | null>(null);
+  const [expandHashes, setExpandHashes] = useState(false);
+  const [searchHistory, setSearchHistory] = useState<string[]>([]);
+  const [noResults, setNoResults] = useState(false);
+  const [copiedHash, setCopiedHash] = useState<string | null>(null);
+  const [showSearchHistory, setShowSearchHistory] = useState(false);
 
   const fetchData = useCallback(async () => {
     try {
@@ -189,9 +210,12 @@ export default function PublicRegistryView() {
   const handleSearch = async () => {
     if (!searchQuery.trim()) {
       setSearchResult(null);
+      setNoResults(false);
       return;
     }
     setSearching(true);
+    setNoResults(false);
+    setShowSearchHistory(false);
     try {
       const q = searchQuery.trim();
       // Determine if it looks like a certId (cuid) or certNumber
@@ -203,8 +227,10 @@ export default function PublicRegistryView() {
       const res = await fetch(url);
       if (!res.ok) {
         if (res.status === 404) {
-          toast({ title: 'Not Found', description: 'No certificate found matching your search', variant: 'destructive' });
+          setNoResults(true);
           setSearchResult(null);
+          // Add to search history
+          setSearchHistory((prev) => [q, ...prev.filter((s) => s !== q)].slice(0, 5));
           return;
         }
         throw new Error('Search failed');
@@ -216,13 +242,16 @@ export default function PublicRegistryView() {
         const results = data.results as SearchResult[];
         if (results.length > 0) {
           setSearchResult(results[0]);
+          setSearchHistory((prev) => [q, ...prev.filter((s) => s !== q)].slice(0, 5));
         } else {
-          toast({ title: 'Not Found', description: 'No certificate found matching your search' });
+          setNoResults(true);
           setSearchResult(null);
+          setSearchHistory((prev) => [q, ...prev.filter((s) => s !== q)].slice(0, 5));
         }
       } else {
         // certId search returns single result
         setSearchResult(data as SearchResult);
+        setSearchHistory((prev) => [q, ...prev.filter((s) => s !== q)].slice(0, 5));
       }
     } catch (err) {
       toast({ title: 'Search Error', description: err instanceof Error ? err.message : 'Search failed', variant: 'destructive' });
@@ -243,6 +272,17 @@ export default function PublicRegistryView() {
       toast({ title: 'Error', description: 'Failed to load audit trail', variant: 'destructive' });
     } finally {
       setSearching(false);
+    }
+  };
+
+  const handleCopyHash = async (hash: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(hash);
+      setCopiedHash(label);
+      toast({ title: 'Copied', description: `${label} copied to clipboard` });
+      setTimeout(() => setCopiedHash(null), 2000);
+    } catch {
+      toast({ title: 'Copy Failed', description: 'Could not copy to clipboard', variant: 'destructive' });
     }
   };
 
@@ -347,10 +387,27 @@ export default function PublicRegistryView() {
               <Input
                 placeholder="Search by Certificate ID or Certificate Number..."
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(e) => { setSearchQuery(e.target.value); setShowSearchHistory(false); setNoResults(false); }}
                 onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                onFocus={() => searchHistory.length > 0 && setShowSearchHistory(true)}
                 className="pl-10"
               />
+              {/* Search History Dropdown */}
+              {showSearchHistory && searchHistory.length > 0 && (
+                <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg z-10 max-h-48 overflow-y-auto">
+                  <div className="p-2 text-[10px] text-muted-foreground font-medium uppercase tracking-wider">Recent Searches</div>
+                  {searchHistory.map((term) => (
+                    <button
+                      key={term}
+                      className="w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center gap-2"
+                      onClick={() => { setSearchQuery(term); setShowSearchHistory(false); }}
+                    >
+                      <Clock className="h-3 w-3 text-muted-foreground" />
+                      <span className="truncate">{term}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
             <Button
               onClick={handleSearch}
@@ -361,6 +418,27 @@ export default function PublicRegistryView() {
               Search
             </Button>
           </div>
+          {/* No Results Message */}
+          {noResults && (
+            <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg flex flex-col gap-2">
+              <div className="flex items-center gap-2 text-sm text-amber-700">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                <span className="font-medium">No certificates found for &quot;{searchQuery}&quot;</span>
+              </div>
+              <div className="text-xs text-amber-600 ml-6">
+                Tips: Try searching by certificate number (e.g., TGO-CERT-001) or certificate ID. Make sure the ID format is correct.
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="ml-6 w-fit text-xs gap-1 border-amber-300 text-amber-700 hover:bg-amber-100"
+                onClick={() => { setSearchResult(null); setNoResults(false); setSearchQuery(''); }}
+              >
+                <Layers className="h-3 w-3" />
+                Browse All Certificates
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -437,14 +515,30 @@ export default function PublicRegistryView() {
                       {searchResult.certificate.status}
                     </Badge>
                   )}
-                  <Badge variant="secondary" className="bg-emerald-50 text-emerald-700 hover:bg-emerald-50 gap-1">
-                    <CheckCircle2 className="h-3 w-3" />
-                    {searchResult.chainIntegrity.valid ? 'No Double Counting Detected' : 'Chain Integrity Warning'}
-                  </Badge>
-                  <Badge variant="secondary" className="bg-blue-50 text-blue-700 hover:bg-blue-50 gap-1">
-                    <Lock className="h-3 w-3" />
-                    De-identified / PDPA Compliant
-                  </Badge>
+                  {searchResult.chainIntegrity.valid && (
+                    <Badge variant="secondary" className="bg-emerald-50 text-emerald-700 hover:bg-emerald-50 gap-1">
+                      <CheckCircle2 className="h-3 w-3" />
+                      No Double Counting
+                    </Badge>
+                  )}
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Badge variant="secondary" className="bg-blue-50 text-blue-700 hover:bg-blue-50 gap-1 cursor-help">
+                        <Lock className="h-3 w-3" />
+                        PDPA Compliant
+                      </Badge>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Personal data has been de-identified in compliance with PDPA.</p>
+                      <p className="text-[10px] mt-0.5 opacity-80">No personally identifiable information is stored on-chain.</p>
+                    </TooltipContent>
+                  </Tooltip>
+                  {searchResult.certificate.project?.methodology && (
+                    <Badge variant="secondary" className="bg-violet-50 text-violet-700 hover:bg-violet-50 gap-1">
+                      <FileBadge className="h-3 w-3" />
+                      {searchResult.certificate.project.methodology}
+                    </Badge>
+                  )}
                 </div>
               </div>
             </CardHeader>
@@ -467,50 +561,93 @@ export default function PublicRegistryView() {
                   <p className="text-sm font-medium">{searchResult.certificate.issuedBy || 'TGO'}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-muted-foreground">Valid From</p>
-                  <p className="text-sm font-medium">{searchResult.certificate.validFrom ? new Date(searchResult.certificate.validFrom).toLocaleDateString() : 'N/A'}</p>
+                  <p className="text-xs text-muted-foreground">Project Location</p>
+                  <p className="text-sm font-medium flex items-center gap-1">
+                    <MapPin className="h-3 w-3 text-slate-400" />
+                    {searchResult.certificate.project?.province || 'N/A'}
+                  </p>
                 </div>
                 <div>
-                  <p className="text-xs text-muted-foreground">Valid Until</p>
-                  <p className="text-sm font-medium">{searchResult.certificate.validUntil ? new Date(searchResult.certificate.validUntil).toLocaleDateString() : 'N/A'}</p>
+                  <p className="text-xs text-muted-foreground">Valid Period</p>
+                  <div className="mt-1">
+                    <div className="flex items-center gap-1 text-xs text-muted-foreground mb-1">
+                      <CalendarDays className="h-3 w-3" />
+                      <span>{searchResult.certificate.validFrom ? new Date(searchResult.certificate.validFrom).toLocaleDateString() : 'N/A'}</span>
+                      <span>-</span>
+                      <span>{searchResult.certificate.validUntil ? new Date(searchResult.certificate.validUntil).toLocaleDateString() : 'N/A'}</span>
+                    </div>
+                    {searchResult.certificate.validFrom && searchResult.certificate.validUntil && (() => {
+                      const start = new Date(searchResult.certificate.validFrom).getTime();
+                      const end = new Date(searchResult.certificate.validUntil).getTime();
+                      const now = Date.now();
+                      const total = end - start;
+                      const elapsed = now - start;
+                      const pct = total > 0 ? Math.min(100, Math.max(0, (elapsed / total) * 100)) : 0;
+                      const isExpired = now > end;
+                      return (
+                        <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all ${isExpired ? 'bg-red-400' : pct > 80 ? 'bg-amber-400' : 'bg-emerald-400'}`}
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                      );
+                    })()}
+                  </div>
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          {/* Chain Integrity Card */}
-          {searchResult.chainIntegrity && (
-            <Card>
-              <CardContent className="p-4">
-                <div className="flex items-center gap-4 flex-wrap text-xs">
-                  <div className="flex items-center gap-1.5">
-                    {searchResult.chainIntegrity.valid ? (
-                      <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                    ) : (
-                      <AlertTriangle className="h-4 w-4 text-red-500" />
+          {/* Chain Integrity Summary Card */}
+          {searchResult.chainIntegrity && (() => {
+            const trail = searchResult.auditTrail;
+            const hasDuplicates = (() => {
+              const tokenIds = trail.map((n) => n.dataHash);
+              return new Set(tokenIds).size !== tokenIds.length;
+            })();
+            return (
+              <Card className="border-slate-200">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-4 flex-wrap text-xs">
+                    <div className="flex items-center gap-1.5">
+                      {searchResult.chainIntegrity.valid ? (
+                        <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                      ) : (
+                        <AlertTriangle className="h-4 w-4 text-red-500" />
+                      )}
+                      <span className={`font-medium ${searchResult.chainIntegrity.valid ? 'text-emerald-700' : 'text-red-700'}`}>
+                        Chain: {searchResult.chainIntegrity.valid ? 'Valid' : 'Broken'}
+                      </span>
+                    </div>
+                    <Separator orientation="vertical" className="h-4" />
+                    <span className="text-muted-foreground">Entries: <span className="font-semibold text-slate-700">{searchResult.chainIntegrity.totalEntries}</span></span>
+                    {searchResult.chainIntegrity.genesisHash && (
+                      <>
+                        <Separator orientation="vertical" className="h-4" />
+                        <span className="text-muted-foreground">Genesis: <code className="font-mono text-[10px]">{truncateHash(searchResult.chainIntegrity.genesisHash, 6)}</code></span>
+                      </>
                     )}
-                    <span className="font-medium">
-                      Chain Integrity: {searchResult.chainIntegrity.valid ? 'Verified' : 'Broken'}
-                    </span>
+                    {searchResult.chainIntegrity.latestRoot && (
+                      <>
+                        <Separator orientation="vertical" className="h-4" />
+                        <span className="text-muted-foreground">Root: <code className="font-mono text-[10px]">{truncateHash(searchResult.chainIntegrity.latestRoot, 6)}</code></span>
+                      </>
+                    )}
+                    {!hasDuplicates && (
+                      <>
+                        <Separator orientation="vertical" className="h-4" />
+                        <Badge variant="secondary" className="bg-emerald-50 text-emerald-700 hover:bg-emerald-50 text-[10px] h-5 gap-0.5">
+                          <CheckCircle2 className="h-2.5 w-2.5" />
+                          No Double Counting
+                        </Badge>
+                      </>
+                    )}
                   </div>
-                  <Separator orientation="vertical" className="h-4" />
-                  <span className="text-muted-foreground">Entries: {searchResult.chainIntegrity.totalEntries}</span>
-                  {searchResult.chainIntegrity.genesisHash && (
-                    <>
-                      <Separator orientation="vertical" className="h-4" />
-                      <span className="text-muted-foreground">Genesis: <code className="font-mono">{truncateHash(searchResult.chainIntegrity.genesisHash, 6)}</code></span>
-                    </>
-                  )}
-                  {searchResult.chainIntegrity.latestRoot && (
-                    <>
-                      <Separator orientation="vertical" className="h-4" />
-                      <span className="text-muted-foreground">Root: <code className="font-mono">{truncateHash(searchResult.chainIntegrity.latestRoot, 6)}</code></span>
-                    </>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          )}
+                </CardContent>
+              </Card>
+            );
+          })()}
 
           {/* Merkle Tree / Audit Trail Timeline */}
           <Card>
@@ -523,10 +660,21 @@ export default function PublicRegistryView() {
                   </CardTitle>
                   <CardDescription>{searchResult.auditTrail.length} entries in the chain</CardDescription>
                 </div>
-                <Button variant="outline" size="sm" onClick={handleExportTrail} className="gap-2">
-                  <Download className="h-3.5 w-3.5" />
-                  Export JSON
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setExpandHashes(!expandHashes)}
+                    className="gap-1 text-xs"
+                  >
+                    {expandHashes ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                    {expandHashes ? 'Collapse Hashes' : 'Expand Hashes'}
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={handleExportTrail} className="gap-2">
+                    <Download className="h-3.5 w-3.5" />
+                    Export JSON
+                  </Button>
+                </div>
               </div>
             </CardHeader>
             <CardContent>
@@ -541,6 +689,11 @@ export default function PublicRegistryView() {
                       const config = eventConfig[node.eventType] || eventConfig.ORIGIN;
                       const Icon = config.icon;
                       const actor = getActorFromMetadata(node.metadata);
+                      // Chain verification: check if previousHash matches prior entry's dataHash
+                      const prevNode = idx > 0 ? searchResult.auditTrail[idx - 1] : null;
+                      const chainLinkValid = idx === 0
+                        ? node.previousHash === '0'.repeat(64) || node.previousHash === '' || node.previousHash === 'GENESIS'
+                        : prevNode !== null && node.previousHash === prevNode.dataHash;
 
                       return (
                         <React.Fragment key={`${node.eventType}-${idx}`}>
@@ -553,17 +706,45 @@ export default function PublicRegistryView() {
                                 <Icon className={`h-4 w-4 ${config.color}`} />
                               </div>
                               {idx < searchResult.auditTrail.length - 1 && (
-                                <div className="w-0.5 flex-1 bg-slate-200 my-1 min-h-[24px]" />
+                                <div className="w-0.5 flex-1 my-1 min-h-[24px] relative">
+                                  <div className={`absolute inset-0 ${chainLinkValid ? 'bg-emerald-300' : 'bg-red-300'}`} style={{ width: '2px', left: '50%', transform: 'translateX(-50%)' }} />
+                                  {chainLinkValid ? (
+                                    <div className="absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 bg-white rounded-full p-0.5">
+                                      <CheckCircle2 className="h-3 w-3 text-emerald-500" />
+                                    </div>
+                                  ) : (
+                                    <div className="absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 bg-white rounded-full p-0.5">
+                                      <XCircle className="h-3 w-3 text-red-500" />
+                                    </div>
+                                  )}
+                                </div>
                               )}
                             </div>
 
                             {/* Node content */}
                             <div className="flex-1 pb-6 min-w-0">
                               <div className="flex items-center gap-2 flex-wrap mb-1">
-                                <Badge variant="secondary" className={`${config.bgColor} ${config.color} hover:bg-opacity-80 text-xs font-semibold`}>
+                                <Badge variant="secondary" className={`${config.bgColor} ${config.color} hover:bg-opacity-80 text-xs font-bold`}>
                                   {config.label}
                                 </Badge>
                                 <span className="text-xs text-muted-foreground">{formatRelativeTime(node.timestamp)}</span>
+                                {idx > 0 && (
+                                  chainLinkValid ? (
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <CheckCircle2 className="h-3 w-3 text-emerald-500 cursor-help" />
+                                      </TooltipTrigger>
+                                      <TooltipContent>Hash chain verified: previousHash matches prior dataHash</TooltipContent>
+                                    </Tooltip>
+                                  ) : (
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <AlertTriangle className="h-3 w-3 text-red-500 cursor-help" />
+                                      </TooltipTrigger>
+                                      <TooltipContent>Chain link broken: previousHash does not match prior dataHash</TooltipContent>
+                                    </Tooltip>
+                                  )
+                                )}
                               </div>
 
                               <div className="rounded-lg bg-slate-50 border border-slate-200 p-3 space-y-1.5">
@@ -571,22 +752,43 @@ export default function PublicRegistryView() {
                                   <Hash className="h-3 w-3 text-slate-400 shrink-0" />
                                   <span className="text-muted-foreground">dataHash:</span>
                                   <code className="font-mono text-[11px] bg-white px-1.5 py-0.5 rounded border border-slate-200 break-all">
-                                    {truncateHash(node.dataHash, 10)}
+                                    {expandHashes ? node.dataHash : truncateHashShort(node.dataHash)}
                                   </code>
+                                  <button
+                                    className="shrink-0 p-0.5 rounded hover:bg-slate-200 transition-colors"
+                                    onClick={() => handleCopyHash(node.dataHash, `dataHash-${idx}`)}
+                                    title="Copy hash"
+                                  >
+                                    {copiedHash === `dataHash-${idx}` ? <Check className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3 text-slate-400" />}
+                                  </button>
                                 </div>
                                 <div className="flex items-center gap-2 text-xs">
                                   <Link2 className="h-3 w-3 text-slate-400 shrink-0" />
                                   <span className="text-muted-foreground">prevHash:</span>
                                   <code className="font-mono text-[11px] bg-white px-1.5 py-0.5 rounded border border-slate-200 break-all">
-                                    {truncateHash(node.previousHash, 10)}
+                                    {expandHashes ? node.previousHash : truncateHashShort(node.previousHash)}
                                   </code>
+                                  <button
+                                    className="shrink-0 p-0.5 rounded hover:bg-slate-200 transition-colors"
+                                    onClick={() => handleCopyHash(node.previousHash, `prevHash-${idx}`)}
+                                    title="Copy hash"
+                                  >
+                                    {copiedHash === `prevHash-${idx}` ? <Check className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3 text-slate-400" />}
+                                  </button>
                                 </div>
                                 <div className="flex items-center gap-2 text-xs">
                                   <Shield className="h-3 w-3 text-slate-400 shrink-0" />
                                   <span className="text-muted-foreground">merkleRoot:</span>
                                   <code className="font-mono text-[11px] bg-white px-1.5 py-0.5 rounded border border-slate-200 break-all">
-                                    {truncateHash(node.merkleRoot, 10)}
+                                    {expandHashes ? node.merkleRoot : truncateHashShort(node.merkleRoot)}
                                   </code>
+                                  <button
+                                    className="shrink-0 p-0.5 rounded hover:bg-slate-200 transition-colors"
+                                    onClick={() => handleCopyHash(node.merkleRoot, `merkleRoot-${idx}`)}
+                                    title="Copy hash"
+                                  >
+                                    {copiedHash === `merkleRoot-${idx}` ? <Check className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3 text-slate-400" />}
+                                  </button>
                                 </div>
                                 <Separator className="my-1" />
                                 <div className="flex items-center gap-4 text-xs text-muted-foreground">

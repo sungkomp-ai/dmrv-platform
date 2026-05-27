@@ -70,6 +70,7 @@ interface Finding {
 
 interface Review {
   id: string;
+  projectId?: string;
   reviewerOrg: string;
   reviewerName: string;
   reviewType: ReviewType;
@@ -144,6 +145,7 @@ const MOCK_DATA: VVBData = {
   reviews: [
     {
       id: 'VVB-001',
+      projectId: 'PRJ-001',
       reviewerOrg: 'Bureau Veritas',
       reviewerName: 'Dr. Somchai P.',
       reviewType: 'VALIDATION',
@@ -169,6 +171,7 @@ const MOCK_DATA: VVBData = {
     },
     {
       id: 'VVB-002',
+      projectId: 'PRJ-002',
       reviewerOrg: 'SGS Thailand',
       reviewerName: 'Ms. Apinya K.',
       reviewType: 'VERIFICATION',
@@ -190,6 +193,7 @@ const MOCK_DATA: VVBData = {
     },
     {
       id: 'VVB-003',
+      projectId: 'PRJ-003',
       reviewerOrg: 'TUV Nord',
       reviewerName: 'Dr. Heinrich M.',
       reviewType: 'PERIODIC_VERIFICATION',
@@ -210,6 +214,7 @@ const MOCK_DATA: VVBData = {
     },
     {
       id: 'VVB-004',
+      projectId: 'PRJ-004',
       reviewerOrg: 'Bureau Veritas',
       reviewerName: 'Mr. Tanawat S.',
       reviewType: 'VALIDATION',
@@ -229,6 +234,7 @@ const MOCK_DATA: VVBData = {
     },
     {
       id: 'VVB-005',
+      projectId: 'PRJ-005',
       reviewerOrg: 'SGS Thailand',
       reviewerName: 'Ms. Ploypailin R.',
       reviewType: 'VERIFICATION',
@@ -249,6 +255,7 @@ const MOCK_DATA: VVBData = {
     },
     {
       id: 'VVB-006',
+      projectId: 'PRJ-006',
       reviewerOrg: 'TUV Nord',
       reviewerName: 'Dr. Heinrich M.',
       reviewType: 'PERIODIC_VERIFICATION',
@@ -353,25 +360,29 @@ export default function VVBWorkspaceView() {
     if (!selectedReview) return;
     setIsSubmitting(true);
     try {
-      // Simulate API call
-      await new Promise((r) => setTimeout(r, 800));
-      const updatedReview = {
-        ...selectedReview,
-        recommendation,
-        comments: reviewerComment,
-        status: recommendation === 'APPROVE' ? 'APPROVED' as ReviewStatus : recommendation === 'REJECT' ? 'REJECTED' as ReviewStatus : 'REQUESTED_INFO' as ReviewStatus,
-      };
-      setData((prev) => prev ? {
-        ...prev,
-        reviews: prev.reviews.map((r) => r.id === selectedReview.id ? updatedReview : r),
-      } : prev);
-      setSelectedReview(updatedReview);
-      toast({
-        title: `Review ${recommendation === 'APPROVE' ? 'Approved' : recommendation === 'REJECT' ? 'Rejected' : 'Info Requested'}`,
-        description: `Review ${selectedReview.id} has been updated`,
+      const res = await fetch('/api/dmrv/vvb', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'update',
+          reviewId: selectedReview.id,
+          projectId: selectedReview.projectId,
+          status: recommendation === 'APPROVE' ? 'APPROVED' : recommendation === 'REJECT' ? 'REJECTED' : 'REQUESTED_INFO',
+          recommendation: recommendation.toLowerCase(),
+          comments: reviewerComment,
+        }),
       });
+      if (res.ok) {
+        toast({ title: 'Recommendation submitted', description: `Review ${recommendation.toLowerCase()}ed successfully` });
+        setReviewerComment('');
+        setSelectedReview(null);
+        setDetailOpen(false);
+        fetchData();
+      } else {
+        toast({ title: 'Error', description: 'Failed to submit recommendation', variant: 'destructive' });
+      }
     } catch {
-      toast({ title: 'Error', description: 'Failed to submit recommendation', variant: 'destructive' });
+      toast({ title: 'Error', description: 'Network error', variant: 'destructive' });
     } finally {
       setIsSubmitting(false);
     }
@@ -384,40 +395,31 @@ export default function VVBWorkspaceView() {
     }
     setIsSubmitting(true);
     try {
-      await new Promise((r) => setTimeout(r, 800));
-      const newReview: Review = {
-        id: `VVB-${String((data?.reviews.length || 0) + 1).padStart(3, '0')}`,
-        reviewerOrg: newOrg,
-        reviewerName: newReviewer,
-        reviewType: newType,
-        status: 'PENDING',
-        projectName: newProject,
-        projectProvince: 'Bangkok',
-        evidenceCount: 0,
-        evidenceRefs: [],
-        findings: { completeness: 0, accuracy: 0, consistency: 0 },
-        recommendation: 'PENDING',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        comments: '',
-      };
-      setData((prev) => prev ? {
-        reviews: [newReview, ...prev.reviews],
-        summary: {
-          ...prev.summary,
-          total: prev.summary.total + 1,
-          byStatus: { ...prev.summary.byStatus, PENDING: prev.summary.byStatus.PENDING + 1 },
-          byReviewType: { ...prev.summary.byReviewType, [newType]: (prev.summary.byReviewType[newType] || 0) + 1 },
-        },
-      } : prev);
-      setCreateOpen(false);
-      setNewProject('');
-      setNewOrg('');
-      setNewType('VALIDATION');
-      setNewReviewer('');
-      toast({ title: 'Review Created', description: `New review ${newReview.id} has been created` });
+      const res = await fetch('/api/dmrv/vvb', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'create',
+          projectId: newProject,
+          reviewerOrg: newOrg,
+          reviewerName: newReviewer,
+          reviewType: newType,
+          status: 'PENDING',
+        }),
+      });
+      if (res.ok) {
+        toast({ title: 'Review created', description: 'New VVB review has been created' });
+        setCreateOpen(false);
+        setNewProject('');
+        setNewOrg('');
+        setNewReviewer('');
+        setNewType('VALIDATION');
+        fetchData();
+      } else {
+        toast({ title: 'Error', description: 'Failed to create review', variant: 'destructive' });
+      }
     } catch {
-      toast({ title: 'Error', description: 'Failed to create review', variant: 'destructive' });
+      toast({ title: 'Error', description: 'Network error', variant: 'destructive' });
     } finally {
       setIsSubmitting(false);
     }
@@ -430,7 +432,7 @@ export default function VVBWorkspaceView() {
     if (activeTab === 'pending') {
       reviews = reviews.filter((r) => r.status === 'PENDING');
     } else if (activeTab === 'my') {
-      reviews = reviews.filter((r) => r.reviewerOrg === 'Bureau Veritas');
+      // Show all reviews (no org-specific filter)
     }
 
     if (filterStatus !== 'ALL') {
