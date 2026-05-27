@@ -138,3 +138,30 @@ Stage Summary:
 - Template Library uses existing methodology rules as starting points
 - AI-generated rules show sparkle badge and calculationNodes in detail view
 - ESLint passes with zero errors
+
+---
+Task ID: 5
+Agent: main-orchestrator
+Task: Fix Dashboard menu error - multiple runtime and TypeScript errors
+
+Work Log:
+- Identified root cause: `useSyncExternalStore` destructuring bug in ProjectMap.tsx (line 289) — was `[mounted, setMounted] = useSyncExternalStore(...)` but `useSyncExternalStore` returns a single boolean value, causing `TypeError: true is not iterable` runtime crash
+- Fixed `ProjectMap.tsx`: Changed destructuring to `const mounted = useSyncExternalStore(...)`
+- Fixed `ProjectMap.tsx`: Added `import type { Map as LeafletMap } from 'leaflet'` for proper type reference
+- Fixed `ProjectMap.tsx`: Fixed TypeScript cast `(L.Icon.Default.prototype as unknown as Record<string, unknown>)._getIconUrl`
+- Fixed `db.ts`: Added `as unknown` intermediate cast for PrismaClient type check
+- Fixed `devices/route.ts`: Fixed function name typo `getSupportedMeasurements` → `getSupportedMeasurement`
+- Fixed `simulation/route.ts`: Added `as unknown` intermediate cast for type conversion
+- Added `buyer` field to CarbonCredit model in Prisma schema
+- Added `Settlement` model to Prisma schema (with creditId foreign key)
+- Ran `db:push` to sync database
+- Fixed `marketplace/route.ts`: Updated settlement creation with creditId, buyer references
+- Fixed `logistics/route.ts`: Updated settlement creation with credit lookup by tokenId
+- Fixed `initialize/route.ts`: Updated settlement creation with creditId references
+
+Stage Summary:
+- Main Dashboard crash fixed (useSyncExternalStore destructuring bug)
+- All API routes now work correctly with updated Prisma schema
+- TypeScript errors reduced from ~40 to ~29 (remaining are in seed.ts type inference, not runtime-affecting)
+- ESLint passes with zero errors
+- All API endpoints return 200 status codes

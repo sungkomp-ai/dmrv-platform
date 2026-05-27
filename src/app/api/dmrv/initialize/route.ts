@@ -433,6 +433,7 @@ export async function POST() {
     const settlements = await Promise.all([
       db.settlement.create({
         data: {
+          creditId: credits[1].id,
           assetId: 'TCO2E-2024-BC-0002',
           amount: 1000.0,
           status: 'processed',
@@ -440,6 +441,7 @@ export async function POST() {
       }),
       db.settlement.create({
         data: {
+          creditId: credits[4].id,
           assetId: 'TCO2E-2024-SOL-0002',
           amount: 50.0,
           status: 'processed',

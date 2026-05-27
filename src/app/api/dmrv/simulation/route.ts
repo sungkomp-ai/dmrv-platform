@@ -226,7 +226,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as SimulationParams;
 
-    const simulationType = body.simulationType || (body as Record<string, unknown>).type as string || '';
+    const simulationType = body.simulationType || (body as unknown as Record<string, unknown>).type as string || '';
     if (!simulationType) {
       return NextResponse.json(
         { error: 'simulationType is required', validTypes: ['awd', 'biogas', 'solar', 'biochar', 'footprint'] },

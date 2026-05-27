@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import type { Map as LeafletMap } from 'leaflet';
 import { MapPin, Leaf, Award, AlertTriangle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -63,7 +64,7 @@ const statusColors: Record<string, string> = {
 
 function ProjectMapInner({ projects, onProjectClick }: ProjectMapProps) {
   const mapRef = useRef<HTMLDivElement>(null);
-  const mapInstanceRef = useRef<L.Map | null>(null);
+  const mapInstanceRef = useRef<LeafletMap | null>(null);
   const [selectedProject, setSelectedProject] = useState<MapProject | null>(null);
   const [leafletLoaded, setLeafletLoaded] = useState(false);
 
@@ -74,7 +75,7 @@ function ProjectMapInner({ projects, onProjectClick }: ProjectMapProps) {
       import('react-leaflet'),
     ]).then(([L, RL]) => {
       // Fix default marker icon issue with webpack
-      delete (L.Icon.Default.prototype as Record<string, unknown>)._getIconUrl;
+      delete (L.Icon.Default.prototype as unknown as Record<string, unknown>)._getIconUrl;
       L.Icon.Default.mergeOptions({
         iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
         iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
@@ -285,9 +286,11 @@ function ProjectMapInner({ projects, onProjectClick }: ProjectMapProps) {
   );
 }
 
+const emptySubscribe = () => () => {};
+
 export default function ProjectMap(props: ProjectMapProps) {
-  const [mounted, setMounted] = useSyncExternalStore(
-    () => () => {},
+  const mounted = useSyncExternalStore(
+    emptySubscribe,
     () => true,
     () => false,
   );

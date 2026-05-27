@@ -23,7 +23,7 @@ export async function GET() {
         id: c.id,
         tokenId: c.tokenId,
         amount: c.amount,
-        buyer: c.buyer,
+        buyer: c.buyer || 'Unknown',
         project: c.project.name,
         tradedAt: c.updatedAt.toISOString(),
       })),
@@ -31,7 +31,7 @@ export async function GET() {
         id: c.id,
         tokenId: c.tokenId,
         amount: c.amount,
-        buyer: c.buyer,
+        buyer: c.buyer || 'Self-retired',
         project: c.project.name,
         retiredAt: c.updatedAt.toISOString(),
       })),
@@ -128,6 +128,7 @@ export async function POST(request: NextRequest) {
         // Create settlement
         await db.settlement.create({
           data: {
+            creditId: creditId,
             assetId: credit.tokenId,
             amount: credit.amount,
             status: 'processed',
@@ -162,7 +163,7 @@ export async function POST(request: NextRequest) {
 
         const updatedCredit = await db.carbonCredit.update({
           where: { id: creditId },
-          data: { status: 'Retired', buyer: buyer ?? credit.buyer ?? 'Self-retired' },
+          data: { status: 'Retired', buyer: buyer || credit.buyer || 'Self-retired' },
         });
 
         await db.auditLog.create({

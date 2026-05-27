@@ -72,7 +72,7 @@ export async function GET() {
               lastCalibration: calDate,
               metadata: JSON.stringify({
                 serialNumber: `SN-${d.deviceId}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
-                supportedMeasurements: getSupportedMeasurements(d.deviceType),
+                supportedMeasurements: getSupportedMeasurement(d.deviceType),
                 calibrationHistory: [
                   { date: calDate.toISOString(), result: 'PASS', nextDue: new Date(calDate.getTime() + 90 * 86400000).toISOString() },
                 ],

@@ -64,12 +64,14 @@ model CarbonCredit {
   projectId String
   amount    Float    @default(0)
   status    String   @default("Available") // Available, Traded, Retired, Buffered
+  buyer     String   @default("") // Buyer name when traded/retired
   metadata  String   @default("{}")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   project         Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
   bufferPoolEntry BufferPoolEntry?
+  settlement      Settlement?
 }
 
 model Certificate {
@@ -360,6 +362,19 @@ model CrossChainBridge {
   updatedAt         DateTime @updatedAt
 
   transactions BridgeTransaction[]
+}
+
+// ─── Settlement Model ──────────────────────────────────────────────────────
+
+model Settlement {
+  id        String   @id @default(cuid())
+  creditId  String   @unique // Reference to CarbonCredit
+  assetId   String   @default("") // Token ID of the settled asset
+  amount    Float    @default(0) // Settlement amount
+  status    String   @default("pending") // pending, processed, failed
+  timestamp DateTime @default(now())
+
+  credit CarbonCredit @relation(fields: [creditId], references: [id], onDelete: Cascade)
 }
 
 model BridgeTransaction {

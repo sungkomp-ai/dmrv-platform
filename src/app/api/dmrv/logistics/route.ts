@@ -136,8 +136,15 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ error: 'assetId and amount are required' }, { status: 400 });
         }
 
+        // Find the credit by tokenId (assetId) to link the settlement
+        const credit = await db.carbonCredit.findFirst({ where: { tokenId: body.assetId } });
+        if (!credit) {
+          return NextResponse.json({ error: 'Credit not found for the given assetId' }, { status: 404 });
+        }
+
         const settlement = await db.settlement.create({
           data: {
+            creditId: credit.id,
             assetId: body.assetId,
             amount: body.amount,
             status: 'processed',
