@@ -14,10 +14,10 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "GeoDashboard — Global Operations Map",
-  description: "Interactive map dashboard for global operations monitoring with real-time analytics and location tracking.",
-  keywords: ["map", "dashboard", "analytics", "operations", "geo"],
-  authors: [{ name: "GeoDashboard Team" }],
+  title: "dMRV Platform — Carbon Credit System",
+  description: "Digital Measurement, Reporting & Verification platform for carbon credit management with satellite imagery, IoT monitoring, and real-time analytics.",
+  keywords: ["dMRV", "carbon credit", "T-VER", "satellite", "IoT", "Thailand"],
+  authors: [{ name: "dMRV Platform Team" }],
   icons: {
     icon: "https://z-cdn.chatglm.cn/z-ai/static/logo.svg",
   },

@@ -10,19 +10,139 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model Location {
+model Project {
   id          String   @id @default(cuid())
   name        String
-  category    String   @default("office") // office, factory, warehouse, renewable, datacenter
-  lat         Float
-  lng         Float
   description String   @default("")
-  status      String   @default("active") // active, inactive, maintenance
-  value       Float    @default(0)
+  methodology String   @default("T-VER") // T-VER, IPCC-2023, T-VER-FOREST
+  status      String   @default("Active") // Active, Pending, Suspended, Completed
+  areaHa      Float    @default(0)
+  location    String   @default("")
   region      String   @default("")
-  country     String   @default("")
-  employees   Int      @default(0)
-  revenue     Float    @default(0)
+  country     String   @default("Thailand")
+  centerLat   Float    @default(13.75)
+  centerLng   Float    @default(100.5)
+  province    String   @default("")
+  startDate   DateTime @default(now())
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  plots          Plot[]
+  credits        CarbonCredit[]
+  certificates   Certificate[]
+  ingestionLogs  IngestionLog[]
+  submissions    Submission[]
+  auditLogs      AuditLog[]
+  iotSensors     IoTSensor[]
+}
+
+model Plot {
+  id          String   @id @default(cuid())
+  plotId      String
+  projectId   String
+  coordinates String   @default("[]") // JSON: [[lat, lng], ...]
+  ownerInfo   String   @default("")
+  trackType   String   @default("forest") // forest, biochar, awd, biogas, solar
+  areaHa      Float    @default(0)
+  status      String   @default("REGISTERED") // REGISTERED, VERIFIED, ACTIVE, INACTIVE
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+model CarbonCredit {
+  id        String   @id @default(cuid())
+  tokenId   String   @unique
+  projectId String
+  amount    Float    @default(0)
+  status    String   @default("Available") // Available, Traded, Retired
+  metadata  String   @default("{}")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+model Certificate {
+  id          String   @id @default(cuid())
+  projectId   String
+  status      String   @default("SUBMITTED") // SUBMITTED, APPROVED, REJECTED, REVOKED
+  issuedBy    String   @default("TGO")
+  certificateNumber String @default("")
+  validFrom   DateTime @default(now())
+  validUntil  DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+model IngestionLog {
+  id             String   @id @default(cuid())
+  projectId      String
+  sourceType     String   // satellite, iot, drone, photo, lidar, manual
+  activityType   String   // monitoring, verification, measurement
+  payload        String   @default("{}")
+  evidenceUrl    String   @default("")
+  integrityHash  String   @default("")
+  classification String   @default("PUBLIC") // PUBLIC, CONFIDENTIAL
+  isEncrypted    Boolean  @default(false)
+  timestamp      DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+model Submission {
+  id          String   @id @default(cuid())
+  projectId   String
+  type        String   @default("VERIFICATION") // VERIFICATION, CERTIFICATION, MONITORING
+  status      String   @default("PENDING") // PENDING, UNDER_REVIEW, APPROVED, REJECTED
+  data        String   @default("{}")
+  submittedBy String   @default("")
+  reviewedBy  String   @default("")
+  submittedAt DateTime @default(now())
+  reviewedAt  DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  agentName String
+  action    String
+  projectId String?
+  details   String   @default("{}")
+  severity  String   @default("INFO") // INFO, WARNING, ERROR, CRITICAL
+  timestamp DateTime @default(now())
+
+  project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+}
+
+model Alert {
+  id        String   @id @default(cuid())
+  severity  String   @default("INFO") // INFO, WARNING, CRITICAL
+  message   String
+  resolved  Boolean  @default(false)
+  timestamp DateTime @default(now())
+}
+
+model IoTSensor {
+  id          String   @id @default(cuid())
+  projectId   String
+  sensorId    String
+  sensorType  String   @default("soil_moisture") // soil_moisture, temperature, humidity, ch4, co2, water_level, ph, wind_speed, solar_irradiance
+  lat         Float    @default(0)
+  lng         Float    @default(0)
+  status      String   @default("online") // online, offline, maintenance
+  lastReading Float    @default(0)
+  unit        String   @default("")
+  battery     Int      @default(100)
+  lastSeen    DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 }

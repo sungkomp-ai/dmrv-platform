@@ -18,6 +18,7 @@ import {
   Search,
   Footprints,
   FlaskConical,
+  Map as MapIcon,
   Menu,
   Bell,
   CircleDot,
@@ -34,6 +35,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import DashboardView from './DashboardView';
+import MapDashboardView from './MapDashboardView';
 import OrchestratorView from './OrchestratorView';
 import IngestionView from './IngestionView';
 import AuthView from './AuthView';
@@ -52,6 +54,7 @@ import SimulationView from './SimulationView';
 
 type ModuleKey =
   | 'dashboard'
+  | 'map'
   | 'orchestrator'
   | 'ingestion'
   | 'auth'
@@ -93,6 +96,7 @@ interface SystemStatus {
 
 const menuItems: MenuItem[] = [
   { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { key: 'map', label: 'Map Dashboard', icon: MapIcon },
   { key: 'orchestrator', label: 'Orchestrator', icon: Workflow },
   { key: 'ingestion', label: 'Ingestion', icon: Upload },
   { key: 'auth', label: 'Auth & RBAC', icon: Shield },
@@ -112,6 +116,7 @@ const menuItems: MenuItem[] = [
 
 const moduleComponents: Record<ModuleKey, React.ComponentType> = {
   dashboard: DashboardView,
+  map: MapDashboardView,
   orchestrator: OrchestratorView,
   ingestion: IngestionView,
   auth: AuthView,
@@ -217,7 +222,7 @@ const severityColors: Record<string, string> = {
 };
 
 export default function DmrvApp() {
-  const [activeModule, setActiveModule] = useState<ModuleKey>('dashboard');
+  const [activeModule, setActiveModule] = useState<ModuleKey>('map');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -483,8 +488,8 @@ export default function DmrvApp() {
         </aside>
 
         {/* Main Content */}
-        <main className="flex-1 overflow-y-auto">
-          <div className="p-4 lg:p-6 max-w-7xl mx-auto">
+        <main className={`flex-1 ${activeModule === 'map' ? 'overflow-hidden' : 'overflow-y-auto'}`}>
+          <div className={`${activeModule === 'map' ? 'h-full p-0' : 'p-4 lg:p-6 max-w-7xl mx-auto'}`}>
             <ActiveComponent key={activeModule} />
           </div>
         </main>

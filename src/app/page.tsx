@@ -1,5 +1,5 @@
-import MapDashboard from '@/components/map/MapDashboard';
+import DmrvApp from '@/components/dmrv/DmrvApp';
 
 export default function Home() {
-  return <MapDashboard />;
+  return <DmrvApp />;
 }
