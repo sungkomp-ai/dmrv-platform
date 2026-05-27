@@ -189,3 +189,28 @@ Stage Summary:
 - Added allowedDevOrigins config for CORS fix
 - All 26 sidebar menu items confirmed working
 - Server compiles and serves pages correctly
+
+---
+Task ID: 6
+Agent: Main Agent
+Task: Fix "หายหลายเมนู" (missing many menus) — sidebar scrollbar invisible
+
+Work Log:
+- Investigated user report "หายหลายเมนู" — menus appear missing because sidebar ScrollArea hides scrollbar completely
+- With 26 menu items + 7 section headers, content overflows viewport height (~1320px vs typical 768-1080px)
+- Sidebar used Radix ScrollArea with `scrollbar-width: none` and `::-webkit-scrollbar { display: none }` — no visual indicator that more items exist below
+- Replaced ScrollArea with custom scrollable div (`sidebar-scroll` class) with visible scrollbar styling
+- Added `.sidebar-scroll` CSS to globals.css — subtle slate scrollbar (rgba(100,116,139,0.4)) that brightens on hover
+- Added scroll state tracking (canScrollUp, canScrollDown) with `checkScroll` callback
+- Added gradient fade indicator at bottom ("Scroll for more" text with gradient background) when canScrollDown is true
+- Added gradient fade at top when canScrollUp is true
+- Added auto-scroll to active menu item when activeModule changes
+- Added `data-active` attribute to menu buttons for scroll targeting
+- Re-verified all 26 API endpoints return correct status codes (all 200 except verification/simulation which are POST-only)
+- Lint passes with zero errors
+- Dev server compiles and serves correctly
+
+Stage Summary:
+- Root cause: invisible scrollbar made ~8-10 bottom menu items (ENTERPRISE, AI & INTELLIGENCE, INTEGRATION sections) invisible to users
+- Fixed with visible custom scrollbar + scroll indicators + auto-scroll to active item
+- All 26 menu items now accessible via scrolling with clear visual cues

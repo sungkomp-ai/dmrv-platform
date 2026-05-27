@@ -214,6 +214,37 @@
   border-radius: 2px;
 }
 
+/* Sidebar custom scrollbar - visible but subtle */
+.sidebar-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(100, 116, 139, 0.4) transparent;
+}
+
+.sidebar-scroll:hover {
+  scrollbar-color: rgba(100, 116, 139, 0.7) transparent;
+}
+
+.sidebar-scroll::-webkit-scrollbar {
+  width: 5px;
+}
+
+.sidebar-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sidebar-scroll::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.4);
+  border-radius: 3px;
+}
+
+.sidebar-scroll:hover::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.7);
+}
+
+.sidebar-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 116, 139, 0.9);
+}
+
 /* Smooth transitions for interactive elements */
 button, a {
   transition: all 150ms ease;

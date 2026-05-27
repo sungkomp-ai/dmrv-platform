@@ -43,32 +43,33 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import DashboardView from './DashboardView';
-import MapDashboardView from './MapDashboardView';
-import OrchestratorView from './OrchestratorView';
-import IngestionView from './IngestionView';
-import AuthView from './AuthView';
-import CarbonView from './CarbonView';
-import CertificationView from './CertificationView';
-import VerificationView from './VerificationView';
-import MonitoringView from './MonitoringView';
-import ReportingView from './ReportingView';
-import MarketplaceView from './MarketplaceView';
-import LogisticsView from './LogisticsView';
-import GovernanceView from './GovernanceView';
-import SubmissionView from './SubmissionView';
-import AuditView from './AuditView';
-import FootprintView from './FootprintView';
-import SimulationView from './SimulationView';
-import VVBWorkspaceView from './VVBWorkspaceView';
-import ConflictResolverView from './ConflictResolverView';
-import PublicRegistryView from './PublicRegistryView';
-import DeviceManagementView from './DeviceManagementView';
-import BufferPoolView from './BufferPoolView';
-import ForwardContractsView from './ForwardContractsView';
-import DevApiPortalView from './DevApiPortalView';
-import MethodologyStudioView from './MethodologyStudioView';
-import CrossChainBridgeView from './CrossChainBridgeView';
+// Lazy-load all view components to reduce initial bundle size and improve server stability
+const DashboardView = React.lazy(() => import('./DashboardView'));
+const MapDashboardView = React.lazy(() => import('./MapDashboardView'));
+const OrchestratorView = React.lazy(() => import('./OrchestratorView'));
+const IngestionView = React.lazy(() => import('./IngestionView'));
+const AuthView = React.lazy(() => import('./AuthView'));
+const CarbonView = React.lazy(() => import('./CarbonView'));
+const CertificationView = React.lazy(() => import('./CertificationView'));
+const VerificationView = React.lazy(() => import('./VerificationView'));
+const MonitoringView = React.lazy(() => import('./MonitoringView'));
+const ReportingView = React.lazy(() => import('./ReportingView'));
+const MarketplaceView = React.lazy(() => import('./MarketplaceView'));
+const LogisticsView = React.lazy(() => import('./LogisticsView'));
+const GovernanceView = React.lazy(() => import('./GovernanceView'));
+const SubmissionView = React.lazy(() => import('./SubmissionView'));
+const AuditView = React.lazy(() => import('./AuditView'));
+const FootprintView = React.lazy(() => import('./FootprintView'));
+const SimulationView = React.lazy(() => import('./SimulationView'));
+const VVBWorkspaceView = React.lazy(() => import('./VVBWorkspaceView'));
+const ConflictResolverView = React.lazy(() => import('./ConflictResolverView'));
+const PublicRegistryView = React.lazy(() => import('./PublicRegistryView'));
+const DeviceManagementView = React.lazy(() => import('./DeviceManagementView'));
+const BufferPoolView = React.lazy(() => import('./BufferPoolView'));
+const ForwardContractsView = React.lazy(() => import('./ForwardContractsView'));
+const DevApiPortalView = React.lazy(() => import('./DevApiPortalView'));
+const MethodologyStudioView = React.lazy(() => import('./MethodologyStudioView'));
+const CrossChainBridgeView = React.lazy(() => import('./CrossChainBridgeView'));
 import { ErrorBoundary } from './ErrorBoundary';
 
 type ModuleKey =
@@ -207,6 +208,9 @@ interface SidebarContentProps {
 
 function SidebarContent({ collapsed = false, activeModule, onModuleChange, menuItemsWithBadges }: SidebarContentProps) {
   const items = menuItemsWithBadges || menuItems;
+  const scrollRef = React.useRef<HTMLDivElement>(null);
+  const [canScrollDown, setCanScrollDown] = useState(false);
+  const [canScrollUp, setCanScrollUp] = useState(false);
 
   // Pre-compute which items should show section headers
   const itemsWithSections = items.map((item, idx) => {
@@ -214,6 +218,34 @@ function SidebarContent({ collapsed = false, activeModule, onModuleChange, menuI
     const showSection = item.section && (!prevItem || prevItem.section !== item.section);
     return { ...item, showSection };
   });
+
+  const checkScroll = React.useCallback(() => {
+    const el = scrollRef.current;
+    if (el) {
+      setCanScrollUp(el.scrollTop > 4);
+      setCanScrollDown(el.scrollTop + el.clientHeight < el.scrollHeight - 4);
+    }
+  }, []);
+
+  useEffect(() => {
+    checkScroll();
+    window.addEventListener('resize', checkScroll);
+    return () => window.removeEventListener('resize', checkScroll);
+  }, [checkScroll, collapsed]);
+
+  // Auto-scroll to active item when it changes
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const el = scrollRef.current;
+      if (!el) return;
+      const activeBtn = el.querySelector('[data-active="true"]');
+      if (activeBtn) {
+        activeBtn.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      }
+      checkScroll();
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [activeModule, checkScroll]);
 
   return (
     <div className="flex h-full flex-col bg-slate-900 text-white">
@@ -230,8 +262,19 @@ function SidebarContent({ collapsed = false, activeModule, onModuleChange, menuI
         )}
       </div>
 
+      {/* Scroll indicator top */}
+      {canScrollUp && (
+        <div className="relative h-0 z-10">
+          <div className="absolute inset-x-0 top-0 h-6 bg-gradient-to-b from-slate-900 to-transparent pointer-events-none" />
+        </div>
+      )}
+
       {/* Navigation */}
-      <ScrollArea className="flex-1 px-2 py-3">
+      <div
+        ref={scrollRef}
+        onScroll={checkScroll}
+        className="flex-1 px-2 py-3 overflow-y-auto sidebar-scroll"
+      >
         <nav className="flex flex-col gap-0.5">
           {itemsWithSections.map((item) => {
             const isActive = activeModule === item.key;
@@ -250,6 +293,7 @@ function SidebarContent({ collapsed = false, activeModule, onModuleChange, menuI
                   </div>
                 )}
                 <button
+                  data-active={isActive}
                   onClick={() => onModuleChange(item.key)}
                   className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150 ${
                     isActive
@@ -277,7 +321,20 @@ function SidebarContent({ collapsed = false, activeModule, onModuleChange, menuI
             );
           })}
         </nav>
-      </ScrollArea>
+      </div>
+
+      {/* Scroll indicator bottom */}
+      {canScrollDown && !collapsed && (
+        <div className="relative h-0 z-10 -mt-6">
+          <div className="absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-slate-900 via-slate-900/90 to-transparent pointer-events-none flex items-end justify-center pb-1">
+            <span className="text-[9px] text-slate-500 flex items-center gap-1">
+              <ChevronLeft className="h-3 w-3 rotate-90" />
+              Scroll for more
+              <ChevronLeft className="h-3 w-3 -rotate-90" />
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* Footer */}
       {!collapsed && (
@@ -314,6 +371,7 @@ export default function DmrvApp() {
   const [itemsWithBadges, setItemsWithBadges] = useState<MenuItem[]>(menuItems);
 
   const ActiveComponent = moduleComponents[activeModule];
+
   const activeItem = menuItems.find((item) => item.key === activeModule);
   const unresolvedCount = notifications.filter((n) => !n.resolved).length;
 
@@ -593,7 +651,16 @@ export default function DmrvApp() {
         <main className={`flex-1 ${activeModule === 'map' ? 'overflow-hidden' : 'overflow-y-auto'}`}>
           <div className={`${activeModule === 'map' ? 'h-full p-0' : 'p-4 lg:p-6 max-w-7xl mx-auto'}`}>
             <ErrorBoundary key={activeModule}>
-              <ActiveComponent />
+              <React.Suspense fallback={
+                <div className="flex items-center justify-center h-64">
+                  <div className="flex flex-col items-center gap-3">
+                    <RefreshCw className="h-8 w-8 text-emerald-600 animate-spin" />
+                    <span className="text-sm text-muted-foreground">Loading module...</span>
+                  </div>
+                </div>
+              }>
+                <ActiveComponent />
+              </React.Suspense>
             </ErrorBoundary>
           </div>
         </main>
