@@ -129,17 +129,19 @@
 
 .custom-popup .leaflet-popup-content-wrapper {
   border-radius: 12px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
   padding: 0;
+  overflow: hidden;
 }
 
 .custom-popup .leaflet-popup-content {
   margin: 0;
   padding: 0;
+  min-width: 200px;
 }
 
 .custom-popup .leaflet-popup-tip {
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
 .leaflet-popup-close-button {
@@ -164,7 +166,7 @@
 
 /* Custom Leaflet tile styling */
 .leaflet-tile-pane {
-  filter: saturate(0.9) brightness(1.02);
+  filter: saturate(0.85) brightness(1.02);
 }
 
 .dark .leaflet-tile-pane {
@@ -193,38 +195,35 @@
   box-shadow: 0 2px 8px rgba(0,0,0,0.15) !important;
 }
 
-/* Marker pulse animation */
-@keyframes marker-pulse {
-  0% {
-    transform: translate(-50%, -50%) scale(0.8);
-    opacity: 0.6;
-  }
-  100% {
-    transform: translate(-50%, -50%) scale(2);
-    opacity: 0;
-  }
+/* Custom ScrollArea styling */
+[data-radix-scroll-area-viewport] {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
 }
 
-/* Custom marker positioning fix */
-.custom-marker {
-  background: transparent !important;
-  border: none !important;
+[data-radix-scroll-area-viewport]::-webkit-scrollbar {
+  width: 4px;
 }
 
-/* Leaflet attribution styling */
-.leaflet-control-attribution {
-  font-size: 9px !important;
-  background: rgba(255, 255, 255, 0.7) !important;
-  backdrop-filter: blur(4px);
-  border-radius: 4px !important;
-  padding: 2px 6px !important;
+[data-radix-scroll-area-viewport]::-webkit-scrollbar-track {
+  background: transparent;
 }
 
-.dark .leaflet-control-attribution {
-  background: rgba(0, 0, 0, 0.5) !important;
-  color: rgba(255, 255, 255, 0.6) !important;
+[data-radix-scroll-area-viewport]::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 2px;
 }
 
-.dark .leaflet-control-attribution a {
-  color: rgba(255, 255, 255, 0.8) !important;
+/* Smooth transitions for interactive elements */
+button, a {
+  transition: all 150ms ease;
+}
+
+/* Card hover effects */
+.card-hover {
+  transition: transform 150ms ease, box-shadow 150ms ease;
+}
+.card-hover:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
 }
