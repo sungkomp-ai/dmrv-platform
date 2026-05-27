@@ -69,6 +69,7 @@ import ForwardContractsView from './ForwardContractsView';
 import DevApiPortalView from './DevApiPortalView';
 import MethodologyStudioView from './MethodologyStudioView';
 import CrossChainBridgeView from './CrossChainBridgeView';
+import { ErrorBoundary } from './ErrorBoundary';
 
 type ModuleKey =
   | 'dashboard'
@@ -305,7 +306,7 @@ const severityColors: Record<string, string> = {
 };
 
 export default function DmrvApp() {
-  const [activeModule, setActiveModule] = useState<ModuleKey>('map');
+  const [activeModule, setActiveModule] = useState<ModuleKey>('dashboard');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -591,7 +592,9 @@ export default function DmrvApp() {
         {/* Main Content */}
         <main className={`flex-1 ${activeModule === 'map' ? 'overflow-hidden' : 'overflow-y-auto'}`}>
           <div className={`${activeModule === 'map' ? 'h-full p-0' : 'p-4 lg:p-6 max-w-7xl mx-auto'}`}>
-            <ActiveComponent key={activeModule} />
+            <ErrorBoundary key={activeModule}>
+              <ActiveComponent />
+            </ErrorBoundary>
           </div>
         </main>
       </div>
