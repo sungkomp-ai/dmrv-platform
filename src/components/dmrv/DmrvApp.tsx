@@ -27,6 +27,15 @@ import {
   XCircle,
   Info,
   RefreshCw,
+  ShieldCheck,
+  Flag,
+  Radio,
+  Database,
+  Server,
+  Landmark,
+  BookOpen,
+  Terminal,
+  Layers,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from '@/components/ui/sheet';
@@ -51,6 +60,14 @@ import SubmissionView from './SubmissionView';
 import AuditView from './AuditView';
 import FootprintView from './FootprintView';
 import SimulationView from './SimulationView';
+import VVBWorkspaceView from './VVBWorkspaceView';
+import ConflictResolverView from './ConflictResolverView';
+import PublicRegistryView from './PublicRegistryView';
+import DeviceManagementView from './DeviceManagementView';
+import BufferPoolView from './BufferPoolView';
+import ForwardContractsView from './ForwardContractsView';
+import DevApiPortalView from './DevApiPortalView';
+import MethodologyStudioView from './MethodologyStudioView';
 
 type ModuleKey =
   | 'dashboard'
@@ -69,7 +86,15 @@ type ModuleKey =
   | 'submission'
   | 'audit'
   | 'footprint'
-  | 'simulation';
+  | 'simulation'
+  | 'vvb'
+  | 'conflict'
+  | 'registry'
+  | 'devices'
+  | 'buffer'
+  | 'forward'
+  | 'devportal'
+  | 'methodology';
 
 interface MenuItem {
   key: ModuleKey;
@@ -77,6 +102,7 @@ interface MenuItem {
   icon: React.ElementType;
   badge?: string;
   badgeColor?: string;
+  section?: string; // Section header for grouping
 }
 
 interface Notification {
@@ -95,23 +121,46 @@ interface SystemStatus {
 }
 
 const menuItems: MenuItem[] = [
-  { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  // Core Operations
+  { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, section: 'CORE' },
   { key: 'map', label: 'Map Dashboard', icon: MapIcon },
   { key: 'orchestrator', label: 'Orchestrator', icon: Workflow },
   { key: 'ingestion', label: 'Ingestion', icon: Upload },
   { key: 'auth', label: 'Auth & RBAC', icon: Shield },
-  { key: 'carbon', label: 'Carbon', icon: Leaf },
+
+  // Carbon Management
+  { key: 'carbon', label: 'Carbon', icon: Leaf, section: 'CARBON' },
   { key: 'certification', label: 'Certification', icon: FileCheck },
   { key: 'verification', label: 'Verification', icon: CheckCircle },
   { key: 'monitoring', label: 'Monitoring', icon: Activity },
   { key: 'reporting', label: 'Reporting', icon: FileText },
-  { key: 'marketplace', label: 'Marketplace', icon: ShoppingCart },
+
+  // Market & Operations
+  { key: 'marketplace', label: 'Marketplace', icon: ShoppingCart, section: 'OPERATIONS' },
   { key: 'logistics', label: 'Logistics', icon: Truck },
   { key: 'governance', label: 'Governance', icon: Scale },
   { key: 'submission', label: 'Submission', icon: ClipboardList },
   { key: 'audit', label: 'Audit', icon: Search },
-  { key: 'footprint', label: 'Footprint', icon: Footprints },
+
+  // Analysis
+  { key: 'footprint', label: 'Footprint', icon: Footprints, section: 'ANALYSIS' },
   { key: 'simulation', label: 'Simulation', icon: FlaskConical },
+
+  // Enterprise: Verification & Validation
+  { key: 'vvb', label: 'VVB Workspace', icon: ShieldCheck, section: 'ENTERPRISE' },
+  { key: 'conflict', label: 'Conflict Resolver', icon: Flag },
+
+  // Enterprise: Trust & Transparency
+  { key: 'registry', label: 'Public Registry', icon: Database },
+  { key: 'devices', label: 'Device & Oracle', icon: Radio },
+
+  // Enterprise: Finance & Risk
+  { key: 'buffer', label: 'Buffer Pool', icon: Landmark },
+  { key: 'forward', label: 'Forward Contracts', icon: Server },
+
+  // Enterprise: Integration
+  { key: 'devportal', label: 'Developer API', icon: Terminal },
+  { key: 'methodology', label: 'Methodology Studio', icon: BookOpen },
 ];
 
 const moduleComponents: Record<ModuleKey, React.ComponentType> = {
@@ -132,6 +181,14 @@ const moduleComponents: Record<ModuleKey, React.ComponentType> = {
   audit: AuditView,
   footprint: FootprintView,
   simulation: SimulationView,
+  vvb: VVBWorkspaceView,
+  conflict: ConflictResolverView,
+  registry: PublicRegistryView,
+  devices: DeviceManagementView,
+  buffer: BufferPoolView,
+  forward: ForwardContractsView,
+  devportal: DevApiPortalView,
+  methodology: MethodologyStudioView,
 };
 
 interface SidebarContentProps {
@@ -143,6 +200,14 @@ interface SidebarContentProps {
 
 function SidebarContent({ collapsed = false, activeModule, onModuleChange, menuItemsWithBadges }: SidebarContentProps) {
   const items = menuItemsWithBadges || menuItems;
+
+  // Pre-compute which items should show section headers
+  const itemsWithSections = items.map((item, idx) => {
+    const prevItem = idx > 0 ? items[idx - 1] : null;
+    const showSection = item.section && (!prevItem || prevItem.section !== item.section);
+    return { ...item, showSection };
+  });
+
   return (
     <div className="flex h-full flex-col bg-slate-900 text-white">
       {/* Logo Area */}
@@ -153,7 +218,7 @@ function SidebarContent({ collapsed = false, activeModule, onModuleChange, menuI
         {!collapsed && (
           <div className="flex flex-col overflow-hidden">
             <span className="text-sm font-bold tracking-tight">dMRV Platform</span>
-            <span className="text-[11px] text-slate-400">Carbon Credit System</span>
+            <span className="text-[11px] text-slate-400">Enterprise v3.0</span>
           </div>
         )}
       </div>
@@ -161,35 +226,47 @@ function SidebarContent({ collapsed = false, activeModule, onModuleChange, menuI
       {/* Navigation */}
       <ScrollArea className="flex-1 px-2 py-3">
         <nav className="flex flex-col gap-0.5">
-          {items.map((item) => {
+          {itemsWithSections.map((item) => {
             const isActive = activeModule === item.key;
             const Icon = item.icon;
+
             return (
-              <button
-                key={item.key}
-                onClick={() => onModuleChange(item.key)}
-                className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150 ${
-                  isActive
-                    ? 'bg-emerald-600/20 text-emerald-400 shadow-sm'
-                    : 'text-slate-300 hover:bg-slate-800 hover:text-white'
-                } ${collapsed ? 'justify-center' : ''}`}
-                title={collapsed ? item.label : undefined}
-              >
-                <Icon className={`h-4.5 w-4.5 shrink-0 ${isActive ? 'text-emerald-400' : ''}`} />
-                {!collapsed && (
-                  <>
-                    <span className="truncate">{item.label}</span>
-                    {item.badge && (
-                      <Badge className={`ml-auto h-5 min-w-[20px] justify-center text-[10px] text-white ${item.badgeColor || 'bg-emerald-600 hover:bg-emerald-600'}`}>
-                        {item.badge}
-                      </Badge>
-                    )}
-                  </>
+              <React.Fragment key={item.key}>
+                {item.showSection && !collapsed && (
+                  <div className="pt-3 pb-1 px-3">
+                    <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">{item.section}</span>
+                  </div>
                 )}
-                {isActive && !collapsed && !item.badge && (
-                  <div className="ml-auto h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                {item.showSection && collapsed && (
+                  <div className="pt-2 pb-1 mx-2">
+                    <div className="border-t border-slate-700/50" />
+                  </div>
                 )}
-              </button>
+                <button
+                  onClick={() => onModuleChange(item.key)}
+                  className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150 ${
+                    isActive
+                      ? 'bg-emerald-600/20 text-emerald-400 shadow-sm'
+                      : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                  } ${collapsed ? 'justify-center' : ''}`}
+                  title={collapsed ? item.label : undefined}
+                >
+                  <Icon className={`h-4 w-4 shrink-0 ${isActive ? 'text-emerald-400' : ''}`} />
+                  {!collapsed && (
+                    <>
+                      <span className="truncate">{item.label}</span>
+                      {item.badge && (
+                        <Badge className={`ml-auto h-5 min-w-[20px] justify-center text-[10px] text-white ${item.badgeColor || 'bg-emerald-600 hover:bg-emerald-600'}`}>
+                          {item.badge}
+                        </Badge>
+                      )}
+                    </>
+                  )}
+                  {isActive && !collapsed && !item.badge && (
+                    <div className="ml-auto h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                  )}
+                </button>
+              </React.Fragment>
             );
           })}
         </nav>
@@ -201,7 +278,7 @@ function SidebarContent({ collapsed = false, activeModule, onModuleChange, menuI
           <div className="flex items-center gap-2 text-xs text-slate-500">
             <CircleDot className="h-3 w-3 text-emerald-500" />
             <span>System Online</span>
-            <span className="ml-auto">v2.5.0</span>
+            <span className="ml-auto">v3.0.0</span>
           </div>
         </div>
       )}
@@ -235,10 +312,11 @@ export default function DmrvApp() {
 
   const fetchSystemData = useCallback(async () => {
     try {
-      const [monitoringRes, submissionRes, certificationRes] = await Promise.all([
+      const [monitoringRes, submissionRes, certificationRes, conflictRes] = await Promise.all([
         fetch('/api/dmrv/monitoring'),
         fetch('/api/dmrv/submission'),
         fetch('/api/dmrv/certification'),
+        fetch('/api/dmrv/conflict'),
       ]);
 
       if (monitoringRes.ok) {
@@ -255,7 +333,6 @@ export default function DmrvApp() {
           }))
         );
 
-        // Update sidebar badges based on real data
         const badges: Partial<Record<ModuleKey, { badge: string; badgeColor: string }>> = {};
 
         if (health?.alerts?.unresolved > 0) {
@@ -271,7 +348,6 @@ export default function DmrvApp() {
         );
       }
 
-      // Add submission/certification badges if available
       if (submissionRes.ok) {
         const subData = await submissionRes.json();
         const pendingSubs = subData.summary?.readyForVerification || 0;
@@ -294,6 +370,22 @@ export default function DmrvApp() {
             prev.map((item) =>
               item.key === 'certification'
                 ? { ...item, badge: String(pendingCerts), badgeColor: 'bg-teal-600 hover:bg-teal-600' }
+                : item
+            )
+          );
+        }
+      }
+
+      if (conflictRes.ok) {
+        const conflictData = await conflictRes.json();
+        const flaggedCases = conflictData.summary?.byStatus?.FLAGGED || 0;
+        const criticalCases = conflictData.summary?.bySeverity?.CRITICAL || 0;
+        const totalOpen = flaggedCases + (conflictData.summary?.byStatus?.IN_REVIEW || 0);
+        if (totalOpen > 0) {
+          setItemsWithBadges((prev) =>
+            prev.map((item) =>
+              item.key === 'conflict'
+                ? { ...item, badge: String(totalOpen), badgeColor: criticalCases > 0 ? 'bg-red-600 hover:bg-red-600' : 'bg-amber-600 hover:bg-amber-600' }
                 : item
             )
           );
@@ -361,6 +453,9 @@ export default function DmrvApp() {
             <>
               <activeItem.icon className="h-5 w-5 text-emerald-600" />
               <h1 className="text-base font-semibold text-gray-900">{activeItem.label}</h1>
+              {activeItem.section === 'ENTERPRISE' && (
+                <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 text-[9px] h-4 ml-1">ENT</Badge>
+              )}
             </>
           )}
         </div>

@@ -101,38 +101,38 @@ function makePolygon(centerLat: number, centerLng: number, offsetDeg: number): s
 
 // ─── Plot definitions per project ───────────────────────────────────────
 const PLOT_DEFINITIONS: Record<number, Array<{ plotId: string; offsetDeg: number; areaHa: number; status: string; ownerInfo: string }>> = {
-  0: [ // สมุทรสาคร Blue Carbon
+  0: [
     { plotId: 'SMS-BC-001', offsetDeg: 0.010, areaHa: 120, status: 'ACTIVE', ownerInfo: 'สมาคมประมงบ้านบางน้ำจืด' },
     { plotId: 'SMS-BC-002', offsetDeg: 0.015, areaHa: 140, status: 'VERIFIED', ownerInfo: 'องค์การบริหารส่วนตำบลบางโทรัด' },
     { plotId: 'SMS-BC-003', offsetDeg: 0.020, areaHa: 100, status: 'ACTIVE', ownerInfo: 'กลุ่มอนุรักษ์ป่าชายเลนสมุทรสาคร' },
     { plotId: 'SMS-BC-004', offsetDeg: 0.008, areaHa: 80, status: 'REGISTERED', ownerInfo: 'เทศบาลตำบลท่าจีน' },
     { plotId: 'SMS-BC-005', offsetDeg: 0.012, areaHa: 60, status: 'ACTIVE', ownerInfo: 'ชุมชนประมงบ้านโคกขาม' },
   ],
-  1: [ // ลพบุรี Biochar
+  1: [
     { plotId: 'LPB-BC-001', offsetDeg: 0.010, areaHa: 35, status: 'ACTIVE', ownerInfo: 'สหกรณ์การเกษตรลพบุรี' },
     { plotId: 'LPB-BC-002', offsetDeg: 0.015, areaHa: 40, status: 'VERIFIED', ownerInfo: 'บริษัท ไบโอชาร์ไทย จำกัด' },
     { plotId: 'LPB-BC-003', offsetDeg: 0.008, areaHa: 30, status: 'ACTIVE', ownerInfo: 'กลุ่มเกษตรกรอินทรีย์เมืองลพบุรี' },
     { plotId: 'LPB-BC-004', offsetDeg: 0.012, areaHa: 15, status: 'REGISTERED', ownerInfo: 'องค์การบริหารส่วนตำบลเขาสมิง' },
   ],
-  2: [ // นครราชสีมา AWD Rice
+  2: [
     { plotId: 'NMA-AWD-001', offsetDeg: 0.020, areaHa: 250, status: 'ACTIVE', ownerInfo: 'สหกรณ์การเกษตรนครราชสีมา' },
     { plotId: 'NMA-AWD-002', offsetDeg: 0.015, areaHa: 200, status: 'ACTIVE', ownerInfo: 'กลุ่มเกษตรกรอัจฉริยะโคราช' },
     { plotId: 'NMA-AWD-003', offsetDeg: 0.010, areaHa: 180, status: 'VERIFIED', ownerInfo: 'ศูนย์เทคโนโลยีการเกษตรภาคตะวันออกเฉียงเหนือ' },
     { plotId: 'NMA-AWD-004', offsetDeg: 0.018, areaHa: 120, status: 'REGISTERED', ownerInfo: 'เกษตรกรรายย่อยอำเภอเมืองนครราชสีมา' },
     { plotId: 'NMA-AWD-005', offsetDeg: 0.012, areaHa: 50, status: 'ACTIVE', ownerInfo: 'กองทุนหมู่บ้านทับบุตรี' },
   ],
-  3: [ // ชลบุรี Biogas
+  3: [
     { plotId: 'CBR-BG-001', offsetDeg: 0.005, areaHa: 20, status: 'ACTIVE', ownerInfo: 'บริษัท มันสำปะหลังไทย จำกัด (มหาชน)' },
     { plotId: 'CBR-BG-002', offsetDeg: 0.008, areaHa: 15, status: 'REGISTERED', ownerInfo: 'บริษัท ไบโอก๊าซชลบุรี จำกัด' },
     { plotId: 'CBR-BG-003', offsetDeg: 0.006, areaHa: 15, status: 'ACTIVE', ownerInfo: 'องค์การบริหารส่วนตำบลหนองปลาหมอ' },
   ],
-  4: [ // ขอนแก่น Solar PV
+  4: [
     { plotId: 'KKC-SP-001', offsetDeg: 0.012, areaHa: 80, status: 'ACTIVE', ownerInfo: 'บริษัท โซลาร์เอนเนอร์ยี่ขอนแก่น จำกัด' },
     { plotId: 'KKC-SP-002', offsetDeg: 0.010, areaHa: 60, status: 'VERIFIED', ownerInfo: 'การไฟฟ้าส่วนภูมิภาค (กฟภ.)' },
     { plotId: 'KKC-SP-003', offsetDeg: 0.015, areaHa: 40, status: 'ACTIVE', ownerInfo: 'บริษัท พลังงานสะอาดอีสาน จำกัด' },
     { plotId: 'KKC-SP-004', offsetDeg: 0.008, areaHa: 20, status: 'REGISTERED', ownerInfo: 'มหาวิทยาลัยขอนแก่น (ศูนย์พลังงานทดแทน)' },
   ],
-  5: [ // เชียงใหม่ Forest Conservation
+  5: [
     { plotId: 'CMM-FC-001', offsetDeg: 0.020, areaHa: 350, status: 'ACTIVE', ownerInfo: 'อุทยานแห่งชาติดอยอินทนนท์' },
     { plotId: 'CMM-FC-002', offsetDeg: 0.018, areaHa: 280, status: 'VERIFIED', ownerInfo: 'กลุ่มอนุรักษ์ป่าชุมชนดอยสุเทพ' },
     { plotId: 'CMM-FC-003', offsetDeg: 0.015, areaHa: 250, status: 'ACTIVE', ownerInfo: 'มูลนิธิโครงการหลวง' },
@@ -141,38 +141,36 @@ const PLOT_DEFINITIONS: Record<number, Array<{ plotId: string; offsetDeg: number
   ],
 };
 
-// ─── Track types per project methodology ────────────────────────────────
 const TRACK_TYPES = ['forest', 'biochar', 'awd', 'biogas', 'solar', 'forest'];
 
-// ─── IoT Sensor definitions per project ─────────────────────────────────
 const SENSOR_TYPES_PER_PROJECT: Record<number, Array<{ sensorType: string; unit: string; readingRange: [number, number] }>> = {
-  0: [ // สมุทรสาคร Blue Carbon (Forest)
+  0: [
     { sensorType: 'soil_moisture', unit: '%', readingRange: [40, 80] },
     { sensorType: 'temperature', unit: '°C', readingRange: [25, 38] },
     { sensorType: 'humidity', unit: '%', readingRange: [60, 95] },
     { sensorType: 'co2', unit: 'ppm', readingRange: [380, 520] },
   ],
-  1: [ // ลพบุรี Biochar
+  1: [
     { sensorType: 'temperature', unit: '°C', readingRange: [200, 600] },
     { sensorType: 'co2', unit: 'ppm', readingRange: [400, 800] },
     { sensorType: 'ch4', unit: 'ppm', readingRange: [1.5, 12] },
   ],
-  2: [ // นครราชสีมา AWD Rice
+  2: [
     { sensorType: 'water_level', unit: 'cm', readingRange: [0, 15] },
     { sensorType: 'soil_moisture', unit: '%', readingRange: [50, 90] },
     { sensorType: 'temperature', unit: '°C', readingRange: [22, 40] },
   ],
-  3: [ // ชลบุรี Biogas
+  3: [
     { sensorType: 'ch4', unit: 'ppm', readingRange: [50, 500] },
     { sensorType: 'temperature', unit: '°C', readingRange: [30, 55] },
     { sensorType: 'humidity', unit: '%', readingRange: [55, 85] },
   ],
-  4: [ // ขอนแก่น Solar PV
+  4: [
     { sensorType: 'solar_irradiance', unit: 'W/m²', readingRange: [200, 1000] },
     { sensorType: 'temperature', unit: '°C', readingRange: [25, 45] },
     { sensorType: 'wind_speed', unit: 'm/s', readingRange: [0.5, 8] },
   ],
-  5: [ // เชียงใหม่ Forest Conservation
+  5: [
     { sensorType: 'co2', unit: 'ppm', readingRange: [370, 490] },
     { sensorType: 'humidity', unit: '%', readingRange: [65, 98] },
     { sensorType: 'temperature', unit: '°C', readingRange: [15, 32] },
@@ -180,7 +178,6 @@ const SENSOR_TYPES_PER_PROJECT: Record<number, Array<{ sensorType: string; unit:
   ],
 };
 
-// ─── Helper: Random number in range ─────────────────────────────────────
 function rand(min: number, max: number): number {
   return Math.round((min + Math.random() * (max - min)) * 100) / 100;
 }
@@ -193,7 +190,6 @@ function pick<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
-// ─── Seeding lock ───────────────────────────────────────────────────────
 let seedingPromise: Promise<void> | null = null;
 
 export async function ensureSeeded() {
@@ -243,15 +239,14 @@ async function seedAll() {
   for (let i = 0; i < createdProjects.length; i++) {
     const project = createdProjects[i];
     const sensorDefs = SENSOR_TYPES_PER_PROJECT[i];
-    // 3-5 sensors per project
     const sensorCount = 3 + Math.floor(Math.random() * 3);
     let sensorIdx = 0;
     for (let s = 0; s < sensorCount; s++) {
       const sensorDef = sensorDefs[sensorIdx % sensorDefs.length];
       sensorIdx++;
       const sensorId = `${project.province.split(' ')[0]}-${sensorDef.sensorType.toUpperCase()}-${String(s + 1).padStart(3, '0')}`;
-      const isOnline = Math.random() > 0.15; // 85% online
-      const lastSeen = new Date(Date.now() - randInt(0, 3600000)); // within last hour
+      const isOnline = Math.random() > 0.15;
+      const lastSeen = new Date(Date.now() - randInt(0, 3600000));
       await db.ioTSensor.create({
         data: {
           projectId: project.id,
@@ -270,7 +265,8 @@ async function seedAll() {
   }
 
   // ── Create Carbon Credits ───────────────────────────────────────────
-  const creditStatuses = ['Available', 'Traded', 'Retired'];
+  const creditStatuses = ['Available', 'Traded', 'Retired', 'Buffered'];
+  const createdCredits: { id: string; projectId: string; amount: number }[] = [];
   for (let i = 0; i < createdProjects.length; i++) {
     const project = createdProjects[i];
     const creditCount = randInt(2, 4);
@@ -279,7 +275,7 @@ async function seedAll() {
       const status = pick(creditStatuses);
       const ts = Date.now() - randInt(0, 86400000 * 30);
       const randomSuffix = Math.random().toString(36).substring(2, 8).toUpperCase();
-      await db.carbonCredit.create({
+      const credit = await db.carbonCredit.create({
         data: {
           projectId: project.id,
           tokenId: `TCO2E-${ts}-${randomSuffix}`,
@@ -292,11 +288,13 @@ async function seedAll() {
           }),
         },
       });
+      createdCredits.push({ id: credit.id, projectId: project.id, amount: credit.amount });
     }
   }
 
   // ── Create Certificates ─────────────────────────────────────────────
   const certStatuses = ['SUBMITTED', 'APPROVED', 'REJECTED', 'REVOKED'];
+  const createdCerts: { id: string; projectId: string; certNumber: string }[] = [];
   for (let i = 0; i < createdProjects.length; i++) {
     const project = createdProjects[i];
     const certCount = randInt(1, 2);
@@ -304,16 +302,18 @@ async function seedAll() {
       const status = c === 0 ? 'APPROVED' : pick(certStatuses);
       const validFrom = new Date(project.startDate.getTime() + randInt(30, 180) * 86400000);
       const validUntil = new Date(validFrom.getTime() + 365 * 86400000);
-      await db.certificate.create({
+      const certNumber = `TGO-CERT-${project.province.substring(0, 3)}-${2024 + c}`;
+      const cert = await db.certificate.create({
         data: {
           projectId: project.id,
           status,
           issuedBy: 'TGO',
-          certificateNumber: `TGO-CERT-${project.province.substring(0, 3)}-${2024 + c}`,
+          certificateNumber: certNumber,
           validFrom,
           validUntil,
         },
       });
+      createdCerts.push({ id: cert.id, projectId: project.id, certNumber });
     }
   }
 
@@ -384,15 +384,10 @@ async function seedAll() {
     }
   }
 
-  // ── Create Audit Logs (10-15) ───────────────────────────────────────
+  // ── Create Audit Logs ───────────────────────────────────────────────
   const agentNames = [
-    'SecurityAgent',
-    'ClassificationAgent',
-    'VerificationAgent',
-    'IngestionAgent',
-    'MonitoringAgent',
-    'ReportingAgent',
-    'ComplianceAgent',
+    'SecurityAgent', 'ClassificationAgent', 'VerificationAgent',
+    'IngestionAgent', 'MonitoringAgent', 'ReportingAgent', 'ComplianceAgent',
   ];
   const auditActions = [
     { action: 'DATA_INGESTION_COMPLETED', severity: 'INFO' },
@@ -411,7 +406,6 @@ async function seedAll() {
     { action: 'CERTIFICATE_RENEWED', severity: 'INFO' },
     { action: 'MONITORING_REPORT_GENERATED', severity: 'INFO' },
   ];
-
   const auditCount = randInt(10, 15);
   for (let a = 0; a < auditCount; a++) {
     const auditDef = auditActions[a % auditActions.length];
@@ -432,7 +426,7 @@ async function seedAll() {
     });
   }
 
-  // ── Create Alerts (3-5) ─────────────────────────────────────────────
+  // ── Create Alerts ───────────────────────────────────────────────────
   const alerts = [
     { severity: 'CRITICAL', message: 'Sensor CH4-CBR-003 in Chonburi reporting dangerously high methane levels (487 ppm). Immediate inspection required.' },
     { severity: 'WARNING', message: 'Soil moisture sensor SMS-BC-002 in Samut Sakhon offline for 6+ hours. Data gap detected in mangrove monitoring zone.' },
@@ -446,9 +440,432 @@ async function seedAll() {
       data: {
         severity: alerts[a].severity,
         message: alerts[a].message,
-        resolved: a === 2, // only the INFO one is resolved
+        resolved: a === 2,
         timestamp: new Date(Date.now() - randInt(0, 86400000 * 3)),
       },
     });
+  }
+
+  // ── ENTERPRISE: Create VVB Reviews ──────────────────────────────────
+  const vvbOrgs = [
+    'Bureau Veritas (Thailand)', 'SGS (Thailand) Ltd.', 'TÜV SÜD (Thailand)',
+    'Thai VV Association', 'DET NORSKE VERITAS (DNV-GL)',
+  ];
+  const vvbReviewers = [
+    'ดร.ประภาส ตรวจสอบ', 'คุณสุนทร วิชาการ', 'ดร.มาลี ประเมินผล',
+    'คุณวิชัย พิสูจน์จริง', 'ดร.สุนีย์ รับรอง',
+  ];
+  const reviewTypes = ['VALIDATION', 'VERIFICATION', 'PERIODIC_VERIFICATION'];
+  const vvbStatuses = ['PENDING', 'IN_PROGRESS', 'APPROVED', 'REJECTED', 'REQUESTED_INFO'];
+  for (let i = 0; i < createdProjects.length; i++) {
+    const project = createdProjects[i];
+    const reviewCount = randInt(1, 3);
+    for (let r = 0; r < reviewCount; r++) {
+      const status = vvbStatuses[r === 0 ? randInt(0, 2) : randInt(0, 4)];
+      const reviewType = pick(reviewTypes);
+      await db.vVBReview.create({
+        data: {
+          projectId: project.id,
+          reviewerOrg: pick(vvbOrgs),
+          reviewerName: pick(vvbReviewers),
+          reviewType,
+          status,
+          evidenceRefs: JSON.stringify([
+            { refId: `EV-${randInt(100, 999)}`, type: 'satellite', description: 'Land cover change analysis' },
+            { refId: `EV-${randInt(100, 999)}`, type: 'iot', description: 'Sensor data validation report' },
+            { refId: `EV-${randInt(100, 999)}`, type: 'ground_truth', description: 'Field measurement records' },
+          ]),
+          findings: JSON.stringify({
+            completeness: rand(75, 100),
+            accuracy: rand(80, 99),
+            consistency: rand(70, 98),
+            materialMisstatement: status === 'REJECTED',
+            nonConformities: status === 'REQUESTED_INFO' ? ['Missing baseline data for Q2 2024', 'Incomplete monitoring records'] : [],
+          }),
+          recommendation: status === 'APPROVED' ? 'approve' : status === 'REJECTED' ? 'reject' : 'request_more_info',
+          comments: status === 'APPROVED'
+            ? 'All verification criteria met. Data integrity confirmed. No material misstatement found.'
+            : status === 'REJECTED'
+            ? 'Significant data gaps detected. Baseline methodology not followed. Re-submission required.'
+            : status === 'REQUESTED_INFO'
+            ? 'Additional documentation required: baseline emission factors and Q2 monitoring data.'
+            : 'Under review by validation team.',
+          reviewedAt: ['APPROVED', 'REJECTED', 'REQUESTED_INFO'].includes(status)
+            ? new Date(Date.now() - randInt(1, 14) * 86400000)
+            : null,
+        },
+      });
+    }
+  }
+
+  // ── ENTERPRISE: Create Conflict Cases ───────────────────────────────
+  const conflictTitles = [
+    'Satellite vs IoT: Forest cover discrepancy',
+    'CH4 sensor reading exceeds satellite prediction',
+    'Soil moisture inconsistency between drone and IoT',
+    'Water level data conflict: IoT vs manual measurement',
+    'CO₂ flux mismatch: Eddy covariance vs satellite estimate',
+    'Land use change detected but sensor data normal',
+    'Biochar production volume mismatch: Reported vs measured',
+    'Solar irradiance sensor vs satellite data deviation',
+  ];
+  const conflictTypes = ['DATA_MISMATCH', 'THRESHOLD_EXCEEDED', 'INTEGRITY_FAIL', 'SPATIAL_MISMATCH'];
+  const conflictSeverities = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'];
+  const conflictStatuses = ['FLAGGED', 'IN_REVIEW', 'RESOLVED', 'ESCALATED'];
+  const conflictCount = randInt(4, 7);
+  for (let c = 0; c < conflictCount; c++) {
+    const project = pick(createdProjects);
+    const severity = conflictSeverities[Math.min(c, conflictSeverities.length - 1)];
+    const status = conflictStatuses[c % conflictStatuses.length];
+    await db.conflictCase.create({
+      data: {
+        projectId: project.id,
+        title: conflictTitles[c % conflictTitles.length],
+        description: `Discrepancy detected in ${project.province} project between data sources. Automated ExistenceVerifier flagged this case for human review.`,
+        sourceA: JSON.stringify({
+          type: c % 2 === 0 ? 'satellite' : 'iot',
+          id: c % 2 === 0 ? `SAT-${randInt(10, 99)}-2024` : `IOT-${randInt(100, 999)}`,
+          value: c % 2 === 0 ? `${randInt(80, 120)} ha forest cover` : `${rand(350, 500)} ppm CO₂`,
+          timestamp: new Date(Date.now() - randInt(1, 7) * 86400000).toISOString(),
+        }),
+        sourceB: JSON.stringify({
+          type: c % 2 === 0 ? 'iot' : 'drone',
+          id: c % 2 === 0 ? `IOT-${randInt(100, 999)}` : `DRN-${randInt(10, 99)}-2024`,
+          value: c % 2 === 0 ? `${rand(380, 440)} ppm CO₂` : `${randInt(90, 130)} ha forest cover`,
+          timestamp: new Date(Date.now() - randInt(1, 7) * 86400000).toISOString(),
+        }),
+        conflictType: conflictTypes[c % conflictTypes.length],
+        severity,
+        status,
+        resolution: status === 'RESOLVED'
+          ? 'Ground-truth verification confirmed satellite data is accurate. IoT sensor recalibrated.'
+          : '',
+        resolvedBy: status === 'RESOLVED' ? 'ดร.สมชาย วิชาการ' : '',
+        evidenceUrl: status === 'RESOLVED'
+          ? `https://evidence.dmrv-th.org/conflict/${c + 1}/resolution`
+          : '',
+        resolvedAt: status === 'RESOLVED' ? new Date(Date.now() - randInt(1, 3) * 86400000) : null,
+      },
+    });
+  }
+
+  // ── ENTERPRISE: Create Audit Trail Entries (Merkle Tree) ────────────
+  for (const cert of createdCerts) {
+    const eventTypes = ['ORIGIN', 'QUANTIFY', 'VERIFY', 'CERTIFY', 'MINT'];
+    let prevHash = '0'.repeat(64); // Genesis hash
+    const project = createdProjects.find(p => p.id === cert.projectId);
+    for (let e = 0; e < eventTypes.length; e++) {
+      const dataHash = `sha256:${Math.random().toString(36).substring(2, 34)}${Date.now().toString(36)}`;
+      const merkleRoot = `mr:${Math.random().toString(36).substring(2, 30)}`;
+      await db.auditTrailEntry.create({
+        data: {
+          certificateId: cert.id,
+          eventType: eventTypes[e],
+          previousHash: prevHash,
+          dataHash,
+          merkleRoot,
+          metadata: JSON.stringify({
+            actor: e < 2 ? 'IngestionModule' : e < 4 ? 'CarbonQuantifier' : 'MarketplaceModule',
+            action: eventTypes[e],
+            projectProvince: project?.province || '',
+            amount_tco2e: rand(50, 500),
+            de_identified: true,
+            pdpa_compliant: true,
+          }),
+          timestamp: new Date(Date.now() - (eventTypes.length - e) * randInt(1, 14) * 86400000),
+        },
+      });
+      prevHash = dataHash;
+    }
+  }
+
+  // ── ENTERPRISE: Create Device Registrations ─────────────────────────
+  const manufacturers = ['Davis Instruments', 'Campbell Scientific', 'Vaisala', 'Hoboware', 'Sensirion', 'Libelium'];
+  const deviceTypes = ['iot', 'iot', 'iot', 'drone', 'satellite', 'iot'];
+  for (let i = 0; i < createdProjects.length; i++) {
+    const project = createdProjects[i];
+    const devCount = randInt(2, 4);
+    for (let d = 0; d < devCount; d++) {
+      const deviceType = pick(deviceTypes);
+      const manufacturer = pick(manufacturers);
+      const isConnected = Math.random() > 0.2;
+      const isSigned = Math.random() > 0.4;
+      await db.deviceRegistration.create({
+        data: {
+          projectId: project.id,
+          deviceId: `DEV-${project.province.substring(0, 3)}-${deviceType.toUpperCase()}-${String(d + 1).padStart(3, '0')}`,
+          deviceType,
+          manufacturer,
+          model: `${manufacturer.split(' ')[0]}-${randInt(100, 999)}`,
+          firmwareVersion: `v${randInt(1, 3)}.${randInt(0, 9)}.${randInt(0, 9)}`,
+          publicKey: isSigned ? `ecdsa-p256:${Math.random().toString(36).substring(2, 18)}...` : '',
+          signingStatus: isSigned ? 'SIGNED' : (Math.random() > 0.7 ? 'EXPIRED' : 'UNSIGNED'),
+          connectionStatus: isConnected ? 'connected' : 'disconnected',
+          healthStatus: isConnected ? (Math.random() > 0.3 ? 'HEALTHY' : 'DEGRADED') : 'CRITICAL',
+          lastCalibration: new Date(Date.now() - randInt(7, 90) * 86400000),
+          batteryLevel: randInt(60, 100),
+          signalStrength: isConnected ? randInt(-70, -30) : randInt(-100, -80),
+          metadata: JSON.stringify({
+            dataProvider: manufacturer,
+            calibrationDue: new Date(Date.now() + randInt(30, 180) * 86400000).toISOString(),
+            supportedMeasurements: ['temperature', 'humidity', 'co2'].slice(0, randInt(1, 3)),
+          }),
+        },
+      });
+    }
+  }
+
+  // ── ENTERPRISE: Create Buffer Pool Entries ──────────────────────────
+  const riskCategories = ['LOW', 'MEDIUM', 'HIGH', 'VERY_HIGH'];
+  const bufferPcts: Record<string, number> = { LOW: 10, MEDIUM: 15, HIGH: 20, VERY_HIGH: 30 };
+  for (const credit of createdCredits) {
+    if (Math.random() > 0.5) continue; // ~50% of credits go to buffer
+    const riskCategory = pick(riskCategories);
+    const bufferPct = bufferPcts[riskCategory];
+    const uncertaintyPct = rand(5, 45);
+    await db.bufferPoolEntry.create({
+      data: {
+        projectId: credit.projectId,
+        creditId: credit.id,
+        amount: Math.round(credit.amount * bufferPct / 100 * 100) / 100,
+        uncertaintyPct,
+        bufferPct,
+        riskCategory,
+        reason: `Auto-deducted per Governance Module: ${riskCategory} risk category (${bufferPct}% buffer)`,
+      },
+    });
+  }
+
+  // ── ENTERPRISE: Create Forward Contracts ────────────────────────────
+  const buyers = [
+    'PTT Public Company Limited', 'Bangkok Bank (ESG Portfolio)', 'SCG Chemicals',
+    'Thai Beverage (ESG Fund)', 'AIS Green Fund', 'CP Group (Carbon Neutral)',
+  ];
+  const contractStatuses = ['DRAFT', 'PENDING', 'APPROVED', 'ACTIVE', 'COMPLETED', 'CANCELLED'];
+  for (let i = 0; i < createdProjects.length; i++) {
+    if (Math.random() > 0.6) continue;
+    const project = createdProjects[i];
+    const creditAmount = rand(200, 3000);
+    const pricePerUnit = rand(5, 25);
+    const status = pick(contractStatuses);
+    await db.forwardContract.create({
+      data: {
+        projectId: project.id,
+        sellerName: project.name,
+        buyerName: pick(buyers),
+        creditAmount,
+        pricePerUnit,
+        totalValue: Math.round(creditAmount * pricePerUnit * 100) / 100,
+        deliveryDate: new Date(Date.now() + randInt(90, 365) * 86400000),
+        status,
+        terms: JSON.stringify({
+          paymentSchedule: 'quarterly',
+          deliveryMethod: 'registry_transfer',
+          verificationRequired: true,
+          penaltyClause: '2% per month delay',
+          forceMajeure: true,
+          governingLaw: 'Thai Law',
+          disputeResolution: 'Thai Arbitration Institute',
+        }),
+      },
+    });
+  }
+
+  // ── ENTERPRISE: Create API Keys ─────────────────────────────────────
+  const apiKeyNames = [
+    'ERP Integration (SAP)', 'Industrial Park Monitor', 'Mobile App Backend',
+    'Partner Data Feed', 'Dashboard Analytics', 'CI/CD Pipeline',
+  ];
+  const apiPermissions = [
+    ['ingestion:write', 'monitoring:read'],
+    ['ingestion:write', 'monitoring:read', 'carbon:read'],
+    ['monitoring:read', 'reporting:read', 'carbon:read'],
+    ['ingestion:write', 'verification:read'],
+    ['monitoring:read', 'reporting:read', 'audit:read'],
+    ['ingestion:read', 'carbon:read', 'footprint:read', 'simulation:read'],
+  ];
+  for (let k = 0; k < apiKeyNames.length; k++) {
+    const key = `dmrv_${Math.random().toString(36).substring(2, 14)}${Math.random().toString(36).substring(2, 14)}`;
+    const isRevoked = k === apiKeyNames.length - 1;
+    await db.apiKey.create({
+      data: {
+        name: apiKeyNames[k],
+        key,
+        permissions: JSON.stringify(apiPermissions[k]),
+        lastUsed: isRevoked ? null : new Date(Date.now() - randInt(0, 72) * 3600000),
+        status: isRevoked ? 'REVOKED' : 'ACTIVE',
+        createdBy: 'Admin',
+        expiresAt: new Date(Date.now() + randInt(90, 365) * 86400000),
+      },
+    });
+  }
+
+  // ── ENTERPRISE: Create Webhooks ─────────────────────────────────────
+  const webhookUrls = [
+    'https://erp.example.co.th/api/dmrv/callback',
+    'https://monitoring.industrial-park.or.th/webhook',
+    'https://api.partner-org.com/events/dmrv',
+    'https://hooks.slack.com/services/T00/B00/xxx',
+  ];
+  const webhookEvents = [
+    ['credit.minted', 'credit.retired', 'certificate.approved'],
+    ['sensor.offline', 'alert.critical', 'monitoring.health_change'],
+    ['ingestion.completed', 'verification.completed', 'submission.status_change'],
+    ['alert.critical', 'alert.warning'],
+  ];
+  for (let w = 0; w < webhookUrls.length; w++) {
+    const hasFailed = w === webhookUrls.length - 1;
+    await db.webhook.create({
+      data: {
+        url: webhookUrls[w],
+        events: JSON.stringify(webhookEvents[w]),
+        secret: `whsec_${Math.random().toString(36).substring(2, 18)}`,
+        status: hasFailed ? 'FAILED' : 'ACTIVE',
+        lastDelivery: hasFailed ? new Date(Date.now() - 86400000 * 3) : new Date(Date.now() - randInt(0, 72) * 3600000),
+        failureCount: hasFailed ? randInt(3, 8) : 0,
+        lastFailure: hasFailed ? 'Connection timeout after 30s' : '',
+        createdBy: 'Admin',
+      },
+    });
+  }
+
+  // ── ENTERPRISE: Create Methodology Rules ────────────────────────────
+  const methodologyRules = [
+    {
+      name: 'T-VER Forest Carbon Sequestration',
+      methodology: 'T-VER-FOREST',
+      trackType: 'forest',
+      version: '3.2',
+      description: 'Standard methodology for calculating carbon sequestration from afforestation and reforestation projects under Thailand T-VER program.',
+      formula: JSON.stringify({
+        expression: 'ΔC = Σ(A_i × ΔC_i × UF)',
+        variables: { 'ΔC': 'Carbon stock change (tCO₂e)', 'A_i': 'Area of stratum i (ha)', 'ΔC_i': 'Carbon stock change per ha in stratum i', 'UF': 'Uncertainty factor' },
+      }),
+      parameters: JSON.stringify([
+        { name: 'baseline_scenario', type: 'string', required: true, description: 'Pre-project land use scenario' },
+        { name: 'project_scenario', type: 'string', required: true, description: 'Post-project land use scenario' },
+        { name: 'monitoring_frequency', type: 'enum', values: ['annual', 'biannual', 'quarterly'], default: 'annual' },
+        { name: 'uncertainty_discount', type: 'number', min: 0, max: 0.5, default: 0.1 },
+      ]),
+      conditions: JSON.stringify([
+        { field: 'area_ha', operator: '>=', value: 1, message: 'Minimum project area is 1 ha' },
+        { field: 'project_duration', operator: '>=', value: 10, message: 'Minimum crediting period is 10 years' },
+        { field: 'additionality', operator: '==', value: true, message: 'Project must demonstrate additionality' },
+      ]),
+      status: 'ACTIVE',
+      createdBy: 'TGO Thailand',
+    },
+    {
+      name: 'IPCC Biochar Carbon Removal',
+      methodology: 'IPCC-2023',
+      trackType: 'biochar',
+      version: '2.1',
+      description: 'Methodology for quantifying carbon removal through biochar production and application based on IPCC 2023 guidelines.',
+      formula: JSON.stringify({
+        expression: 'CR = M_bc × f_c × (1 - f_H) × (44/12) × Per',
+        variables: { 'CR': 'Carbon removal (tCO₂e)', 'M_bc': 'Mass of biochar (tonnes)', 'f_c': 'Carbon fraction', 'f_H': 'Hydrogen fraction', 'Per': 'Permanence factor' },
+      }),
+      parameters: JSON.stringify([
+        { name: 'feedstock_type', type: 'enum', values: ['rice_husk', 'cassava_waste', 'wood_chip', 'corn_stover'], required: true },
+        { name: 'pyrolysis_temperature', type: 'number', min: 350, max: 700, unit: '°C', required: true },
+        { name: 'application_method', type: 'enum', values: ['soil_amendment', 'construction', 'water_filtration'], required: true },
+      ]),
+      conditions: JSON.stringify([
+        { field: 'pyrolysis_temperature', operator: '>=', value: 350, message: 'Minimum pyrolysis temp 350°C for stability' },
+        { field: 'carbon_content_pct', operator: '>=', value: 10, message: 'Biochar must have ≥10% carbon content' },
+      ]),
+      status: 'ACTIVE',
+      createdBy: 'IPCC Working Group III',
+    },
+    {
+      name: 'AWD Rice Cultivation Emission Reduction',
+      methodology: 'IPCC-2023',
+      trackType: 'awd',
+      version: '1.5',
+      description: 'Methodology for calculating methane emission reductions from Alternate Wetting and Drying rice cultivation.',
+      formula: JSON.stringify({
+        expression: 'ER = (EF_CFP - EF_AWD) × A × 10⁻³ × GWP_CH4',
+        variables: { 'ER': 'Emission reduction (tCO₂e)', 'EF_CFP': 'Emission factor continuous flooding', 'EF_AWD': 'Emission factor AWD', 'A': 'Area (ha)', 'GWP_CH4': 'Global warming potential CH4' },
+      }),
+      parameters: JSON.stringify([
+        { name: 'water_management_regime', type: 'enum', values: ['safe_awd', 'strict_awd', 'aeri'], required: true },
+        { name: 'rice_variety', type: 'string', required: true },
+        { name: 'soil_type', type: 'enum', values: ['clay', 'loam', 'sandy_loam'], required: true },
+        { name: 'gwp_ch4', type: 'number', default: 28, description: 'GWP for CH4 (IPCC AR6)' },
+      ]),
+      conditions: JSON.stringify([
+        { field: 'water_level_threshold_cm', operator: '<=', value: 15, message: 'AWD threshold must be ≤15cm' },
+        { field: 'growing_season_days', operator: '>=', value: 90, message: 'Minimum growing season 90 days' },
+      ]),
+      status: 'ACTIVE',
+      createdBy: 'IRRI / IPCC',
+    },
+    {
+      name: 'Biogas Capture from Wastewater',
+      methodology: 'IPCC-2023',
+      trackType: 'biogas',
+      version: '2.0',
+      description: 'Methodology for quantifying emission reductions from methane capture in industrial wastewater treatment.',
+      formula: JSON.stringify({
+        expression: 'ER = (B₀ × MCF_CFP - B₀ × MCF_BIOGAS) × COD × GWP_CH4',
+        variables: { 'ER': 'Emission reduction (tCO₂e)', 'B₀': 'Maximum CH4 producing capacity', 'MCF': 'Methane conversion factor', 'COD': 'Chemical oxygen demand', 'GWP_CH4': 'GWP for CH4' },
+      }),
+      parameters: JSON.stringify([
+        { name: 'wastewater_type', type: 'enum', values: ['cassava', 'palm_oil', 'rubber', 'tapioca'], required: true },
+        { name: 'treatment_system', type: 'enum', values: ['anaerobic_digester', 'covered_lagoon', 'uasb'], required: true },
+        { name: 'capture_efficiency', type: 'number', min: 0.5, max: 0.99, default: 0.9 },
+      ]),
+      conditions: JSON.stringify([
+        { field: 'capture_efficiency', operator: '>=', value: 0.5, message: 'Minimum capture efficiency 50%' },
+        { field: 'flare_destruction_efficiency', operator: '>=', value: 0.98, message: 'Flare destruction ≥98%' },
+      ]),
+      status: 'ACTIVE',
+      createdBy: 'CDM Methodology Panel',
+    },
+    {
+      name: 'Solar PV Emission Avoidance',
+      methodology: 'IPCC-2023',
+      trackType: 'solar',
+      version: '1.3',
+      description: 'Methodology for calculating emission reductions from solar photovoltaic electricity generation displacing fossil fuel grid electricity.',
+      formula: JSON.stringify({
+        expression: 'ER = EG × EF_grid × (1 - LT)',
+        variables: { 'ER': 'Emission reduction (tCO₂e)', 'EG': 'Electricity generated (MWh)', 'EF_grid': 'Grid emission factor (tCO₂/MWh)', 'LT': 'Leakage factor' },
+      }),
+      parameters: JSON.stringify([
+        { name: 'grid_emission_factor', type: 'number', default: 0.5713, unit: 'tCO₂/MWh', description: 'Thailand grid EF (2024)' },
+        { name: 'capacity_mw', type: 'number', required: true },
+        { name: 'leakage_factor', type: 'number', default: 0, min: 0, max: 0.1 },
+      ]),
+      conditions: JSON.stringify([
+        { field: 'capacity_mw', operator: '<=', value: 15, message: 'Small-scale: ≤15 MW' },
+        { field: 'grid_connection', operator: '==', value: true, message: 'Must be grid-connected' },
+      ]),
+      status: 'ACTIVE',
+      createdBy: 'EGAT / IPCC',
+    },
+    {
+      name: 'Draft: Mangrove Blue Carbon Enhancement',
+      methodology: 'T-VER-FOREST',
+      trackType: 'forest',
+      version: '0.9',
+      description: 'Draft methodology for blue carbon enhancement through mangrove restoration - pending TGO approval.',
+      formula: JSON.stringify({
+        expression: 'ΔBC = (C_biomass + C_soil)_post - (C_biomass + C_soil)_pre',
+        variables: { 'ΔBC': 'Blue carbon stock change', 'C_biomass': 'Carbon in above/below ground biomass', 'C_soil': 'Soil organic carbon' },
+      }),
+      parameters: JSON.stringify([
+        { name: 'mangrove_species', type: 'multi', values: ['rhizophora', 'avicennia', 'sonneratia', 'bruguiera'], required: true },
+        { name: 'tidal_zone', type: 'enum', values: ['intertidal', 'subtidal', 'supratidal'], required: true },
+      ]),
+      conditions: JSON.stringify([
+        { field: 'salinity_ppt', operator: '<=', value: 35, message: 'Maximum salinity 35 ppt' },
+      ]),
+      status: 'DRAFT',
+      createdBy: 'DMCR Thailand',
+    },
+  ];
+  for (const rule of methodologyRules) {
+    await db.methodologyRule.create({ data: rule });
   }
 }

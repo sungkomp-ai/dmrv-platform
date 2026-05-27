@@ -10,6 +10,8 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ─── Core Models ──────────────────────────────────────────────────────────
+
 model Project {
   id          String   @id @default(cuid())
   name        String
@@ -27,13 +29,18 @@ model Project {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  plots          Plot[]
-  credits        CarbonCredit[]
-  certificates   Certificate[]
-  ingestionLogs  IngestionLog[]
-  submissions    Submission[]
-  auditLogs      AuditLog[]
-  iotSensors     IoTSensor[]
+  plots             Plot[]
+  credits           CarbonCredit[]
+  certificates      Certificate[]
+  ingestionLogs     IngestionLog[]
+  submissions       Submission[]
+  auditLogs         AuditLog[]
+  iotSensors        IoTSensor[]
+  vvbReviews        VVBReview[]
+  conflictCases     ConflictCase[]
+  bufferPoolEntries BufferPoolEntry[]
+  forwardContracts  ForwardContract[]
+  deviceRegistrations DeviceRegistration[]
 }
 
 model Plot {
@@ -56,26 +63,28 @@ model CarbonCredit {
   tokenId   String   @unique
   projectId String
   amount    Float    @default(0)
-  status    String   @default("Available") // Available, Traded, Retired
+  status    String   @default("Available") // Available, Traded, Retired, Buffered
   metadata  String   @default("{}")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project         Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  bufferPoolEntry BufferPoolEntry?
 }
 
 model Certificate {
-  id          String   @id @default(cuid())
-  projectId   String
-  status      String   @default("SUBMITTED") // SUBMITTED, APPROVED, REJECTED, REVOKED
-  issuedBy    String   @default("TGO")
-  certificateNumber String @default("")
-  validFrom   DateTime @default(now())
-  validUntil  DateTime @default(now())
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id                String   @id @default(cuid())
+  projectId         String
+  status            String   @default("SUBMITTED") // SUBMITTED, APPROVED, REJECTED, REVOKED
+  issuedBy          String   @default("TGO")
+  certificateNumber String   @default("")
+  validFrom         DateTime @default(now())
+  validUntil        DateTime @default(now())
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
-  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project       Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  auditTrail    AuditTrailEntry[]
 }
 
 model IngestionLog {
@@ -94,17 +103,17 @@ model IngestionLog {
 }
 
 model Submission {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   projectId   String
-  type        String   @default("VERIFICATION") // VERIFICATION, CERTIFICATION, MONITORING
-  status      String   @default("PENDING") // PENDING, UNDER_REVIEW, APPROVED, REJECTED
-  data        String   @default("{}")
-  submittedBy String   @default("")
-  reviewedBy  String   @default("")
-  submittedAt DateTime @default(now())
+  type        String    @default("VERIFICATION") // VERIFICATION, CERTIFICATION, MONITORING
+  status      String    @default("PENDING") // PENDING, UNDER_REVIEW, APPROVED, REJECTED
+  data        String    @default("{}")
+  submittedBy String    @default("")
+  reviewedBy  String    @default("")
+  submittedAt DateTime  @default(now())
   reviewedAt  DateTime?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 }
@@ -145,4 +154,159 @@ model IoTSensor {
   updatedAt   DateTime @updatedAt
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+// ─── Enterprise Models: Verification & Validation Hub ─────────────────────
+
+model VVBReview {
+  id             String   @id @default(cuid())
+  projectId      String
+  reviewerOrg    String   @default("") // VVB organization name
+  reviewerName   String   @default("")
+  reviewType     String   @default("VALIDATION") // VALIDATION, VERIFICATION, PERIODIC_VERIFICATION
+  status         String   @default("PENDING") // PENDING, IN_PROGRESS, APPROVED, REJECTED, REQUESTED_INFO
+  evidenceRefs   String   @default("[]") // JSON: list of evidence URLs/reference IDs
+  findings       String   @default("{}") // JSON: structured findings
+  recommendation String   @default("") // approve, reject, request_more_info
+  comments       String   @default("")
+  reviewedAt     DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+model ConflictCase {
+  id           String    @id @default(cuid())
+  projectId    String
+  title        String
+  description  String    @default("")
+  sourceA      String    @default("{}") // JSON: first data source info
+  sourceB      String    @default("{}") // JSON: second data source info
+  conflictType String    @default("DATA_MISMATCH") // DATA_MISMATCH, THRESHOLD_EXCEEDED, INTEGRITY_FAIL, SPATIAL_MISMATCH
+  severity     String    @default("MEDIUM") // LOW, MEDIUM, HIGH, CRITICAL
+  status       String    @default("FLAGGED") // FLAGGED, IN_REVIEW, RESOLVED, ESCALATED
+  resolution   String    @default("")
+  resolvedBy   String    @default("")
+  evidenceUrl  String    @default("")
+  createdAt    DateTime  @default(now())
+  resolvedAt   DateTime?
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+// ─── Enterprise Models: Trust & Transparency ──────────────────────────────
+
+model AuditTrailEntry {
+  id            String   @id @default(cuid())
+  certificateId String
+  eventType     String   @default("ORIGIN") // ORIGIN, QUANTIFY, VERIFY, CERTIFY, MINT, TRADE, RETIRE, BUFFER
+  previousHash  String   @default("")
+  dataHash      String   @default("")
+  merkleRoot    String   @default("")
+  metadata      String   @default("{}") // JSON: event-specific data (de-identified)
+  timestamp     DateTime @default(now())
+
+  certificate Certificate @relation(fields: [certificateId], references: [id], onDelete: Cascade)
+}
+
+model DeviceRegistration {
+  id              String   @id @default(cuid())
+  projectId       String
+  deviceId        String
+  deviceType      String   @default("iot") // iot, drone, satellite, lidar, manual
+  manufacturer    String   @default("")
+  model           String   @default("")
+  firmwareVersion String   @default("")
+  publicKey       String   @default("") // Hardware-level cryptographic signing key
+  signingStatus   String   @default("UNSIGNED") // UNSIGNED, SIGNED, EXPIRED, REVOKED
+  connectionStatus String  @default("disconnected") // connected, disconnected, maintenance
+  healthStatus    String   @default("UNKNOWN") // HEALTHY, DEGRADED, CRITICAL, UNKNOWN
+  lastCalibration DateTime?
+  batteryLevel    Int      @default(100)
+  signalStrength  Int      @default(0) // dBm
+  metadata        String   @default("{}")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+// ─── Enterprise Models: Finance & Risk Management ─────────────────────────
+
+model BufferPoolEntry {
+  id            String   @id @default(cuid())
+  projectId     String
+  creditId      String   @unique
+  amount        Float    @default(0) // tCO2e held in buffer
+  uncertaintyPct Float   @default(0) // Uncertainty percentage
+  bufferPct     Float    @default(0) // Buffer deduction percentage
+  riskCategory  String   @default("MEDIUM") // LOW, MEDIUM, HIGH, VERY_HIGH
+  reason        String   @default("")
+  releasedAt    DateTime? // When buffer credits are released
+  createdAt     DateTime @default(now())
+
+  project Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  credit  CarbonCredit  @relation(fields: [creditId], references: [id], onDelete: Cascade)
+}
+
+model ForwardContract {
+  id            String    @id @default(cuid())
+  projectId     String
+  sellerName    String    @default("")
+  buyerName     String    @default("")
+  creditAmount  Float     @default(0) // tCO2e
+  pricePerUnit  Float     @default(0) // USD per tCO2e
+  totalValue    Float     @default(0) // USD
+  deliveryDate  DateTime
+  status        String    @default("DRAFT") // DRAFT, PENDING, APPROVED, ACTIVE, COMPLETED, CANCELLED, DEFAULTED
+  terms         String    @default("{}") // JSON: contract terms
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+// ─── Enterprise Models: User Experience & Integration ─────────────────────
+
+model ApiKey {
+  id          String    @id @default(cuid())
+  name        String
+  key         String    @unique
+  permissions String    @default("[]") // JSON: list of permission scopes
+  lastUsed    DateTime?
+  status      String    @default("ACTIVE") // ACTIVE, REVOKED, EXPIRED
+  createdBy   String    @default("")
+  createdAt   DateTime  @default(now())
+  expiresAt   DateTime?
+}
+
+model Webhook {
+  id             String    @id @default(cuid())
+  url            String
+  events         String    @default("[]") // JSON: list of event types
+  secret         String    @default("")
+  status         String    @default("ACTIVE") // ACTIVE, PAUSED, FAILED
+  lastDelivery   DateTime?
+  failureCount   Int       @default(0)
+  lastFailure    String    @default("")
+  createdBy      String    @default("")
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
+
+model MethodologyRule {
+  id          String   @id @default(cuid())
+  name        String
+  methodology String   @default("T-VER")
+  trackType   String   @default("forest")
+  version     String   @default("1.0")
+  description String   @default("")
+  formula     String   @default("{}") // JSON: formula definition with variables
+  parameters  String   @default("[]") // JSON: parameter definitions
+  conditions  String   @default("[]") // JSON: validation conditions
+  status      String   @default("DRAFT") // DRAFT, ACTIVE, DEPRECATED
+  createdBy   String   @default("")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
