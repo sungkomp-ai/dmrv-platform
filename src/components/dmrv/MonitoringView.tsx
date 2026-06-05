@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Activity, AlertTriangle, CheckCircle2, XCircle, Bell, Plus, RefreshCw } from 'lucide-react';
+import { Activity, AlertTriangle, CheckCircle2, XCircle, Bell, Plus, RefreshCw, Cpu, ThermometerSun, Droplets, Wind } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -56,6 +56,7 @@ const severityColors: Record<string, string> = {
 
 export default function MonitoringView() {
   const { toast } = useToast();
+  const [standardMode, setStandardMode] = useState<'international' | 'tgo'>('tgo');
   const [alerts, setAlerts] = useState<AlertItem[]>([]);
   const [health, setHealth] = useState<HealthMetrics | null>(null);
   const [loading, setLoading] = useState(true);
@@ -191,7 +192,11 @@ export default function MonitoringView() {
           <h2 className="text-2xl font-bold tracking-tight text-gray-900">Monitoring</h2>
           <p className="text-muted-foreground text-sm mt-1">System health, metrics, and alert management</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1 bg-muted rounded-lg p-0.5 text-[10px]">
+            <button onClick={() => setStandardMode('tgo')} className={`px-2.5 py-1 rounded-md transition-all ${standardMode === 'tgo' ? 'bg-amber-100 text-amber-800 font-bold shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>🇹🇭 TGO/T-VER</button>
+            <button onClick={() => setStandardMode('international')} className={`px-2.5 py-1 rounded-md transition-all ${standardMode === 'international' ? 'bg-blue-100 text-blue-800 font-bold shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>🌐 Int'l</button>
+          </div>
           <Button variant="outline" size="sm" onClick={handleRefresh} className="gap-2">
             <RefreshCw className="h-3.5 w-3.5" />
             Refresh
@@ -259,19 +264,25 @@ export default function MonitoringView() {
           <Card>
             <CardContent className="p-4 text-center">
               <p className="text-lg font-bold">{health.credits.total.toLocaleString('en-US', { maximumFractionDigits: 1 })}</p>
-              <p className="text-xs text-muted-foreground">Total Credits (tCO2e)</p>
+              <p className="text-xs text-muted-foreground">
+                {standardMode === 'tgo' ? 'Total Credits (tCO₂e T-VER)' : 'Total Credits (tCO₂e)'}
+              </p>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="p-4 text-center">
               <p className="text-lg font-bold text-emerald-600">{health.certificates.approved}</p>
-              <p className="text-xs text-muted-foreground">Approved Certificates</p>
+              <p className="text-xs text-muted-foreground">
+                {standardMode === 'tgo' ? 'ใบรับรองที่อนุมัติ' : 'Approved Certificates'}
+              </p>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="p-4 text-center">
               <p className="text-lg font-bold text-amber-600">{health.certificates.pending}</p>
-              <p className="text-xs text-muted-foreground">Pending Certificates</p>
+              <p className="text-xs text-muted-foreground">
+                {standardMode === 'tgo' ? 'ใบรับรองรอตรวจ' : 'Pending Certificates'}
+              </p>
             </CardContent>
           </Card>
           <Card>
@@ -282,6 +293,107 @@ export default function MonitoringView() {
           </Card>
         </div>
       )}
+
+      {/* IoT Sensor Summary */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <Cpu className="h-4 w-4 text-emerald-600" />
+            IoT Sensor Summary
+          </CardTitle>
+          <CardDescription>
+            {standardMode === 'tgo' ? 'สถานะเซ็นเซอร์ IoT ตามเกณฑ์ T-VER' : 'IoT sensor status overview'}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {[
+              { icon: ThermometerSun, type: standardMode === 'tgo' ? 'CH₄ Sensor' : 'CH₄ Sensor', count: 12, active: 10, warn: 1, fault: 1, color: 'text-orange-600', bg: 'bg-orange-50' },
+              { icon: Droplets, type: standardMode === 'tgo' ? 'N₂O Sensor' : 'N₂O Sensor', count: 8, active: 7, warn: 1, fault: 0, color: 'text-blue-600', bg: 'bg-blue-50' },
+              { icon: Wind, type: standardMode === 'tgo' ? 'CO₂ Sensor' : 'CO₂ Flux', count: 15, active: 14, warn: 0, fault: 1, color: 'text-teal-600', bg: 'bg-teal-50' },
+              { icon: Activity, type: standardMode === 'tgo' ? 'อุณหภูมิ/ความชื้น' : 'Temp/Humidity', count: 20, active: 19, warn: 1, fault: 0, color: 'text-purple-600', bg: 'bg-purple-50' },
+            ].map((sensor) => (
+              <div key={sensor.type} className="rounded-lg border p-3 space-y-2">
+                <div className="flex items-center gap-2">
+                  <div className={`flex h-7 w-7 items-center justify-center rounded ${sensor.bg}`}>
+                    <sensor.icon className={`h-3.5 w-3.5 ${sensor.color}`} />
+                  </div>
+                  <span className="text-xs font-semibold">{sensor.type}</span>
+                </div>
+                <div className="flex items-center justify-between text-[10px]">
+                  <span className="text-muted-foreground">Total: {sensor.count}</span>
+                  <span className="text-emerald-600 font-medium">Active: {sensor.active}</span>
+                </div>
+                <div className="flex gap-1.5">
+                  {sensor.warn > 0 && <Badge variant="secondary" className="text-[8px] h-4 bg-amber-50 text-amber-700 hover:bg-amber-50">{sensor.warn} warn</Badge>}
+                  {sensor.fault > 0 && <Badge variant="secondary" className="text-[8px] h-4 bg-red-50 text-red-700 hover:bg-red-50">{sensor.fault} fault</Badge>}
+                  {sensor.warn === 0 && sensor.fault === 0 && <Badge variant="secondary" className="text-[8px] h-4 bg-emerald-50 text-emerald-700 hover:bg-emerald-50">OK</Badge>}
+                </div>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* T-VER Monitoring Reference Card */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <Activity className="h-4 w-4 text-amber-600" />
+            {standardMode === 'tgo' ? 'แนวทางการติดตามตรวจสอบ T-VER' : 'Monitoring Reference'}
+          </CardTitle>
+          <CardDescription>
+            {standardMode === 'tgo'
+              ? 'ตามแนวทาง TGO 2566 สำหรับโครงการ T-VER'
+              : 'International monitoring standards reference'}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {standardMode === 'tgo' ? (
+            <div className="space-y-3">
+              <div className="flex items-start gap-2 text-sm">
+                <Badge variant="secondary" className="text-[10px] h-5 bg-amber-100 text-amber-800 hover:bg-amber-100 shrink-0">TGO 2566</Badge>
+                <span>แนวทางการติดตามตรวจสอบ TGO 2566 — กรณีโครงการลดก๊าซเรือนกระจก</span>
+              </div>
+              <div className="flex items-start gap-2 text-sm">
+                <Badge variant="secondary" className="text-[10px] h-5 bg-teal-100 text-teal-800 hover:bg-teal-100 shrink-0">ความถี่</Badge>
+                <span>รายงานผลการติดตามทุกเดือน (รายเดือน)</span>
+              </div>
+              <div className="flex items-start gap-2 text-sm">
+                <Badge variant="secondary" className="text-[10px] h-5 bg-emerald-100 text-emerald-800 hover:bg-emerald-100 shrink-0">IoT</Badge>
+                <span>เกณฑ์การตรวจสอบ IoT — ต้องมีระบบบันทึกอัตโนมัติอย่างน้อย 95% uptime</span>
+              </div>
+              <div className="flex items-start gap-2 text-sm">
+                <Badge variant="secondary" className="text-[10px] h-5 bg-orange-100 text-orange-800 hover:bg-orange-100 shrink-0">CH₄/N₂O</Badge>
+                <span>ต้องติดตั้งเซ็นเซอร์ CH₄ และ N₂O ตามพื้นที่โครงการ ตาม T-VER-P-CC-001, T-VER-P-AG-001</span>
+              </div>
+              <Separator />
+              <div className="text-xs text-muted-foreground">
+                อ้างอิง: คู่มือการติดตามตรวจสอบโครงการ T-VER โดยองค์การบริหารจัดการก๊าซเรือนกระจก (TGO) พ.ศ. 2566
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="flex items-start gap-2 text-sm">
+                <Badge variant="secondary" className="text-[10px] h-5 bg-blue-100 text-blue-800 hover:bg-blue-100 shrink-0">IPCC</Badge>
+                <span>IPCC 2006 Guidelines for National Greenhouse Gas Inventories — monitoring and reporting framework</span>
+              </div>
+              <div className="flex items-start gap-2 text-sm">
+                <Badge variant="secondary" className="text-[10px] h-5 bg-emerald-100 text-emerald-800 hover:bg-emerald-100 shrink-0">Verra VCS</Badge>
+                <span>Verra VCS Monitoring Report requirements per methodology — annual reporting cycle</span>
+              </div>
+              <div className="flex items-start gap-2 text-sm">
+                <Badge variant="secondary" className="text-[10px] h-5 bg-purple-100 text-purple-800 hover:bg-purple-100 shrink-0">ISO 14064-2</Badge>
+                <span>ISO 14064-2 reporting frequency — project-level quantification, monitoring and reporting</span>
+              </div>
+              <Separator />
+              <div className="text-xs text-muted-foreground">
+                Reference: IPCC 2006 GL, Verra VCS Standard v4.5, ISO 14064-2:2019
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Create Alert Form */}
       {showForm && (
@@ -324,8 +436,12 @@ export default function MonitoringView() {
       {/* Alert List */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Alert List</CardTitle>
-          <CardDescription>All system alerts — {criticalCount} critical, {warningCount} warning, {infoCount} info unacknowledged</CardDescription>
+          <CardTitle className="text-base">{standardMode === 'tgo' ? 'รายการแจ้งเตือน' : 'Alert List'}</CardTitle>
+          <CardDescription>
+            {standardMode === 'tgo'
+              ? `แจ้งเตือนระบบ — วิกฤต ${criticalCount}, เตือน ${warningCount}, ข้อมูล ${infoCount} ที่ยังไม่รับทราบ`
+              : `All system alerts — ${criticalCount} critical, ${warningCount} warning, ${infoCount} info unacknowledged`}
+          </CardDescription>
         </CardHeader>
         <CardContent className="p-0">
           <ScrollArea className="max-h-96">
@@ -345,7 +461,9 @@ export default function MonitoringView() {
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="text-sm font-medium">{alert.message.split(':')[0]}</span>
                             <Badge variant="secondary" className={`text-[10px] h-5 ${severityStyles[alert.severity] || ''}`}>
-                              {alert.severity}
+                              {standardMode === 'tgo'
+                                ? (alert.severity === 'CRITICAL' ? 'วิกฤต' : alert.severity === 'WARNING' ? 'เตือน' : 'ข้อมูล')
+                                : alert.severity}
                             </Badge>
                             {alert.acknowledged && (
                               <Badge variant="secondary" className="text-[10px] h-5 bg-emerald-50 text-emerald-600 hover:bg-emerald-50">
@@ -362,7 +480,7 @@ export default function MonitoringView() {
                         </div>
                         {!alert.acknowledged && (
                           <Button variant="ghost" size="sm" onClick={() => acknowledgeAlert(alert.id)} className="shrink-0 text-xs">
-                            Acknowledge
+                            {standardMode === 'tgo' ? 'รับทราบ' : 'Acknowledge'}
                           </Button>
                         )}
                       </div>

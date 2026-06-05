@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { ClipboardList, Plus, Send, FileText, Loader2 } from 'lucide-react';
+import { ClipboardList, Plus, Send, FileText, Loader2, GitBranch } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -86,6 +86,7 @@ export default function SubmissionView() {
   const [formType, setFormType] = useState('Project Registration');
   const [formTitle, setFormTitle] = useState('');
   const [formDescription, setFormDescription] = useState('');
+  const [standardMode, setStandardMode] = useState<'international' | 'tgo'>('tgo');
 
   const fetchData = useCallback(async () => {
     try {
@@ -232,10 +233,65 @@ export default function SubmissionView() {
   return (
     <div className="space-y-6">
       {/* Page Title */}
-      <div>
-        <h2 className="text-2xl font-bold tracking-tight text-gray-900">Submission</h2>
-        <p className="text-muted-foreground text-sm mt-1">Create and manage project submissions</p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight text-gray-900">Submission</h2>
+          <p className="text-muted-foreground text-sm mt-1">Create and manage project submissions</p>
+        </div>
+        <div className="flex items-center gap-1 bg-muted rounded-lg p-0.5 text-[10px]">
+          <button onClick={() => setStandardMode('tgo')} className={`px-2.5 py-1 rounded-md transition-all ${standardMode === 'tgo' ? 'bg-amber-100 text-amber-800 font-bold shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>🇹🇭 TGO/T-VER</button>
+          <button onClick={() => setStandardMode('international')} className={`px-2.5 py-1 rounded-md transition-all ${standardMode === 'international' ? 'bg-blue-100 text-blue-800 font-bold shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>🌐 Int'l</button>
+        </div>
       </div>
+
+      {/* T-VER Submission Workflow Card */}
+      <Card className="border-amber-200 bg-gradient-to-r from-amber-50 to-orange-50">
+        <CardContent className="p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <GitBranch className="h-4 w-4 text-amber-700" />
+            <span className="text-sm font-semibold text-amber-900">
+              {standardMode === 'tgo' ? 'T-VER Submission Workflow' : 'International Submission Workflow'}
+            </span>
+          </div>
+          {standardMode === 'tgo' ? (
+            <div className="flex items-center gap-1 flex-wrap">
+              {[
+                { step: 1, label: 'ลงทะเบียนโครงการ' },
+                { step: 2, label: 'ตรวจสอบข้อมูล' },
+                { step: 3, label: 'VVB ตรวจสอบ' },
+                { step: 4, label: 'ขอรับใบรับรอง' },
+                { step: 5, label: 'ออกเครดิตคาร์บอน' },
+              ].map((s, idx) => (
+                <React.Fragment key={s.step}>
+                  <div className="flex items-center gap-1.5 rounded-md bg-white/70 px-2.5 py-1.5 border border-amber-200">
+                    <span className="flex items-center justify-center h-5 w-5 rounded-full bg-amber-600 text-white text-[10px] font-bold">{s.step}</span>
+                    <span className="text-xs font-medium text-amber-900">{s.label}</span>
+                  </div>
+                  {idx < 4 && <span className="text-amber-400 text-sm">→</span>}
+                </React.Fragment>
+              ))}
+            </div>
+          ) : (
+            <div className="flex items-center gap-1 flex-wrap">
+              {[
+                { step: 1, label: 'Project Registration' },
+                { step: 2, label: 'Data Validation' },
+                { step: 3, label: 'VVB Verification' },
+                { step: 4, label: 'Certification Request' },
+                { step: 5, label: 'Credit Issuance' },
+              ].map((s, idx) => (
+                <React.Fragment key={s.step}>
+                  <div className="flex items-center gap-1.5 rounded-md bg-white/70 px-2.5 py-1.5 border border-blue-200">
+                    <span className="flex items-center justify-center h-5 w-5 rounded-full bg-blue-600 text-white text-[10px] font-bold">{s.step}</span>
+                    <span className="text-xs font-medium text-blue-900">{s.label}</span>
+                  </div>
+                  {idx < 4 && <span className="text-blue-400 text-sm">→</span>}
+                </React.Fragment>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Error Banner */}
       {error && (
@@ -292,9 +348,20 @@ export default function SubmissionView() {
               <Select value={formType} onValueChange={setFormType}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {['Project Registration', 'Monitoring Report', 'Credit Request', 'Verification Request', 'Data Submission'].map((t) => (
-                    <SelectItem key={t} value={t}>{t}</SelectItem>
-                  ))}
+                  {standardMode === 'tgo' 
+                    ? [
+                        { value: 'Project Registration', label: 'การลงทะเบียนโครงการ' },
+                        { value: 'Monitoring Report', label: 'รายงานการติดตาม' },
+                        { value: 'Credit Request', label: 'คำขอเครดิต' },
+                        { value: 'Verification Request', label: 'คำขอตรวจสอบ' },
+                        { value: 'Data Submission', label: 'ส่งข้อมูล' },
+                      ].map((t) => (
+                        <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                      ))
+                    : ['Project Registration', 'Monitoring Report', 'Credit Request', 'Verification Request', 'Data Submission'].map((t) => (
+                      <SelectItem key={t} value={t}>{t}</SelectItem>
+                    ))
+                  }
                 </SelectContent>
               </Select>
             </div>
@@ -349,7 +416,17 @@ export default function SubmissionView() {
                           <span className="font-mono text-xs">{sub.projectName}</span>
                         </TableCell>
                         <TableCell>
-                          <Badge variant="secondary" className="text-[10px] h-5">{sub.formType}</Badge>
+                          <Badge variant="secondary" className="text-[10px] h-5">
+                            {standardMode === 'tgo'
+                              ? sub.formType === 'Project Registration' ? 'การลงทะเบียนโครงการ'
+                                : sub.formType === 'Monitoring Report' ? 'รายงานการติดตาม'
+                                : sub.formType === 'Credit Request' ? 'คำขอเครดิต'
+                                : sub.formType === 'Verification Request' ? 'คำขอตรวจสอบ'
+                                : sub.formType === 'Data Submission' ? 'ส่งข้อมูล'
+                                : sub.formType
+                              : sub.formType
+                            }
+                          </Badge>
                         </TableCell>
                         <TableCell>
                           <Badge variant="secondary" className={`text-[10px] h-5 ${statusStyles[sub.status]}`}>

@@ -56,6 +56,7 @@ interface DmrvMapProps {
   onFlyComplete: () => void;
   onProjectClick: (project: MapProject) => void;
   onSensorClick: (sensor: MapSensor) => void;
+  standardMode: 'international' | 'tgo';
 }
 
 const TRACK_COLORS: Record<string, string> = {
@@ -64,6 +65,14 @@ const TRACK_COLORS: Record<string, string> = {
   awd: '#3b82f6',
   biogas: '#8b5cf6',
   solar: '#ef4444',
+};
+
+const TRACK_STYLES: Record<string, { weight: number; dashArray: string; fillOpacity: number }> = {
+  forest: { weight: 2, dashArray: '', fillOpacity: 0.25 },
+  biochar: { weight: 2, dashArray: '6, 3', fillOpacity: 0.20 },
+  awd: { weight: 2, dashArray: '8, 4', fillOpacity: 0.20 },
+  biogas: { weight: 2.5, dashArray: '4, 4', fillOpacity: 0.25 },
+  solar: { weight: 2, dashArray: '', fillOpacity: 0.18 },
 };
 
 const SENSOR_ICONS: Record<string, string> = {
@@ -89,7 +98,7 @@ function useMounted() {
 export default function DmrvMap({
   projects, showZones, showSensors, showSatellite,
   selectedProject, selectedSensor, flyTo, onFlyComplete,
-  onProjectClick, onSensorClick,
+  onProjectClick, onSensorClick, standardMode,
 }: DmrvMapProps) {
   const mounted = useMounted();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -177,25 +186,27 @@ export default function DmrvMap({
           const coords = JSON.parse(plot.coordinates);
           if (!Array.isArray(coords) || coords.length < 3) return;
           const latLngs: L.LatLngExpression[] = coords.map((c: number[]) => [c[0], c[1]] as L.LatLngExpression);
+          const style = TRACK_STYLES[plot.trackType] || TRACK_STYLES.forest;
 
           const polygon = L.polygon(latLngs, {
             color: color,
-            weight: 2,
+            weight: style.weight,
             opacity: 0.9,
             fillColor: color,
-            fillOpacity: 0.2,
-            dashArray: '6, 3',
+            fillOpacity: style.fillOpacity,
+            dashArray: style.dashArray,
           });
 
           polygon.bindPopup(`
-            <div style="min-width: 180px; font-family: system-ui;">
+            <div style="min-width: 200px; font-family: system-ui;">
               <h4 style="font-size: 13px; font-weight: 700; margin: 0 0 6px; color: #1f2937;">${plot.plotId}</h4>
               <div style="display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 6px;">
                 <span style="background: ${color}20; color: ${color}; padding: 1px 8px; border-radius: 99px; font-size: 10px; font-weight: 500;">${trackType}</span>
                 <span style="background: #ecfdf5; color: #047857; padding: 1px 8px; border-radius: 99px; font-size: 10px;">${plot.status}</span>
+                <span style="background: #f3f4f6; color: #6b7280; padding: 1px 8px; border-radius: 99px; font-size: 10px;">${coords.length} vertices</span>
               </div>
               <div style="font-size: 11px; color: #6b7280;">Owner: ${plot.ownerInfo}</div>
-              <div style="font-size: 11px; color: #6b7280;">Area: ${plot.areaHa.toLocaleString()} ha</div>
+              <div style="font-size: 11px; color: #6b7280;">Area: ${standardMode === 'tgo' ? `${(plot.areaHa * 6.25).toLocaleString(undefined, {maximumFractionDigits: 1})} ไร่` : `${plot.areaHa.toLocaleString()} ha`}</div>
             </div>
           `, { className: 'custom-popup' });
 
@@ -235,9 +246,9 @@ export default function DmrvMap({
             <span style="background: #ecfdf5; color: #047857; padding: 2px 8px; border-radius: 99px; font-size: 10px;">${project.status}</span>
           </div>
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; font-size: 12px;">
-            <div style="background: #f9fafb; padding: 6px; border-radius: 6px;">
+            <div style="background: #f9fafb; padding: 6px; border-radius: 6px;" title="${standardMode === 'tgo' ? `${(project.areaHa * 6.25).toLocaleString(undefined, {maximumFractionDigits: 1})} ไร่ (${project.areaHa.toLocaleString()} ha)` : `${project.areaHa.toLocaleString()} ha (${(project.areaHa * 6.25).toLocaleString(undefined, {maximumFractionDigits: 1})} ไร่)`}">
               <div style="color: #6b7280; font-size: 10px;">Area</div>
-              <div style="font-weight: 600;">${project.areaHa.toLocaleString()} ha</div>
+              <div style="font-weight: 600;">${standardMode === 'tgo' ? `${(project.areaHa * 6.25).toLocaleString(undefined, {maximumFractionDigits: 1})} ไร่` : `${project.areaHa.toLocaleString()} ha`}</div>
             </div>
             <div style="background: #f9fafb; padding: 6px; border-radius: 6px;">
               <div style="color: #6b7280; font-size: 10px;">Plots</div>
@@ -261,7 +272,7 @@ export default function DmrvMap({
       marker.on('click', () => onProjectClick(project));
       zoneGroupRef.current!.addLayer(marker);
     });
-  }, [projects, showZones, onProjectClick]);
+  }, [projects, showZones, onProjectClick, standardMode]);
 
   // Draw IoT sensors
   useEffect(() => {

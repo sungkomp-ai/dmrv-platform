@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { FileCheck, Award, Send, Eye, RefreshCw, CheckCircle, XCircle } from 'lucide-react';
+import { FileCheck, Award, Send, Eye, RefreshCw, CheckCircle, XCircle, ArrowRight, Shield } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -11,6 +11,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Separator } from '@/components/ui/separator';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
@@ -56,10 +57,23 @@ const statusLabels: Record<CertStatus, string> = {
   REJECTED: 'Rejected',
 };
 
+const statusLabelsTgo: Record<CertStatus, string> = {
+  SUBMITTED: 'ยื่นคำขอ',
+  APPROVED: 'อนุมัติ',
+  REJECTED: 'ปฏิเสธ',
+};
+
+const methodologyBadges = [
+  { code: 'T-VER-P-CC-001', label: 'Biochar / Climate Change', color: 'bg-orange-100 text-orange-800 hover:bg-orange-100' },
+  { code: 'T-VER-P-AG-001', label: 'AWD Rice / Agriculture', color: 'bg-emerald-100 text-emerald-800 hover:bg-emerald-100' },
+  { code: 'T-VER-P-FOR-001', label: 'Forest Carbon', color: 'bg-green-100 text-green-800 hover:bg-green-100' },
+];
+
 const trackTypeOptions = ['biochar', 'awd', 'biogas', 'solar', 'forest'];
 
 export default function CertificationView() {
   const { toast } = useToast();
+  const [standardMode, setStandardMode] = useState<'international' | 'tgo'>('tgo');
   const [certificates, setCertificates] = useState<Certificate[]>([]);
   const [summary, setSummary] = useState<CertSummary | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -200,17 +214,25 @@ export default function CertificationView() {
   return (
     <div className="space-y-6">
       {/* Page Title */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold tracking-tight text-gray-900">Certification</h2>
           <p className="text-muted-foreground text-sm mt-1">
-            T-VER certification management and Master Certificate issuance
+            {standardMode === 'tgo'
+              ? 'การจัดการใบรับรอง T-VER และ Master Certificate'
+              : 'T-VER certification management and Master Certificate issuance'}
           </p>
         </div>
-        <Button variant="outline" size="sm" onClick={handleRefresh} className="gap-2">
-          <RefreshCw className="h-3.5 w-3.5" />
-          Refresh
-        </Button>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1 bg-muted rounded-lg p-0.5 text-[10px]">
+            <button onClick={() => setStandardMode('tgo')} className={`px-2.5 py-1 rounded-md transition-all ${standardMode === 'tgo' ? 'bg-amber-100 text-amber-800 font-bold shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>🇹🇭 TGO/T-VER</button>
+            <button onClick={() => setStandardMode('international')} className={`px-2.5 py-1 rounded-md transition-all ${standardMode === 'international' ? 'bg-blue-100 text-blue-800 font-bold shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>🌐 Int'l</button>
+          </div>
+          <Button variant="outline" size="sm" onClick={handleRefresh} className="gap-2">
+            <RefreshCw className="h-3.5 w-3.5" />
+            Refresh
+          </Button>
+        </div>
       </div>
 
       {/* Stats */}
@@ -218,28 +240,96 @@ export default function CertificationView() {
         <Card>
           <CardContent className="p-4 text-center">
             <p className="text-2xl font-bold text-emerald-600">{summary?.approved ?? 0}</p>
-            <p className="text-xs text-muted-foreground">Issued</p>
+            <p className="text-xs text-muted-foreground">{standardMode === 'tgo' ? 'อนุมัติ' : 'Issued'}</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4 text-center">
             <p className="text-2xl font-bold text-amber-600">{summary?.submitted ?? 0}</p>
-            <p className="text-xs text-muted-foreground">Pending</p>
+            <p className="text-xs text-muted-foreground">{standardMode === 'tgo' ? 'รอตรวจสอบ' : 'Pending'}</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4 text-center">
             <p className="text-2xl font-bold text-red-600">{summary?.rejected ?? 0}</p>
-            <p className="text-xs text-muted-foreground">Rejected</p>
+            <p className="text-xs text-muted-foreground">{standardMode === 'tgo' ? 'ปฏิเสธ' : 'Rejected'}</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4 text-center">
             <p className="text-2xl font-bold">{(summary?.totalTco2e ?? 0).toLocaleString()}</p>
-            <p className="text-xs text-muted-foreground">Certified tCO2e</p>
+            <p className="text-xs text-muted-foreground">
+              {standardMode === 'tgo' ? 'tCO₂e ที่รับรอง (T-VER)' : 'Certified tCO₂e'}
+            </p>
           </CardContent>
         </Card>
       </div>
+
+      {/* T-VER Certification Workflow Card */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <Shield className="h-4 w-4 text-amber-600" />
+            {standardMode === 'tgo' ? 'ขั้นตอนการรับรอง T-VER' : 'Certification Workflow'}
+          </CardTitle>
+          <CardDescription>
+            {standardMode === 'tgo'
+              ? 'กระบวนการรับรองตามแนวทาง TGO 2566 และมาตรฐาน T-VER'
+              : 'International certification process reference'}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {standardMode === 'tgo' ? (
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-center gap-2 text-xs">
+                {['ยื่นคำขอ', 'ตรวจสอบเอกสาร', 'VVB ประเมิน', 'อนุมัติ/ปฏิเสธ', 'ออก Master Certificate'].map((step, i) => (
+                  <React.Fragment key={i}>
+                    <div className="flex items-center gap-1.5 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 font-semibold text-amber-800">
+                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-amber-200 text-[10px] font-bold">{i + 1}</span>
+                      {step}
+                    </div>
+                    {i < 4 && <ArrowRight className="h-3.5 w-3.5 text-amber-400" />}
+                  </React.Fragment>
+                ))}
+              </div>
+              <Separator />
+              <div className="flex flex-wrap gap-2">
+                {methodologyBadges.map((m) => (
+                  <Badge key={m.code} variant="secondary" className={`text-[10px] h-6 ${m.color}`}>
+                    {m.code} — {m.label}
+                  </Badge>
+                ))}
+              </div>
+              <div className="text-xs text-muted-foreground">
+                อ้างอิง: TGO Guidelines 2566, มาตรฐาน T-VER | รูปแบบ Master Certificate: TVER-MC-YYYY-XXXXX
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-center gap-2 text-xs">
+                {['Submit', 'Document Review', 'VVB Assessment', 'Approve/Reject', 'Issue Certificate'].map((step, i) => (
+                  <React.Fragment key={i}>
+                    <div className="flex items-center gap-1.5 rounded-lg bg-blue-50 border border-blue-200 px-3 py-2 font-semibold text-blue-800">
+                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-200 text-[10px] font-bold">{i + 1}</span>
+                      {step}
+                    </div>
+                    {i < 4 && <ArrowRight className="h-3.5 w-3.5 text-blue-400" />}
+                  </React.Fragment>
+                ))}
+              </div>
+              <Separator />
+              <div className="flex flex-wrap gap-2">
+                <Badge variant="secondary" className="text-[10px] h-6 bg-blue-100 text-blue-800 hover:bg-blue-100">Verra VCS</Badge>
+                <Badge variant="secondary" className="text-[10px] h-6 bg-emerald-100 text-emerald-800 hover:bg-emerald-100">Gold Standard</Badge>
+                <Badge variant="secondary" className="text-[10px] h-6 bg-purple-100 text-purple-800 hover:bg-purple-100">ISO 14064-2</Badge>
+              </div>
+              <div className="text-xs text-muted-foreground">
+                Reference: Verra VCS Standard v4.5, Gold Standard for the Global Goals, ISO 14064-2:2019
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Submit Form */}
@@ -336,8 +426,10 @@ export default function CertificationView() {
                         <TableCell className="font-mono text-sm">{cert.amountTco2e.toLocaleString()}</TableCell>
                         <TableCell>
                           <Badge variant="secondary" className={`text-[10px] h-5 ${statusStyles[cert.status as CertStatus] || ''}`}>
-                            {statusLabels[cert.status as CertStatus] || cert.status}
-                          </Badge>
+                              {standardMode === 'tgo'
+                                ? statusLabelsTgo[cert.status as CertStatus] || cert.status
+                                : statusLabels[cert.status as CertStatus] || cert.status}
+                            </Badge>
                         </TableCell>
                         <TableCell>
                           {cert.status === 'SUBMITTED' && (
@@ -380,10 +472,10 @@ export default function CertificationView() {
                                     <div><span className="text-muted-foreground">Certificate:</span> <span className="font-mono font-semibold">{selectedCert.certId}</span></div>
                                     <div><span className="text-muted-foreground">Project:</span> {selectedCert.project?.name || selectedCert.projectId}</div>
                                     <div><span className="text-muted-foreground">Type:</span> {selectedCert.trackType}</div>
-                                    <div><span className="text-muted-foreground">tCO2e:</span> <span className="font-semibold text-emerald-700">{selectedCert.amountTco2e.toLocaleString()}</span></div>
-                                    <div><span className="text-muted-foreground">Status:</span> <Badge variant="secondary" className={`text-[10px] h-5 ${statusStyles[selectedCert.status as CertStatus] || ''}`}>{statusLabels[selectedCert.status as CertStatus] || selectedCert.status}</Badge></div>
+                                    <div><span className="text-muted-foreground">{standardMode === 'tgo' ? 'tCO₂e (T-VER):' : 'tCO₂e:'}</span> <span className="font-semibold text-emerald-700">{selectedCert.amountTco2e.toLocaleString()}</span></div>
+                                    <div><span className="text-muted-foreground">Status:</span> <Badge variant="secondary" className={`text-[10px] h-5 ${statusStyles[selectedCert.status as CertStatus] || ''}`}>{standardMode === 'tgo' ? statusLabelsTgo[selectedCert.status as CertStatus] || selectedCert.status : statusLabels[selectedCert.status as CertStatus] || selectedCert.status}</Badge></div>
                                     <div><span className="text-muted-foreground">Validator:</span> {selectedCert.validator}</div>
-                                    {selectedCert.masterCertId && <div><span className="text-muted-foreground">Master Cert:</span> <span className="font-mono font-semibold">{selectedCert.masterCertId}</span></div>}
+                                    {selectedCert.masterCertId && <div><span className="text-muted-foreground">{standardMode === 'tgo' ? 'Master Certificate (T-VER):' : 'Master Cert:'}</span> <span className="font-mono font-semibold">{selectedCert.masterCertId}</span></div>}
                                     <div><span className="text-muted-foreground">Issued:</span> {new Date(selectedCert.createdAt).toLocaleDateString()}</div>
                                   </div>
                                 </div>

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Search, CheckCircle2, XCircle, Clock, AlertTriangle, Loader2, Info } from 'lucide-react';
+import { Search, CheckCircle2, XCircle, Clock, AlertTriangle, Loader2, Info, Shield, TreePine, Droplets, Sprout, Waves } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -104,6 +104,7 @@ const auditFields: Record<AuditType, { key: string; label: string; placeholder: 
 
 export default function AuditView() {
   const { toast } = useToast();
+  const [standardMode, setStandardMode] = useState<'international' | 'tgo'>('tgo');
   const [auditType, setAuditType] = useState<AuditType>('Biogas');
   const [projectId, setProjectId] = useState('');
   const [inputs, setInputs] = useState<AuditInput>({});
@@ -223,10 +224,86 @@ export default function AuditView() {
   return (
     <div className="space-y-6">
       {/* Page Title */}
-      <div>
-        <h2 className="text-2xl font-bold tracking-tight text-gray-900">Domain-Specific Audit</h2>
-        <p className="text-muted-foreground text-sm mt-1">Run specialized audits for different carbon credit domains</p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight text-gray-900">Domain-Specific Audit</h2>
+          <p className="text-muted-foreground text-sm mt-1">Run specialized audits for different carbon credit domains</p>
+        </div>
+        <div className="flex items-center gap-1 bg-muted rounded-lg p-0.5 text-[10px]">
+          <button onClick={() => setStandardMode('tgo')} className={`px-2.5 py-1 rounded-md transition-all ${standardMode === 'tgo' ? 'bg-amber-100 text-amber-800 font-bold shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>🇹🇭 TGO/T-VER</button>
+          <button onClick={() => setStandardMode('international')} className={`px-2.5 py-1 rounded-md transition-all ${standardMode === 'international' ? 'bg-blue-100 text-blue-800 font-bold shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>🌐 Int'l</button>
+        </div>
       </div>
+
+      {/* T-VER Audit Criteria Card */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <Shield className="h-4 w-4 text-amber-600" />
+            {standardMode === 'tgo' ? 'เกณฑ์การตรวจสอบ T-VER' : 'Audit Criteria Reference'}
+          </CardTitle>
+          <CardDescription>
+            {standardMode === 'tgo'
+              ? 'การตรวจสอบข้อมูลตามแนวทาง TGO 2566'
+              : 'Audit criteria per international standards'}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {standardMode === 'tgo' ? (
+            <div className="space-y-3">
+              <div className="flex items-start gap-2 text-sm">
+                <Badge variant="secondary" className="text-[10px] h-5 bg-amber-100 text-amber-800 hover:bg-amber-100 shrink-0">TGO 2566</Badge>
+                <span>เกณฑ์การตรวจสอบ T-VER: การตรวจสอบข้อมูลตามแนวทาง TGO 2566</span>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {[
+                  { icon: Sprout, code: 'T-VER-P-CC-001', label: 'Biochar', color: 'bg-orange-50 border-orange-200 text-orange-800' },
+                  { icon: Droplets, code: 'T-VER-P-AG-001', label: 'AWD Rice', color: 'bg-emerald-50 border-emerald-200 text-emerald-800' },
+                  { icon: TreePine, code: 'T-VER-P-FOR-001', label: 'Forest Carbon', color: 'bg-green-50 border-green-200 text-green-800' },
+                  { icon: Waves, code: 'T-VER-BC-001', label: 'Blue Carbon', color: 'bg-blue-50 border-blue-200 text-blue-800' },
+                ].map((domain) => (
+                  <div key={domain.code} className={`rounded-lg border p-2.5 space-y-1.5 ${domain.color}`}>
+                    <div className="flex items-center gap-1.5">
+                      <domain.icon className="h-3.5 w-3.5" />
+                      <span className="text-xs font-bold">{domain.code}</span>
+                    </div>
+                    <p className="text-[10px] font-medium">{domain.label}</p>
+                  </div>
+                ))}
+              </div>
+              <div className="flex gap-3 text-xs text-muted-foreground">
+                <span>หน่วย: <span className="font-semibold text-foreground">tCO₂e</span></span>
+                <span>พื้นที่: <span className="font-semibold text-foreground">ไร่</span></span>
+              </div>
+              <Separator />
+              <div className="text-xs text-muted-foreground">
+                อ้างอิง: คู่มือการตรวจสอบโครงการ T-VER โดย TGO พ.ศ. 2566
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="flex items-start gap-2 text-sm">
+                <Badge variant="secondary" className="text-[10px] h-5 bg-blue-100 text-blue-800 hover:bg-blue-100 shrink-0">IPCC</Badge>
+                <span>Audit criteria per IPCC 2006 Guidelines for National GHG Inventories</span>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Badge variant="secondary" className="text-[10px] h-6 bg-blue-100 text-blue-800 hover:bg-blue-100">Verra VCS</Badge>
+                <Badge variant="secondary" className="text-[10px] h-6 bg-emerald-100 text-emerald-800 hover:bg-emerald-100">Gold Standard</Badge>
+                <Badge variant="secondary" className="text-[10px] h-6 bg-purple-100 text-purple-800 hover:bg-purple-100">ISO 14064-2</Badge>
+              </div>
+              <div className="flex gap-3 text-xs text-muted-foreground">
+                <span>Units: <span className="font-semibold text-foreground">tCO₂e</span></span>
+                <span>Area: <span className="font-semibold text-foreground">ha</span></span>
+                <span>Sequestration: <span className="font-semibold text-foreground">tC/ha</span></span>
+              </div>
+              <Separator />
+              <div className="text-xs text-muted-foreground">
+                Reference: IPCC 2006 GL, Verra VCS v4.5, Gold Standard, ISO 14064-2:2019
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Error Banner */}
       {error && (
@@ -272,9 +349,9 @@ export default function AuditView() {
             </div>
             {fields.map((field) => (
               <div key={field.key} className="space-y-2">
-                <Label>{field.label}</Label>
+                <Label>{standardMode === 'tgo' ? field.label.replace('hectares', 'ไร่').replace('ha/yr', 'ไร่/yr') : field.label}</Label>
                 <Input
-                  placeholder={field.placeholder}
+                  placeholder={standardMode === 'tgo' ? field.placeholder.replace('hectares', 'ไร่') : field.placeholder}
                   value={inputs[field.key] || ''}
                   onChange={(e) => setInputs({ ...inputs, [field.key]: e.target.value })}
                 />
@@ -334,7 +411,9 @@ export default function AuditView() {
                                 ? 'bg-amber-50 text-amber-700 hover:bg-amber-50'
                                 : 'bg-red-50 text-red-700 hover:bg-red-50'
                             }`}>
-                              Score: {result.auditScore}%
+                              {standardMode === 'tgo'
+                                ? `เกรด ${result.auditScore >= 90 ? 'A' : result.auditScore >= 80 ? 'B' : result.auditScore >= 70 ? 'C' : 'ไม่ผ่าน'}: ${result.auditScore}%`
+                                : `Score: ${result.auditScore}%`}
                             </Badge>
                           </div>
                           <p className="text-xs text-muted-foreground mb-2">

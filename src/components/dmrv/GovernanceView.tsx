@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Scale, BookOpen, Plus, Settings, Loader2 } from 'lucide-react';
+import { Scale, BookOpen, Plus, Settings, Loader2, Award } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -60,6 +60,7 @@ export default function GovernanceView() {
   const [methodologies, setMethodologies] = useState<Methodology[]>([]);
   const [rules, setRules] = useState<GovernanceRule[]>([]);
   const [showForm, setShowForm] = useState(false);
+  const [standardMode, setStandardMode] = useState<'international' | 'tgo'>('tgo');
   const [submitting, setSubmitting] = useState(false);
 
   // Form fields
@@ -177,11 +178,72 @@ export default function GovernanceView() {
           <h2 className="text-2xl font-bold tracking-tight text-gray-900">Governance</h2>
           <p className="text-muted-foreground text-sm mt-1">Manage methodologies, rules, and system parameters</p>
         </div>
-        <Button onClick={() => setShowForm(!showForm)} className="gap-2 bg-emerald-600 hover:bg-emerald-700">
-          <Plus className="h-4 w-4" />
-          Add Methodology
-        </Button>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1 bg-muted rounded-lg p-0.5 text-[10px]">
+            <button onClick={() => setStandardMode('tgo')} className={`px-2.5 py-1 rounded-md transition-all ${standardMode === 'tgo' ? 'bg-amber-100 text-amber-800 font-bold shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>🇹🇭 TGO/T-VER</button>
+            <button onClick={() => setStandardMode('international')} className={`px-2.5 py-1 rounded-md transition-all ${standardMode === 'international' ? 'bg-blue-100 text-blue-800 font-bold shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>🌐 Int'l</button>
+          </div>
+          <Button onClick={() => setShowForm(!showForm)} className="gap-2 bg-emerald-600 hover:bg-emerald-700">
+            <Plus className="h-4 w-4" />
+            Add Methodology
+          </Button>
+        </div>
       </div>
+
+      {/* T-VER Methodology Reference Card */}
+      <Card className="border-amber-200 bg-gradient-to-r from-amber-50 to-orange-50">
+        <CardContent className="p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <BookOpen className="h-4 w-4 text-amber-700" />
+            <span className="text-sm font-semibold text-amber-900">
+              {standardMode === 'tgo' ? 'T-VER Methodology Reference' : 'International Methodology Reference'}
+            </span>
+          </div>
+          {standardMode === 'tgo' ? (
+            <div className="grid grid-cols-1 sm:grid-cols-5 gap-2 text-xs text-amber-800">
+              <div className="rounded-md bg-white/60 p-2">
+                <p className="font-semibold">T-VER-P-CC-001</p>
+                <p className="text-amber-700">Biochar Carbon Removal</p>
+              </div>
+              <div className="rounded-md bg-white/60 p-2">
+                <p className="font-semibold">T-VER-P-AG-001</p>
+                <p className="text-amber-700">AWD Rice Cultivation</p>
+              </div>
+              <div className="rounded-md bg-white/60 p-2">
+                <p className="font-semibold">T-VER-P-FOR-001</p>
+                <p className="text-amber-700">Forest Carbon Sequestration</p>
+              </div>
+              <div className="rounded-md bg-white/60 p-2">
+                <p className="font-semibold">T-VER-BC-001</p>
+                <p className="text-amber-700">Blue Carbon</p>
+              </div>
+              <div className="rounded-md bg-white/60 p-2">
+                <p className="font-semibold">TGO Guidelines 2566</p>
+                <p className="text-amber-700">เกณฑ์และวิธีการพิจารณา</p>
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 text-xs text-blue-800">
+              <div className="rounded-md bg-white/60 p-2">
+                <p className="font-semibold">IPCC 2006 GL</p>
+                <p className="text-blue-700">2006 IPCC Guidelines for National GHG Inventories</p>
+              </div>
+              <div className="rounded-md bg-white/60 p-2">
+                <p className="font-semibold">Verra VCS VM0047</p>
+                <p className="text-blue-700">Biochar methodology for VCS</p>
+              </div>
+              <div className="rounded-md bg-white/60 p-2">
+                <p className="font-semibold">Gold Standard</p>
+                <p className="text-blue-700">GS carbon credit methodologies</p>
+              </div>
+              <div className="rounded-md bg-white/60 p-2">
+                <p className="font-semibold">ISO 14064</p>
+                <p className="text-blue-700">GHG quantification & reporting</p>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Add Methodology Form */}
       {showForm && (
@@ -255,6 +317,38 @@ export default function GovernanceView() {
         </Card>
       )}
 
+      {/* T-VER Approved Methodologies (TGO mode) */}
+      {standardMode === 'tgo' && (
+        <Card className="border-amber-100">
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Award className="h-4 w-4 text-amber-600" />
+              T-VER Approved Methodologies
+            </CardTitle>
+            <CardDescription>Standard Thai carbon credit methodologies recognized by TGO</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {[
+                { code: 'T-VER-P-CC-001', name: 'Biochar Carbon Removal', sector: 'Climate Change', desc: 'การดักเก็บคาร์บอนผ่านถ่านชีวมวล ปริมาณคาร์บอนที่ดักเก็บต้องไม่ต่ำกว่า 0.7 ตัน CO₂e/ตัน' },
+                { code: 'T-VER-P-AG-001', name: 'AWD Rice Cultivation', sector: 'Agriculture', desc: 'การลดการปล่อยก๊าซมีเทนจากนาข้าวด้วยเทคนิค AWD ลดได้ 1.5-3.0 tCO₂e/ไร่/ปี' },
+                { code: 'T-VER-P-FOR-001', name: 'Forest Carbon Sequestration', sector: 'Forestry', desc: 'การดักเก็บคาร์บอนในป่าปลูก คำนวณตามชีวมวลเหนือดินและใต้ดิน พื้นที่ขั้นต่ำ 1 ไร่' },
+                { code: 'T-VER-BC-001', name: 'Blue Carbon', sector: 'Blue Carbon', desc: 'การดักเก็บคาร์บอนในระบบนิเวศชายฝั่ง ป่าชายเลน และหญ้าทะเล' },
+              ].map((m) => (
+                <div key={m.code} className="rounded-lg border border-amber-200 bg-amber-50/50 p-3">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Badge className="text-[10px] h-5 bg-amber-100 text-amber-800 hover:bg-amber-100">{m.code}</Badge>
+                    <Badge variant="secondary" className="text-[10px] h-5">{m.sector}</Badge>
+                  </div>
+                  <p className="text-sm font-semibold text-amber-900">{m.name}</p>
+                  <p className="text-xs text-amber-700 mt-1">{m.desc}</p>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Methodology List */}
         <div className="lg:col-span-2">
@@ -310,7 +404,7 @@ export default function GovernanceView() {
                       </div>
                     )}
                     <div className="flex items-center justify-between mt-2">
-                      <p className="text-[10px] text-muted-foreground">Approved by: {method.approvedBy}</p>
+                      <p className="text-[10px] text-muted-foreground">Approved by: {method.approvedBy} {standardMode === 'tgo' && method.trackType ? `• Area: ${(100 * 6.25).toFixed(1)} ไร่` : ''}</p>
                       <p className="text-[10px] text-muted-foreground">Updated: {new Date(method.updatedAt).toLocaleDateString()}</p>
                     </div>
                   </div>

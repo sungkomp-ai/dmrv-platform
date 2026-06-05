@@ -1,0 +1,11 @@
+{
+  "name": "lidar-simulator",
+  "version": "1.0.0",
+  "description": "LIDAR Carbon Credit Verification Simulator for dMRV Platform — 3 Thai forest areas, IPCC & TGO dual standard",
+  "scripts": {
+    "dev": "bun --hot index.ts"
+  },
+  "dependencies": {
+    "socket.io": "^4.7.0"
+  }
+}

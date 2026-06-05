@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useSyncExternalStore } from 'react';
 import { FileText, Download, FileBarChart, Loader2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -52,8 +52,15 @@ interface ReportData {
   };
 }
 
+const emptySub = () => () => {};
+function useMounted() {
+  return useSyncExternalStore(emptySub, () => true, () => false);
+}
+
 export default function ReportingView() {
+  const mounted = useMounted();
   const { toast } = useToast();
+  const [standardMode, setStandardMode] = useState<'international' | 'tgo'>('tgo');
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectsLoading, setProjectsLoading] = useState(true);
   const [reportType, setReportType] = useState('sustainability');
@@ -120,11 +127,27 @@ export default function ReportingView() {
   return (
     <div className="space-y-6">
       {/* Page Title */}
-      <div>
-        <h2 className="text-2xl font-bold tracking-tight text-gray-900">Reporting</h2>
-        <p className="text-muted-foreground text-sm mt-1">
-          Generate sustainability reports and verification documents
-        </p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight text-gray-900">Reporting</h2>
+          <p className="text-muted-foreground text-sm mt-1">
+            Generate sustainability reports and verification documents
+          </p>
+        </div>
+        <div className="flex items-center gap-1 bg-muted rounded-lg p-0.5 text-[10px]">
+          <button
+            onClick={() => setStandardMode('tgo')}
+            className={`px-2.5 py-1 rounded-md transition-all ${standardMode === 'tgo' ? 'bg-amber-100 text-amber-800 font-bold shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+          >
+            🇹🇭 TGO/T-VER
+          </button>
+          <button
+            onClick={() => setStandardMode('international')}
+            className={`px-2.5 py-1 rounded-md transition-all ${standardMode === 'international' ? 'bg-blue-100 text-blue-800 font-bold shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+          >
+            🌐 Int'l
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
@@ -179,7 +202,7 @@ export default function ReportingView() {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Area:</span>
-                  <span className="font-medium">{selectedProject.areaHa} ha</span>
+                  <span className="font-medium">{standardMode === 'tgo' ? `${(selectedProject.areaHa * 6.25).toLocaleString(undefined, {maximumFractionDigits: 1})} ไร่` : `${selectedProject.areaHa} ha`}</span>
                 </div>
               </div>
             )}
@@ -298,8 +321,8 @@ export default function ReportingView() {
                   <h4 className="font-semibold text-sm mb-3">Project Details</h4>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                     <div className="rounded-lg border p-3 text-center">
-                      <p className="text-lg font-bold">{report.projectDetails.area}</p>
-                      <p className="text-xs text-muted-foreground">Area (ha)</p>
+                      <p className="text-lg font-bold">{standardMode === 'tgo' ? (report.projectDetails.area * 6.25).toLocaleString(undefined, {maximumFractionDigits: 1}) : report.projectDetails.area}</p>
+                      <p className="text-xs text-muted-foreground">{standardMode === 'tgo' ? 'พื้นที่ (ไร่)' : 'Area (ha)'}</p>
                     </div>
                     <div className="rounded-lg border p-3 text-center">
                       <p className="text-lg font-bold">{report.projectDetails.plotCount}</p>

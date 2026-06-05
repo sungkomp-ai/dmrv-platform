@@ -36,6 +36,7 @@ interface ProjectMapProps {
   projects: MapProject[];
   loading?: boolean;
   onProjectClick?: (projectId: string) => void;
+  standardMode?: 'international' | 'tgo';
 }
 
 const trackTypeColors: Record<string, string> = {
@@ -62,7 +63,7 @@ const statusColors: Record<string, string> = {
   ACTIVE: '#10b981',
 };
 
-function ProjectMapInner({ projects, onProjectClick }: ProjectMapProps) {
+function ProjectMapInner({ projects, onProjectClick, standardMode = 'tgo' }: ProjectMapProps) {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<LeafletMap | null>(null);
   const [selectedProject, setSelectedProject] = useState<MapProject | null>(null);
@@ -140,7 +141,7 @@ function ProjectMapInner({ projects, onProjectClick }: ProjectMapProps) {
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 12px;">
               <div style="background: #f9fafb; padding: 6px; border-radius: 6px;">
                 <div style="color: #6b7280; font-size: 10px;">Area</div>
-                <div style="font-weight: 600; color: #374151;">${project.areaHa.toLocaleString()} ha</div>
+                <div style="font-weight: 600; color: #374151;">${standardMode === 'tgo' ? `${(project.areaHa * 6.25).toLocaleString(undefined, {maximumFractionDigits: 1})} ไร่` : `${project.areaHa.toLocaleString()} ha`}</div>
               </div>
               <div style="background: #f9fafb; padding: 6px; border-radius: 6px;">
                 <div style="color: #6b7280; font-size: 10px;">Plots</div>
@@ -217,7 +218,7 @@ function ProjectMapInner({ projects, onProjectClick }: ProjectMapProps) {
         mapInstanceRef.current = null;
       }
     };
-  }, [projects, onProjectClick]);
+  }, [projects, onProjectClick, standardMode]);
 
   return (
     <div className="relative w-full h-full min-h-[400px] rounded-lg overflow-hidden">

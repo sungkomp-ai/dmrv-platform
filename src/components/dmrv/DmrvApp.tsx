@@ -36,6 +36,9 @@ import {
   BookOpen,
   Terminal,
   Layers,
+  Flame,
+  Sprout,
+  Radar,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from '@/components/ui/sheet';
@@ -70,6 +73,9 @@ const ForwardContractsView = React.lazy(() => import('./ForwardContractsView'));
 const DevApiPortalView = React.lazy(() => import('./DevApiPortalView'));
 const MethodologyStudioView = React.lazy(() => import('./MethodologyStudioView'));
 const CrossChainBridgeView = React.lazy(() => import('./CrossChainBridgeView'));
+const PyrolysisSimulatorView = React.lazy(() => import('./PyrolysisSimulatorView'));
+const AWDSimulatorView = React.lazy(() => import('./AWDSimulatorView'));
+const LidarSimulatorView = React.lazy(() => import('./LidarSimulatorView'));
 import { ErrorBoundary } from './ErrorBoundary';
 
 type ModuleKey =
@@ -98,7 +104,10 @@ type ModuleKey =
   | 'forward'
   | 'devportal'
   | 'methodology'
-  | 'bridge';
+  | 'bridge'
+  | 'pyrolysis'
+  | 'awd'
+  | 'lidar';
 
 interface MenuItem {
   key: ModuleKey;
@@ -165,6 +174,11 @@ const menuItems: MenuItem[] = [
   // Enterprise: AI & Intelligence
   { key: 'methodology', label: 'AI Methodology Studio', icon: BookOpen, section: 'AI & INTELLIGENCE' },
 
+  // Simulation
+  { key: 'pyrolysis', label: 'Pyrolysis Simulator', icon: Flame, section: 'SIMULATION' },
+  { key: 'awd', label: 'AWD Rice Simulator', icon: Sprout },
+  { key: 'lidar', label: 'LIDAR Verification', icon: Radar },
+
   // Enterprise: Integration & Bridge
   { key: 'bridge', label: 'Cross-Chain Bridge', icon: Layers, section: 'INTEGRATION' },
   { key: 'devportal', label: 'Developer API', icon: Terminal },
@@ -196,6 +210,9 @@ const moduleComponents: Record<ModuleKey, React.ComponentType> = {
   forward: ForwardContractsView,
   devportal: DevApiPortalView,
   methodology: MethodologyStudioView,
+  pyrolysis: PyrolysisSimulatorView,
+  awd: AWDSimulatorView,
+  lidar: LidarSimulatorView,
   bridge: CrossChainBridgeView,
 };
 

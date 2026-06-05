@@ -348,8 +348,8 @@ export default function DevApiPortalView() {
     });
   };
 
-  // Simulated API calls 24h
-  const apiCalls24h = data ? Math.floor(data.summary.activeKeys * 847 + Math.random() * 200) : 0;
+  // Simulated API calls 24h (deterministic based on activeKeys to avoid hydration mismatch)
+  const apiCalls24h = data ? Math.floor(data.summary.activeKeys * 847 + (data.summary.activeKeys * 37 % 200)) : 0;
 
   // ─── Loading State ────────────────────────────────────────────────────
 

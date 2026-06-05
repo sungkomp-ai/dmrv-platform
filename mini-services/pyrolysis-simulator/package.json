@@ -1,0 +1,11 @@
+{
+  "name": "pyrolysis-simulator",
+  "version": "1.0.0",
+  "description": "Real-time Pyrolysis simulation with IoT data streaming",
+  "scripts": {
+    "dev": "bun --hot index.ts"
+  },
+  "dependencies": {
+    "socket.io": "^4.7.0"
+  }
+}

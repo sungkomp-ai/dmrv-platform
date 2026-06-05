@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useSyncExternalStore } from 'react';
 import {
   Leaf,
   FolderKanban,
@@ -265,7 +265,10 @@ const trackTypeColors2: Record<string, string> = {
   solar: 'bg-red-50 text-red-700',
 };
 
+const emptySub = () => () => {};
+
 export default function DashboardView() {
+  const [standardMode, setStandardMode] = useState<'international' | 'tgo'>('tgo');
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
   const [mapProjects, setMapProjects] = useState<MapProject[]>([]);
@@ -339,7 +342,7 @@ export default function DashboardView() {
         {
           title: 'Active Plots',
           value: stats.totalPlots.toLocaleString(),
-          change: `${stats.totalAreaHa.toLocaleString()} ha total`,
+          change: standardMode === 'tgo' ? `${(stats.totalAreaHa * 6.25).toLocaleString(undefined, {maximumFractionDigits: 1})} ไร่ total` : `${stats.totalAreaHa.toLocaleString()} ha total`,
           trend: 'up',
           icon: MapPin,
           iconBg: 'bg-teal-50',
@@ -381,10 +384,26 @@ export default function DashboardView() {
             Monitor your dMRV carbon credit platform at a glance
           </p>
         </div>
-        <Button variant="outline" size="sm" onClick={fetchData} className="gap-2">
-          <RefreshCw className="h-3.5 w-3.5" />
-          Refresh
-        </Button>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1 bg-muted rounded-lg p-0.5 text-[10px]">
+            <button
+              onClick={() => setStandardMode('tgo')}
+              className={`px-2.5 py-1 rounded-md transition-all ${standardMode === 'tgo' ? 'bg-amber-100 text-amber-800 font-bold shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+            >
+              🇹🇭 TGO
+            </button>
+            <button
+              onClick={() => setStandardMode('international')}
+              className={`px-2.5 py-1 rounded-md transition-all ${standardMode === 'international' ? 'bg-blue-100 text-blue-800 font-bold shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+            >
+              🌐 Int'l
+            </button>
+          </div>
+          <Button variant="outline" size="sm" onClick={fetchData} className="gap-2">
+            <RefreshCw className="h-3.5 w-3.5" />
+            Refresh
+          </Button>
+        </div>
       </div>
 
       {/* Error State */}
@@ -442,7 +461,7 @@ export default function DashboardView() {
             {loading ? (
               <Skeleton className="w-full h-full" />
             ) : (
-              <ProjectMap projects={mapProjects} loading={loading} />
+              <ProjectMap projects={mapProjects} loading={loading} standardMode={standardMode} />
             )}
           </div>
         </CardContent>
@@ -629,7 +648,7 @@ export default function DashboardView() {
                         </div>
                         <div>
                           <p className="text-sm font-medium capitalize">{type}</p>
-                          <p className="text-[10px] text-muted-foreground">{Math.round(data.area).toLocaleString()} ha</p>
+                          <p className="text-[10px] text-muted-foreground">{standardMode === 'tgo' ? `${(Math.round(data.area) * 6.25).toLocaleString(undefined, {maximumFractionDigits: 1})} ไร่` : `${Math.round(data.area).toLocaleString()} ha`}</p>
                         </div>
                       </div>
                       <div className="text-right">

@@ -1,0 +1,11 @@
+{
+  "name": "awd-simulator",
+  "version": "1.0.0",
+  "description": "Real-time AWD Rice Cultivation simulation with IoT data streaming (T-VER P-AG-001)",
+  "scripts": {
+    "dev": "bun --hot index.js"
+  },
+  "dependencies": {
+    "socket.io": "^4.7.0"
+  }
+}

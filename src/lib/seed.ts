@@ -88,56 +88,300 @@ const PROJECTS = [
   },
 ];
 
-// ─── Helper: Generate polygon coordinates around a center point ─────────
-function makePolygon(centerLat: number, centerLng: number, offsetDeg: number): string {
-  const offsets = [
-    [-offsetDeg, -offsetDeg],
-    [-offsetDeg, offsetDeg],
-    [offsetDeg, offsetDeg],
-    [offsetDeg, -offsetDeg],
-  ];
-  return JSON.stringify(offsets.map(([dlat, dlng]) => [centerLat + dlat, centerLng + dlng]));
-}
+// ─── Realistic polygon shapes for carbon credit activities ─────────────
+// Each plot has hand-crafted coordinates at real Thailand locations with
+// diverse geometric shapes appropriate to the activity type:
+//   - Mangrove: elongated coastal strips, L-shapes along estuaries
+//   - Biochar: compact industrial footprints, irregular shapes
+//   - AWD Rice: rectangular paddy fields, L-shapes, trapezoids
+//   - Biogas: compact facility footprints, triangular shapes
+//   - Solar PV: large rectangular arrays, hexagonal arrangements
+//   - Forest: organic irregular boundaries following terrain
 
-// ─── Plot definitions per project ───────────────────────────────────────
-const PLOT_DEFINITIONS: Record<number, Array<{ plotId: string; offsetDeg: number; areaHa: number; status: string; ownerInfo: string }>> = {
+const PLOT_DEFINITIONS: Record<number, Array<{ plotId: string; coordinates: string; areaHa: number; status: string; ownerInfo: string }>> = {
+  // ── Project 0: สมุทรสาคร Blue Carbon ──────────────────────────────
+  // Mangrove restoration along Tha Chin estuary & Gulf of Thailand coast
+  // Shapes: elongated coastal strips, L-shapes following river meanders
   0: [
-    { plotId: 'SMS-BC-001', offsetDeg: 0.010, areaHa: 120, status: 'ACTIVE', ownerInfo: 'สมาคมประมงบ้านบางน้ำจืด' },
-    { plotId: 'SMS-BC-002', offsetDeg: 0.015, areaHa: 140, status: 'VERIFIED', ownerInfo: 'องค์การบริหารส่วนตำบลบางโทรัด' },
-    { plotId: 'SMS-BC-003', offsetDeg: 0.020, areaHa: 100, status: 'ACTIVE', ownerInfo: 'กลุ่มอนุรักษ์ป่าชายเลนสมุทรสาคร' },
-    { plotId: 'SMS-BC-004', offsetDeg: 0.008, areaHa: 80, status: 'REGISTERED', ownerInfo: 'เทศบาลตำบลท่าจีน' },
-    { plotId: 'SMS-BC-005', offsetDeg: 0.012, areaHa: 60, status: 'ACTIVE', ownerInfo: 'ชุมชนประมงบ้านโคกขาม' },
+    {
+      plotId: 'SMS-BC-001',
+      // Elongated coastal strip along mangrove at Ban Bang Nam Chieo
+      coordinates: JSON.stringify([
+        [13.532, 100.272], [13.534, 100.280], [13.537, 100.288],
+        [13.541, 100.293], [13.545, 100.295], [13.548, 100.292],
+        [13.546, 100.284], [13.543, 100.276], [13.539, 100.270],
+        [13.535, 100.268],
+      ]),
+      areaHa: 120, status: 'ACTIVE', ownerInfo: 'สมาคมประมงบ้านบางน้ำจืด',
+    },
+    {
+      plotId: 'SMS-BC-002',
+      // L-shape mangrove area at Tha Chin river bend near Ban Bang Thot
+      coordinates: JSON.stringify([
+        [13.548, 100.240], [13.552, 100.244], [13.555, 100.250],
+        [13.558, 100.256], [13.560, 100.262], [13.557, 100.264],
+        [13.553, 100.260], [13.550, 100.254], [13.547, 100.250],
+        [13.545, 100.244],
+      ]),
+      areaHa: 140, status: 'VERIFIED', ownerInfo: 'องค์การบริหารส่วนตำบลบางโทรัด',
+    },
+    {
+      plotId: 'SMS-BC-003',
+      // Curved strip along coastline at Khok Kham
+      coordinates: JSON.stringify([
+        [13.518, 100.290], [13.521, 100.296], [13.525, 100.302],
+        [13.530, 100.306], [13.535, 100.308], [13.538, 100.305],
+        [13.536, 100.298], [13.532, 100.292], [13.527, 100.288],
+        [13.522, 100.286],
+      ]),
+      areaHa: 100, status: 'ACTIVE', ownerInfo: 'กลุ่มอนุรักษ์ป่าชายเลนสมุทรสาคร',
+    },
+    {
+      plotId: 'SMS-BC-004',
+      // Small compact mangrove patch near Ban Tha Chin
+      coordinates: JSON.stringify([
+        [13.562, 100.275], [13.565, 100.278], [13.567, 100.283],
+        [13.565, 100.287], [13.561, 100.285], [13.559, 100.280],
+      ]),
+      areaHa: 80, status: 'REGISTERED', ownerInfo: 'เทศบาลตำบลท่าจีน',
+    },
+    {
+      plotId: 'SMS-BC-005',
+      // Triangular mangrove area at river mouth near Ban Kok Kham
+      coordinates: JSON.stringify([
+        [13.525, 100.265], [13.530, 100.272], [13.533, 100.278],
+        [13.530, 100.280], [13.526, 100.275],
+      ]),
+      areaHa: 60, status: 'ACTIVE', ownerInfo: 'ชุมชนประมงบ้านโคกขาม',
+    },
   ],
+
+  // ── Project 1: ลพบุรี Biochar ──────────────────────────────────────
+  // Biochar production facilities in agricultural zones of Lopburi
+  // Shapes: compact irregular, pentagon, diamond
   1: [
-    { plotId: 'LPB-BC-001', offsetDeg: 0.010, areaHa: 35, status: 'ACTIVE', ownerInfo: 'สหกรณ์การเกษตรลพบุรี' },
-    { plotId: 'LPB-BC-002', offsetDeg: 0.015, areaHa: 40, status: 'VERIFIED', ownerInfo: 'บริษัท ไบโอชาร์ไทย จำกัด' },
-    { plotId: 'LPB-BC-003', offsetDeg: 0.008, areaHa: 30, status: 'ACTIVE', ownerInfo: 'กลุ่มเกษตรกรอินทรีย์เมืองลพบุรี' },
-    { plotId: 'LPB-BC-004', offsetDeg: 0.012, areaHa: 15, status: 'REGISTERED', ownerInfo: 'องค์การบริหารส่วนตำบลเขาสมิง' },
+    {
+      plotId: 'LPB-BC-001',
+      // Compact pentagon - biochar production facility near Phatthana Nikhom
+      coordinates: JSON.stringify([
+        [14.820, 100.650], [14.823, 100.654], [14.822, 100.660],
+        [14.818, 100.662], [14.815, 100.658], [14.816, 100.653],
+      ]),
+      areaHa: 35, status: 'ACTIVE', ownerInfo: 'สหกรณ์การเกษตรลพบุรี',
+    },
+    {
+      plotId: 'LPB-BC-002',
+      // Diamond shape - rice husk processing at Ban Mi district
+      coordinates: JSON.stringify([
+        [14.785, 100.620], [14.790, 100.628], [14.787, 100.636],
+        [14.781, 100.632], [14.779, 100.624],
+      ]),
+      areaHa: 40, status: 'VERIFIED', ownerInfo: 'บริษัท ไบโอชาร์ไทย จำกัด',
+    },
+    {
+      plotId: 'LPB-BC-003',
+      // Irregular shape - cassava waste biochar near Khok Samrong
+      coordinates: JSON.stringify([
+        [14.850, 100.690], [14.854, 100.695], [14.856, 100.702],
+        [14.853, 100.706], [14.848, 100.704], [14.846, 100.698],
+        [14.847, 100.692],
+      ]),
+      areaHa: 30, status: 'ACTIVE', ownerInfo: 'กลุ่มเกษตรกรอินทรีย์เมืองลพบุรี',
+    },
+    {
+      plotId: 'LPB-BC-004',
+      // Small rectangular facility near Sa Bot
+      coordinates: JSON.stringify([
+        [14.760, 100.670], [14.763, 100.670], [14.763, 100.677],
+        [14.760, 100.677],
+      ]),
+      areaHa: 15, status: 'REGISTERED', ownerInfo: 'องค์การบริหารส่วนตำบลเขาสมิง',
+    },
   ],
+
+  // ── Project 2: นครราชสีมา AWD Rice ───────────────────────────────
+  // Rice paddy fields on the Korat Plateau - large agricultural areas
+  // Shapes: rectangular fields, L-shapes, trapezoids, chevrons
   2: [
-    { plotId: 'NMA-AWD-001', offsetDeg: 0.020, areaHa: 250, status: 'ACTIVE', ownerInfo: 'สหกรณ์การเกษตรนครราชสีมา' },
-    { plotId: 'NMA-AWD-002', offsetDeg: 0.015, areaHa: 200, status: 'ACTIVE', ownerInfo: 'กลุ่มเกษตรกรอัจฉริยะโคราช' },
-    { plotId: 'NMA-AWD-003', offsetDeg: 0.010, areaHa: 180, status: 'VERIFIED', ownerInfo: 'ศูนย์เทคโนโลยีการเกษตรภาคตะวันออกเฉียงเหนือ' },
-    { plotId: 'NMA-AWD-004', offsetDeg: 0.018, areaHa: 120, status: 'REGISTERED', ownerInfo: 'เกษตรกรรายย่อยอำเภอเมืองนครราชสีมา' },
-    { plotId: 'NMA-AWD-005', offsetDeg: 0.012, areaHa: 50, status: 'ACTIVE', ownerInfo: 'กองทุนหมู่บ้านทับบุตรี' },
+    {
+      plotId: 'NMA-AWD-001',
+      // Large rectangular paddy field near Muang Nakhon Ratchasima
+      coordinates: JSON.stringify([
+        [14.960, 102.060], [14.960, 102.090], [14.975, 102.090],
+        [14.975, 102.060],
+      ]),
+      areaHa: 250, status: 'ACTIVE', ownerInfo: 'สหกรณ์การเกษตรนครราชสีมา',
+    },
+    {
+      plotId: 'NMA-AWD-002',
+      // L-shape rice field near Chok Chai district
+      coordinates: JSON.stringify([
+        [14.920, 102.110], [14.920, 102.140], [14.930, 102.140],
+        [14.930, 102.125], [14.938, 102.125], [14.938, 102.110],
+      ]),
+      areaHa: 200, status: 'ACTIVE', ownerInfo: 'กลุ่มเกษตรกรอัจฉริยะโคราช',
+    },
+    {
+      plotId: 'NMA-AWD-003',
+      // Trapezoid paddy near Sung Noen
+      coordinates: JSON.stringify([
+        [14.890, 102.040], [14.895, 102.045], [14.900, 102.042],
+        [14.905, 102.048], [14.905, 102.065], [14.890, 102.065],
+      ]),
+      areaHa: 180, status: 'VERIFIED', ownerInfo: 'ศูนย์เทคโนโลยีการเกษตรภาคตะวันออกเฉียงเหนือ',
+    },
+    {
+      plotId: 'NMA-AWD-004',
+      // Chevron-shaped AWD trial plot near Non Thai
+      coordinates: JSON.stringify([
+        [15.000, 102.080], [15.008, 102.090], [15.012, 102.100],
+        [15.005, 102.098], [14.998, 102.088],
+      ]),
+      areaHa: 120, status: 'REGISTERED', ownerInfo: 'เกษตรกรรายย่อยอำเภอเมืองนครราชสีมา',
+    },
+    {
+      plotId: 'NMA-AWD-005',
+      // Small rectangular demonstration plot near Kham Thale So
+      coordinates: JSON.stringify([
+        [14.940, 101.990], [14.945, 101.990], [14.945, 102.005],
+        [14.940, 102.005],
+      ]),
+      areaHa: 50, status: 'ACTIVE', ownerInfo: 'กองทุนหมู่บ้านทับบุตรี',
+    },
   ],
+
+  // ── Project 3: ชลบุรี Biogas ──────────────────────────────────────
+  // Industrial biogas capture facilities near cassava starch factories
+  // Shapes: compact rectangular, triangular, irregular
   3: [
-    { plotId: 'CBR-BG-001', offsetDeg: 0.005, areaHa: 20, status: 'ACTIVE', ownerInfo: 'บริษัท มันสำปะหลังไทย จำกัด (มหาชน)' },
-    { plotId: 'CBR-BG-002', offsetDeg: 0.008, areaHa: 15, status: 'REGISTERED', ownerInfo: 'บริษัท ไบโอก๊าซชลบุรี จำกัด' },
-    { plotId: 'CBR-BG-003', offsetDeg: 0.006, areaHa: 15, status: 'ACTIVE', ownerInfo: 'องค์การบริหารส่วนตำบลหนองปลาหมอ' },
+    {
+      plotId: 'CBR-BG-001',
+      // Rectangular biogas facility near Nong Khang Khao industrial zone
+      coordinates: JSON.stringify([
+        [13.355, 100.970], [13.360, 100.970], [13.360, 100.980],
+        [13.355, 100.980],
+      ]),
+      areaHa: 20, status: 'ACTIVE', ownerInfo: 'บริษัท มันสำปะหลังไทย จำกัด (มหาชน)',
+    },
+    {
+      plotId: 'CBR-BG-002',
+      // Triangular covered lagoon digester near Ban Bueng
+      coordinates: JSON.stringify([
+        [13.330, 101.010], [13.337, 101.018], [13.334, 101.025],
+        [13.327, 101.020],
+      ]),
+      areaHa: 15, status: 'REGISTERED', ownerInfo: 'บริษัท ไบโอก๊าซชลบุรี จำกัด',
+    },
+    {
+      plotId: 'CBR-BG-003',
+      // Irregular U-shaped wastewater treatment area near Phan Thong
+      coordinates: JSON.stringify([
+        [13.380, 100.945], [13.384, 100.948], [13.386, 100.955],
+        [13.383, 100.960], [13.379, 100.958], [13.377, 100.952],
+        [13.378, 100.947],
+      ]),
+      areaHa: 15, status: 'ACTIVE', ownerInfo: 'องค์การบริหารส่วนตำบลหนองปลาหมอ',
+    },
   ],
+
+  // ── Project 4: ขอนแก่น Solar PV ──────────────────────────────────
+  // Utility-scale solar farms in the Isan region
+  // Shapes: large rectangles, hexagonal arrangements, step shapes
   4: [
-    { plotId: 'KKC-SP-001', offsetDeg: 0.012, areaHa: 80, status: 'ACTIVE', ownerInfo: 'บริษัท โซลาร์เอนเนอร์ยี่ขอนแก่น จำกัด' },
-    { plotId: 'KKC-SP-002', offsetDeg: 0.010, areaHa: 60, status: 'VERIFIED', ownerInfo: 'การไฟฟ้าส่วนภูมิภาค (กฟภ.)' },
-    { plotId: 'KKC-SP-003', offsetDeg: 0.015, areaHa: 40, status: 'ACTIVE', ownerInfo: 'บริษัท พลังงานสะอาดอีสาน จำกัด' },
-    { plotId: 'KKC-SP-004', offsetDeg: 0.008, areaHa: 20, status: 'REGISTERED', ownerInfo: 'มหาวิทยาลัยขอนแก่น (ศูนย์พลังงานทดแทน)' },
+    {
+      plotId: 'KKC-SP-001',
+      // Large rectangular solar array near Ban Phai
+      coordinates: JSON.stringify([
+        [16.420, 102.810], [16.420, 102.840], [16.440, 102.840],
+        [16.440, 102.810],
+      ]),
+      areaHa: 80, status: 'ACTIVE', ownerInfo: 'บริษัท โซลาร์เอนเนอร์ยี่ขอนแก่น จำกัด',
+    },
+    {
+      plotId: 'KKC-SP-002',
+      // Hexagonal solar farm near Khon Kaen University
+      coordinates: JSON.stringify([
+        [16.470, 102.820], [16.474, 102.825], [16.474, 102.835],
+        [16.470, 102.840], [16.466, 102.835], [16.466, 102.825],
+      ]),
+      areaHa: 60, status: 'VERIFIED', ownerInfo: 'การไฟฟ้าส่วนภูมิภาค (กฟภ.)',
+    },
+    {
+      plotId: 'KKC-SP-003',
+      // Step-shaped solar installation near Chum Phae
+      coordinates: JSON.stringify([
+        [16.500, 102.870], [16.506, 102.870], [16.506, 102.878],
+        [16.512, 102.878], [16.512, 102.886], [16.500, 102.886],
+      ]),
+      areaHa: 40, status: 'ACTIVE', ownerInfo: 'บริษัท พลังงานสะอาดอีสาน จำกัด',
+    },
+    {
+      plotId: 'KKC-SP-004',
+      // Small rectangular rooftop/community solar near Muang Khon Kaen
+      coordinates: JSON.stringify([
+        [16.440, 102.860], [16.445, 102.860], [16.445, 102.868],
+        [16.440, 102.868],
+      ]),
+      areaHa: 20, status: 'REGISTERED', ownerInfo: 'มหาวิทยาลัยขอนแก่น (ศูนย์พลังงานทดแทน)',
+    },
   ],
+
+  // ── Project 5: เชียงใหม่ Forest Conservation ──────────────────────
+  // Forest conservation in mountainous terrain near Doi Inthanon
+  // Shapes: large organic/irregular boundaries following mountain ridges
   5: [
-    { plotId: 'CMM-FC-001', offsetDeg: 0.020, areaHa: 350, status: 'ACTIVE', ownerInfo: 'อุทยานแห่งชาติดอยอินทนนท์' },
-    { plotId: 'CMM-FC-002', offsetDeg: 0.018, areaHa: 280, status: 'VERIFIED', ownerInfo: 'กลุ่มอนุรักษ์ป่าชุมชนดอยสุเทพ' },
-    { plotId: 'CMM-FC-003', offsetDeg: 0.015, areaHa: 250, status: 'ACTIVE', ownerInfo: 'มูลนิธิโครงการหลวง' },
-    { plotId: 'CMM-FC-004', offsetDeg: 0.022, areaHa: 200, status: 'ACTIVE', ownerInfo: 'องค์การบริหารส่วนตำบลแม่แจ่ม' },
-    { plotId: 'CMM-FC-005', offsetDeg: 0.010, areaHa: 120, status: 'REGISTERED', ownerInfo: 'กลุ่มวิสาหกิจชุมชนป่าไม้เชียงใหม่' },
+    {
+      plotId: 'CMM-FC-001',
+      // Large irregular forest boundary near Doi Inthanon summit area
+      coordinates: JSON.stringify([
+        [18.580, 98.870], [18.590, 98.880], [18.600, 98.890],
+        [18.610, 98.895], [18.620, 98.892], [18.625, 98.885],
+        [18.620, 98.875], [18.610, 98.865], [18.600, 98.858],
+        [18.590, 98.860],
+      ]),
+      areaHa: 350, status: 'ACTIVE', ownerInfo: 'อุทยานแห่งชาติดอยอินทนนท์',
+    },
+    {
+      plotId: 'CMM-FC-002',
+      // Crescent-shaped forest along ridge near Doi Suthep
+      coordinates: JSON.stringify([
+        [18.810, 98.920], [18.816, 98.928], [18.822, 98.938],
+        [18.828, 98.948], [18.824, 98.952], [18.818, 98.945],
+        [18.812, 98.935], [18.808, 98.925],
+      ]),
+      areaHa: 280, status: 'VERIFIED', ownerInfo: 'กลุ่มอนุรักษ์ป่าชุมชนดอยสุเทพ',
+    },
+    {
+      plotId: 'CMM-FC-003',
+      // Polygonal forest plot near Mae Chaem (Royal Project)
+      coordinates: JSON.stringify([
+        [18.680, 98.700], [18.688, 98.710], [18.695, 98.722],
+        [18.692, 98.730], [18.685, 98.735], [18.677, 98.728],
+        [18.672, 98.718], [18.670, 98.708],
+      ]),
+      areaHa: 250, status: 'ACTIVE', ownerInfo: 'มูลนิธิโครงการหลวง',
+    },
+    {
+      plotId: 'CMM-FC-004',
+      // Elongated forest corridor along Mae Chaem valley
+      coordinates: JSON.stringify([
+        [18.730, 98.650], [18.738, 98.655], [18.745, 98.662],
+        [18.752, 98.670], [18.758, 98.678], [18.755, 98.682],
+        [18.748, 98.676], [18.740, 98.668], [18.734, 98.660],
+        [18.728, 98.653],
+      ]),
+      areaHa: 200, status: 'ACTIVE', ownerInfo: 'องค์การบริหารส่วนตำบลแม่แจ่ม',
+    },
+    {
+      plotId: 'CMM-FC-005',
+      // Compact irregular forest patch near Chom Thong
+      coordinates: JSON.stringify([
+        [18.420, 98.680], [18.426, 98.685], [18.430, 98.693],
+        [18.428, 98.700], [18.422, 98.698], [18.418, 98.690],
+        [18.416, 98.683],
+      ]),
+      areaHa: 120, status: 'REGISTERED', ownerInfo: 'กลุ่มวิสาหกิจชุมชนป่าไม้เชียงใหม่',
+    },
   ],
 };
 
@@ -225,7 +469,7 @@ async function seedAll() {
         data: {
           plotId: pd.plotId,
           projectId: project.id,
-          coordinates: makePolygon(project.centerLat, project.centerLng, pd.offsetDeg),
+          coordinates: pd.coordinates,
           trackType,
           areaHa: pd.areaHa,
           status: pd.status,
@@ -236,9 +480,11 @@ async function seedAll() {
   }
 
   // ── Create IoT Sensors ──────────────────────────────────────────────
+  // Place sensors within plot boundaries for realistic positioning
   for (let i = 0; i < createdProjects.length; i++) {
     const project = createdProjects[i];
     const sensorDefs = SENSOR_TYPES_PER_PROJECT[i];
+    const plotDefs = PLOT_DEFINITIONS[i];
     const sensorCount = 3 + Math.floor(Math.random() * 3);
     let sensorIdx = 0;
     for (let s = 0; s < sensorCount; s++) {
@@ -247,13 +493,18 @@ async function seedAll() {
       const sensorId = `${project.province.split(' ')[0]}-${sensorDef.sensorType.toUpperCase()}-${String(s + 1).padStart(3, '0')}`;
       const isOnline = Math.random() > 0.15;
       const lastSeen = new Date(Date.now() - randInt(0, 3600000));
+      // Place sensor within a random plot's boundary
+      const plotDef = plotDefs[s % plotDefs.length];
+      const plotCoords: number[][] = JSON.parse(plotDef.coordinates);
+      const avgLat = plotCoords.reduce((sum, c) => sum + c[0], 0) / plotCoords.length;
+      const avgLng = plotCoords.reduce((sum, c) => sum + c[1], 0) / plotCoords.length;
       await db.ioTSensor.create({
         data: {
           projectId: project.id,
           sensorId,
           sensorType: sensorDef.sensorType,
-          lat: project.centerLat + rand(-0.01, 0.01),
-          lng: project.centerLng + rand(-0.01, 0.01),
+          lat: avgLat + rand(-0.002, 0.002),
+          lng: avgLng + rand(-0.002, 0.002),
           status: isOnline ? 'online' : 'offline',
           lastReading: rand(sensorDef.readingRange[0], sensorDef.readingRange[1]),
           unit: sensorDef.unit,

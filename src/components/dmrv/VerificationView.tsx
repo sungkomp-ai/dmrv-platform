@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { CheckCircle, Shield, Activity, Hash } from 'lucide-react';
+import { CheckCircle, Shield, Activity, Hash, BookOpen } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -46,6 +46,7 @@ export default function VerificationView() {
   const [loading, setLoading] = useState(true);
   const [result, setResult] = useState<VerificationResult | null>(null);
   const [history, setHistory] = useState<VerificationResult[]>([]);
+  const [standardMode, setStandardMode] = useState<'international' | 'tgo'>('tgo');
 
   const fetchProjects = useCallback(async () => {
     try {
@@ -140,12 +141,61 @@ export default function VerificationView() {
   return (
     <div className="space-y-6">
       {/* Page Title */}
-      <div>
-        <h2 className="text-2xl font-bold tracking-tight text-gray-900">Cross-Modal Verification</h2>
-        <p className="text-muted-foreground text-sm mt-1">
-          Validate data integrity across multiple source types
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight text-gray-900">Cross-Modal Verification</h2>
+          <p className="text-muted-foreground text-sm mt-1">
+            Validate data integrity across multiple source types
+          </p>
+        </div>
+        <div className="flex items-center gap-1 bg-muted rounded-lg p-0.5 text-[10px]">
+          <button onClick={() => setStandardMode('tgo')} className={`px-2.5 py-1 rounded-md transition-all ${standardMode === 'tgo' ? 'bg-amber-100 text-amber-800 font-bold shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>🇹🇭 TGO/T-VER</button>
+          <button onClick={() => setStandardMode('international')} className={`px-2.5 py-1 rounded-md transition-all ${standardMode === 'international' ? 'bg-blue-100 text-blue-800 font-bold shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>🌐 Int'l</button>
+        </div>
       </div>
+
+      {/* T-VER Methodology Reference Card */}
+      <Card className="border-amber-200 bg-gradient-to-r from-amber-50 to-orange-50">
+        <CardContent className="p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <BookOpen className="h-4 w-4 text-amber-700" />
+            <span className="text-sm font-semibold text-amber-900">
+              {standardMode === 'tgo' ? 'T-VER Verification Standards' : 'International Verification Standards'}
+            </span>
+          </div>
+          {standardMode === 'tgo' ? (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs text-amber-800">
+              <div className="rounded-md bg-white/60 p-2">
+                <p className="font-semibold">T-VER-P-CC-001</p>
+                <p className="text-amber-700">Verification criteria for carbon credit projects under T-VER standard</p>
+              </div>
+              <div className="rounded-md bg-white/60 p-2">
+                <p className="font-semibold">Thai Verification Standards</p>
+                <p className="text-amber-700">กรมควบคุมมลพิษ cross-modal validation requirements</p>
+              </div>
+              <div className="rounded-md bg-white/60 p-2">
+                <p className="font-semibold">TGO Guidelines 2566</p>
+                <p className="text-amber-700">อย. ธุรกิจการค้าคาร์บอน verification integrity threshold ≥70%</p>
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs text-blue-800">
+              <div className="rounded-md bg-white/60 p-2">
+                <p className="font-semibold">ISO 14064-2</p>
+                <p className="text-blue-700">Quantification & reporting of GHG emission reductions</p>
+              </div>
+              <div className="rounded-md bg-white/60 p-2">
+                <p className="font-semibold">Verra VCS VVB</p>
+                <p className="text-blue-700">Validation & verification body requirements for VCS projects</p>
+              </div>
+              <div className="rounded-md bg-white/60 p-2">
+                <p className="font-semibold">Gold Standard</p>
+                <p className="text-blue-700">GS verification & certification requirements</p>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Verification Form */}
@@ -218,11 +268,27 @@ export default function VerificationView() {
                       <Badge className={`text-lg px-3 py-1 ${gradeColor(result.integrityGrade)}`}>
                         {result.integrityGrade}
                       </Badge>
+                      {standardMode === 'tgo' && (
+                        <span className="text-xs text-amber-700 ml-2">
+                          {result.integrityGrade === 'A' ? 'เกรด A — ผ่านเกณฑ์ T-VER' :
+                           result.integrityGrade === 'B' ? 'เกรด B — ผ่านเกณฑ์ T-VER' :
+                           result.integrityGrade === 'C' ? 'เกรด C — ผ่านขั้นต่ำ' :
+                           'ไม่ผ่านเกณฑ์ T-VER'}
+                        </span>
+                      )}
                     </div>
                     <Progress value={result.hashCoverage} className={`h-3 ${scoreBarColor(result.hashCoverage)}`} />
                     <div className="flex justify-between text-xs text-muted-foreground">
                       <span>Hash Coverage</span>
                       <span>{result.hashCoverage}%</span>
+                    </div>
+                    <div className="flex items-center gap-1 mt-1">
+                      <Badge variant="outline" className="text-[10px] h-5">
+                        {standardMode === 'tgo' ? 'tCO₂e' : 'kg C'}
+                      </Badge>
+                      <span className="text-[10px] text-muted-foreground">
+                        {standardMode === 'tgo' ? 'TGO unit context' : 'International unit context'}
+                      </span>
                     </div>
                   </div>
                 </div>

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useSyncExternalStore } from 'react';
 import {
   MapPin, Satellite, Radio, Leaf, TreePine, Flame, Droplets, Zap, Sun,
   RefreshCw, Layers, Eye, EyeOff, ChevronDown, ChevronRight, Battery,
@@ -115,7 +115,14 @@ function timeAgo(dateStr: string) {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
+// SSR-safe mount guard to prevent hydration mismatch with Date.now() / dynamic data
+const emptySubscribe = () => () => {};
+function useMounted() {
+  return useSyncExternalStore(emptySubscribe, () => true, () => false);
+}
+
 export default function MapDashboardView() {
+  const mounted = useMounted();
   const [data, setData] = useState<MapData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -127,6 +134,7 @@ export default function MapDashboardView() {
   const [mapFullscreen, setMapFullscreen] = useState(false);
   const [sidebarTab, setSidebarTab] = useState<'projects' | 'sensors' | 'layers'>('projects');
   const [flyTo, setFlyTo] = useState<{ center: [number, number]; zoom: number } | null>(null);
+  const [standardMode, setStandardMode] = useState<'international' | 'tgo'>('tgo');
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -193,9 +201,9 @@ export default function MapDashboardView() {
             { icon: MapPin, label: 'Projects', value: data.stats.totalProjects, sub: `${data.stats.activeProjects} active`, color: 'text-emerald-600', bg: 'bg-emerald-50' },
             { icon: Leaf, label: 'Credits (tCO₂e)', value: formatNumber(data.stats.totalCredits), sub: 'Total quantified', color: 'text-green-600', bg: 'bg-green-50' },
             { icon: Radio, label: 'IoT Sensors', value: data.stats.totalSensors, sub: `${data.stats.onlineSensors} online`, color: 'text-blue-600', bg: 'bg-blue-50' },
-            { icon: Satellite, label: 'Total Area', value: `${formatNumber(data.stats.totalAreaHa)} ha`, sub: `${data.stats.totalPlots} plots`, color: 'text-amber-600', bg: 'bg-amber-50' },
+            { icon: Satellite, label: 'Total Area', value: standardMode === 'tgo' ? `${formatNumber(data.stats.totalAreaHa * 6.25)} ไร่` : `${formatNumber(data.stats.totalAreaHa)} ha`, sub: `${data.stats.totalPlots} plots`, color: 'text-amber-600', bg: 'bg-amber-50', title: standardMode === 'tgo' ? `${formatNumber(data.stats.totalAreaHa * 6.25)} ไร่ (${formatNumber(data.stats.totalAreaHa)} ha)` : `${formatNumber(data.stats.totalAreaHa)} ha (${formatNumber(data.stats.totalAreaHa * 6.25)} ไร่)` },
           ].map(s => (
-            <Card key={s.label} className="min-w-[160px] shadow-none border-dashed">
+            <Card key={s.label} className="min-w-[160px] shadow-none border-dashed" title={s.title}>
               <CardContent className="p-3 flex items-center gap-3">
                 <div className={`h-9 w-9 rounded-xl ${s.bg} flex items-center justify-center shrink-0`}>
                   <s.icon className={`h-4 w-4 ${s.color}`} />
@@ -226,6 +234,7 @@ export default function MapDashboardView() {
             onFlyComplete={() => setFlyTo(null)}
             onProjectClick={handleProjectClick}
             onSensorClick={handleSensorClick}
+            standardMode={standardMode}
           />
 
           {/* Map Controls */}
@@ -245,6 +254,17 @@ export default function MapDashboardView() {
               {showSensors ? <Radio className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
               IoT
             </Button>
+            {/* Standard Mode Toggle */}
+            <div className="bg-background/90 backdrop-blur-xl rounded-md shadow-md p-0.5 flex">
+              <button
+                className={`px-2 py-1 rounded text-[10px] font-medium transition-all ${standardMode === 'tgo' ? 'bg-amber-100 text-amber-800 shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                onClick={() => setStandardMode('tgo')}
+                title="TGO/T-VER Standard (ไร่)">🇹🇭 TGO</button>
+              <button
+                className={`px-2 py-1 rounded text-[10px] font-medium transition-all ${standardMode === 'international' ? 'bg-blue-100 text-blue-800 shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                onClick={() => setStandardMode('international')}
+                title="IPCC International Standard (ha)">🌐 Int'l</button>
+            </div>
           </div>
 
           {/* Fullscreen Toggle */}
@@ -278,6 +298,10 @@ export default function MapDashboardView() {
                 </div>
               </>
             )}
+            <Separator className="my-2" />
+            <p className="font-semibold text-muted-foreground text-[10px]">
+              {standardMode === 'tgo' ? '🇹🇭 T-VER Standard (ไร่)' : '🌍 IPCC Standard (ha)'}
+            </p>
           </div>
 
           {/* Selected Project Info Overlay */}
@@ -295,9 +319,9 @@ export default function MapDashboardView() {
                 <Badge variant="outline" className="text-[9px] h-4">{selectedProject.methodology}</Badge>
               </div>
               <div className="grid grid-cols-2 gap-2 mt-3">
-                <div className="bg-muted/50 rounded-lg p-2 text-center">
+                <div className="bg-muted/50 rounded-lg p-2 text-center" title={standardMode === 'tgo' ? `${(selectedProject.areaHa * 6.25).toLocaleString(undefined, {maximumFractionDigits: 1})} ไร่ (${selectedProject.areaHa.toLocaleString()} ha)` : `${selectedProject.areaHa.toLocaleString()} ha (${(selectedProject.areaHa * 6.25).toLocaleString(undefined, {maximumFractionDigits: 1})} ไร่)`}>
                   <p className="text-[9px] text-muted-foreground">Area</p>
-                  <p className="text-sm font-bold">{selectedProject.areaHa.toLocaleString()} ha</p>
+                  <p className="text-sm font-bold">{standardMode === 'tgo' ? `${(selectedProject.areaHa * 6.25).toLocaleString(undefined, {maximumFractionDigits: 1})} ไร่` : `${selectedProject.areaHa.toLocaleString()} ha`}</p>
                 </div>
                 <div className="bg-emerald-50 rounded-lg p-2 text-center">
                   <p className="text-[9px] text-emerald-600">Credits</p>
@@ -352,7 +376,7 @@ export default function MapDashboardView() {
                             </div>
                             <div className="flex-1 min-w-0">
                               <p className="text-sm font-semibold truncate">{project.name}</p>
-                              <p className="text-[11px] text-muted-foreground">{project.province} · {project.areaHa.toLocaleString()} ha</p>
+                              <p className="text-[11px] text-muted-foreground" title={standardMode === 'tgo' ? `${(project.areaHa * 6.25).toLocaleString(undefined, {maximumFractionDigits: 1})} ไร่ (${project.areaHa.toLocaleString()} ha)` : `${project.areaHa.toLocaleString()} ha (${(project.areaHa * 6.25).toLocaleString(undefined, {maximumFractionDigits: 1})} ไร่)`}>{project.province} · {standardMode === 'tgo' ? `${(project.areaHa * 6.25).toLocaleString(undefined, {maximumFractionDigits: 1})} ไร่` : `${project.areaHa.toLocaleString()} ha`}</p>
                               <div className="flex items-center gap-2 mt-1.5">
                                 <Badge variant="secondary" className="text-[9px] h-4 bg-emerald-50 text-emerald-700 hover:bg-emerald-50">
                                   {project.status}
@@ -422,7 +446,7 @@ export default function MapDashboardView() {
                                 <span className="text-[9px] text-muted-foreground">
                                   <Battery className="h-2.5 w-2.5 inline mr-0.5" />{sensor.battery}%
                                 </span>
-                                <span className="text-[9px] text-muted-foreground">{timeAgo(sensor.lastSeen)}</span>
+                                <span className="text-[9px] text-muted-foreground" suppressHydrationWarning>{mounted ? timeAgo(sensor.lastSeen) : '...'}</span>
                               </div>
                             </div>
                           </div>
