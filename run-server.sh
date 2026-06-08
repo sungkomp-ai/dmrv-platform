@@ -1,9 +1,7 @@
 #!/bin/bash
-cd /home/z/my-project
+cd /home/z/my-project/.next/standalone
 while true; do
-  echo "Starting Next.js server..."
-  npx next dev -p 3000 -H 0.0.0.0 2>&1 | tee -a /home/z/my-project/dev.log
-  EXIT_CODE=$?
-  echo "Server exited with code $EXIT_CODE, restarting in 3s..."
-  sleep 3
+  node server.js 2>&1
+  echo "[$(date)] Server exited, restarting..." >&2
+  sleep 2
 done

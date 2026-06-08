@@ -1,35 +1,34 @@
 ---
 Task ID: 1
-Agent: main
-Task: จำลองการทำงาน - BioCarbon Simulation Lab
+Agent: Main
+Task: Simulate/demonstrate the operation of the dMRV BioCarbon Platform
 
 Work Log:
-- Analyzed existing dMRV platform codebase (30+ view components, DmrvApp shell)
-- Created BioCarbonView.tsx component with 8 tabs of bio/microorganism simulation data
-- Fixed import error: `Bacteria` doesn't exist in lucide-react, replaced with `Bug`
-- Removed unused imports (Thermometer, TrendingDown, Clock, Target, PieChartIcon)
-- Added BioCarbonView to DmrvApp navigation (new menu item + lazy load)
-- Changed React.lazy to next/dynamic with ssr:false for all 30 components
-- Due to sandbox memory constraints, created standalone BioCarbon page (page.tsx)
-- Built production build successfully with `next build`
-- Verified all 8 tabs work via Agent Browser:
-  - Overview: KPI cards, pathway map, TRL chart, microorganism summary
-  - Methanotrophs: 6 strains table, CH₄ oxidation chart, radar comparison
-  - SynMEC: 5 syntrophic processes, CH₄/H₂ pressure charts, pH/VS removal
-  - CO₂ Capture: 5 CCU systems, capture over time, efficiency pie chart
-  - Waste→Value: 5 processes, CO₂e savings chart, distribution
-  - Bioremediation: 6 processes, performance simulation chart
-  - Calculator: T-VER credit calculator with GWP factors
-  - AI Lab: Analysis tools + AI insights
-- Simulation control (Play/Pause/Reset) works across all chart tabs
-- Dual standard mode (🇹🇭 TGO / 🌐 Int'l) implemented
-- Server stability issue: dev server OOM during compilation, production server dies periodically
-- Production server verified working (HTTP 200, 39KB page content)
+- Checked project state: Next.js dev server was running on port 3000 (PID 12843)
+- Discovered React was not hydrating: all __reactFiber keys were missing from DOM
+- Root cause: Static JavaScript/CSS chunks were returning 404 from the dev server
+- Dev server kept entering D-state (uninterruptible disk I/O) and dying after serving first request
+- Tried multiple approaches: bun run dev, npx next dev, different ports, turbopack/no-turbopack
+- Dev server consistently died after ~1 request due to sandbox D-state disk I/O issue
+- Solution: Built production bundle with `npx next build` (output: standalone)
+- Used double-fork technique `( node server.js & ) &` to keep server alive past shell session exit
+- Production server stays alive and serves all requests correctly
+- React hydration works properly in production build
+- Static chunks are served correctly (200 status)
 
 Stage Summary:
-- BioCarbon Simulation Lab fully implemented with 8 interactive tabs
-- All simulation data based on BIOTEC-NSTDA research (methanotrophs, SynMEC, CCU, etc.)
-- Charts: AreaChart, LineChart, BarChart, PieChart, RadarChart, ComposedChart (Recharts)
-- Calculator: T-VER carbon credit calculation with GWP factors
-- Production build succeeds, server serves pages correctly
-- Known issue: sandbox environment causes server instability (OOM/resource limits)
+- Server is running on port 3000 via standalone production build (PID 18426)
+- Caddy proxy on port 81 also working correctly
+- All 8 BioCarbon tabs verified and working:
+  1. Overview - KPI cards, Carbon Bio-Pathway Map, TRL chart, microorganism cards
+  2. Methanotrophs - 6 strains table, strain selector, CH₄ oxidation simulation chart, radar comparison, CO₂e bar chart
+  3. SynMEC - 5 syntrophic processes, CH₄/H₂ pressure chart, pH/VS removal chart
+  4. CO₂ Capture - 5 CCU systems with TRL, capture over time area chart, efficiency pie chart
+  5. Waste→Value - 5 waste processes, CO₂e savings bar chart, distribution donut chart
+  6. Bioremediation - 6 remediation processes, performance simulation composed chart
+  7. Calculator - BioCarbon Credit Calculator with T-VER/International dual standard, area in ไร่/ha
+  8. AI Lab - AI assistant with strain analysis, process optimization, carbon pathway tools
+- Simulation controls (Run Sim / Pause / Reset) all working correctly
+- TGO ↔ International standard toggle working (area units switch between ไร่ and ha)
+- No page errors detected
+- Screenshots saved: verification-5 through verification-16
