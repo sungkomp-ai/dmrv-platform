@@ -39,6 +39,7 @@ import {
   Flame,
   Sprout,
   Radar,
+  Microscope,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from '@/components/ui/sheet';
@@ -46,36 +47,38 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-// Lazy-load all view components to reduce initial bundle size and improve server stability
-const DashboardView = React.lazy(() => import('./DashboardView'));
-const MapDashboardView = React.lazy(() => import('./MapDashboardView'));
-const OrchestratorView = React.lazy(() => import('./OrchestratorView'));
-const IngestionView = React.lazy(() => import('./IngestionView'));
-const AuthView = React.lazy(() => import('./AuthView'));
-const CarbonView = React.lazy(() => import('./CarbonView'));
-const CertificationView = React.lazy(() => import('./CertificationView'));
-const VerificationView = React.lazy(() => import('./VerificationView'));
-const MonitoringView = React.lazy(() => import('./MonitoringView'));
-const ReportingView = React.lazy(() => import('./ReportingView'));
-const MarketplaceView = React.lazy(() => import('./MarketplaceView'));
-const LogisticsView = React.lazy(() => import('./LogisticsView'));
-const GovernanceView = React.lazy(() => import('./GovernanceView'));
-const SubmissionView = React.lazy(() => import('./SubmissionView'));
-const AuditView = React.lazy(() => import('./AuditView'));
-const FootprintView = React.lazy(() => import('./FootprintView'));
-const SimulationView = React.lazy(() => import('./SimulationView'));
-const VVBWorkspaceView = React.lazy(() => import('./VVBWorkspaceView'));
-const ConflictResolverView = React.lazy(() => import('./ConflictResolverView'));
-const PublicRegistryView = React.lazy(() => import('./PublicRegistryView'));
-const DeviceManagementView = React.lazy(() => import('./DeviceManagementView'));
-const BufferPoolView = React.lazy(() => import('./BufferPoolView'));
-const ForwardContractsView = React.lazy(() => import('./ForwardContractsView'));
-const DevApiPortalView = React.lazy(() => import('./DevApiPortalView'));
-const MethodologyStudioView = React.lazy(() => import('./MethodologyStudioView'));
-const CrossChainBridgeView = React.lazy(() => import('./CrossChainBridgeView'));
-const PyrolysisSimulatorView = React.lazy(() => import('./PyrolysisSimulatorView'));
-const AWDSimulatorView = React.lazy(() => import('./AWDSimulatorView'));
-const LidarSimulatorView = React.lazy(() => import('./LidarSimulatorView'));
+import dynamic from 'next/dynamic';
+// Dynamic imports with ssr:false to reduce initial compilation overhead
+const DashboardView = dynamic(() => import('./DashboardView'), { ssr: false });
+const MapDashboardView = dynamic(() => import('./MapDashboardView'), { ssr: false });
+const OrchestratorView = dynamic(() => import('./OrchestratorView'), { ssr: false });
+const IngestionView = dynamic(() => import('./IngestionView'), { ssr: false });
+const AuthView = dynamic(() => import('./AuthView'), { ssr: false });
+const CarbonView = dynamic(() => import('./CarbonView'), { ssr: false });
+const CertificationView = dynamic(() => import('./CertificationView'), { ssr: false });
+const VerificationView = dynamic(() => import('./VerificationView'), { ssr: false });
+const MonitoringView = dynamic(() => import('./MonitoringView'), { ssr: false });
+const ReportingView = dynamic(() => import('./ReportingView'), { ssr: false });
+const MarketplaceView = dynamic(() => import('./MarketplaceView'), { ssr: false });
+const LogisticsView = dynamic(() => import('./LogisticsView'), { ssr: false });
+const GovernanceView = dynamic(() => import('./GovernanceView'), { ssr: false });
+const SubmissionView = dynamic(() => import('./SubmissionView'), { ssr: false });
+const AuditView = dynamic(() => import('./AuditView'), { ssr: false });
+const FootprintView = dynamic(() => import('./FootprintView'), { ssr: false });
+const SimulationView = dynamic(() => import('./SimulationView'), { ssr: false });
+const VVBWorkspaceView = dynamic(() => import('./VVBWorkspaceView'), { ssr: false });
+const ConflictResolverView = dynamic(() => import('./ConflictResolverView'), { ssr: false });
+const PublicRegistryView = dynamic(() => import('./PublicRegistryView'), { ssr: false });
+const DeviceManagementView = dynamic(() => import('./DeviceManagementView'), { ssr: false });
+const BufferPoolView = dynamic(() => import('./BufferPoolView'), { ssr: false });
+const ForwardContractsView = dynamic(() => import('./ForwardContractsView'), { ssr: false });
+const DevApiPortalView = dynamic(() => import('./DevApiPortalView'), { ssr: false });
+const MethodologyStudioView = dynamic(() => import('./MethodologyStudioView'), { ssr: false });
+const CrossChainBridgeView = dynamic(() => import('./CrossChainBridgeView'), { ssr: false });
+const PyrolysisSimulatorView = dynamic(() => import('./PyrolysisSimulatorView'), { ssr: false });
+const AWDSimulatorView = dynamic(() => import('./AWDSimulatorView'), { ssr: false });
+const LidarSimulatorView = dynamic(() => import('./LidarSimulatorView'), { ssr: false });
+const BioCarbonView = dynamic(() => import('./BioCarbonView'), { ssr: false });
 import { ErrorBoundary } from './ErrorBoundary';
 
 type ModuleKey =
@@ -107,7 +110,8 @@ type ModuleKey =
   | 'bridge'
   | 'pyrolysis'
   | 'awd'
-  | 'lidar';
+  | 'lidar'
+  | 'biocarbon';
 
 interface MenuItem {
   key: ModuleKey;
@@ -178,6 +182,7 @@ const menuItems: MenuItem[] = [
   { key: 'pyrolysis', label: 'Pyrolysis Simulator', icon: Flame, section: 'SIMULATION' },
   { key: 'awd', label: 'AWD Rice Simulator', icon: Sprout },
   { key: 'lidar', label: 'LIDAR Verification', icon: Radar },
+  { key: 'biocarbon', label: 'BioCarbon Lab', icon: Microscope },
 
   // Enterprise: Integration & Bridge
   { key: 'bridge', label: 'Cross-Chain Bridge', icon: Layers, section: 'INTEGRATION' },
@@ -213,6 +218,7 @@ const moduleComponents: Record<ModuleKey, React.ComponentType> = {
   pyrolysis: PyrolysisSimulatorView,
   awd: AWDSimulatorView,
   lidar: LidarSimulatorView,
+  biocarbon: BioCarbonView,
   bridge: CrossChainBridgeView,
 };
 
