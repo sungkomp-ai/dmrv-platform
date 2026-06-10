@@ -174,7 +174,7 @@ const GWP_N2O = 298;
 // COMPONENT
 // ============================================================
 
-type BioTab = 'overview' | 'methanotrophs' | 'synmec' | 'ccu' | 'waste' | 'bioremediation' | 'calculator' | 'ailab';
+type BioTab = 'overview' | 'methanotrophs' | 'synmec' | 'ccu' | 'waste' | 'bioremediation' | 'calculator' | 'monitoring' | 'ailab';
 
 interface BioCarbonViewProps {
   initialTab?: BioTab;
@@ -346,6 +346,7 @@ export default function BioCarbonView({ initialTab = 'overview' }: BioCarbonView
           <TabsTrigger value="waste" className="text-xs gap-1"><Recycle className="h-3.5 w-3.5" /> Waste→Value</TabsTrigger>
           <TabsTrigger value="bioremediation" className="text-xs gap-1"><Droplets className="h-3.5 w-3.5" /> Bioremediation</TabsTrigger>
           <TabsTrigger value="calculator" className="text-xs gap-1"><Calculator className="h-3.5 w-3.5" /> Calculator</TabsTrigger>
+          <TabsTrigger value="monitoring" className="text-xs gap-1"><Info className="h-3.5 w-3.5" /> Monitoring</TabsTrigger>
           <TabsTrigger value="ailab" className="text-xs gap-1"><Bot className="h-3.5 w-3.5" /> AI Lab</TabsTrigger>
         </TabsList>
 
@@ -1003,6 +1004,219 @@ export default function BioCarbonView({ initialTab = 'overview' }: BioCarbonView
           </div>
         </TabsContent>
 
+        {/* ============ MONITORING PROTOCOL TAB ============ */}
+        <TabsContent value="monitoring" className="space-y-6">
+          {/* T-VER Methodology Reference */}
+          <Card className="border-amber-200 bg-amber-50/30">
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 text-amber-600" />
+                แนวทางการเก็บข้อมูล T-VER (Monitoring Protocol)
+              </CardTitle>
+              <CardDescription>ข้อกำหนดการติดตาม วัด รายงาน (MRV) ตามมาตรฐาน TGO T-VER สำหรับโครงการ BioCarbon</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* T-VER Standard Reference */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="rounded-lg bg-amber-50 border border-amber-200 p-4">
+                  <h4 className="text-sm font-bold text-amber-800 mb-2">🇹🇭 มาตรฐาน T-VER (ไทย)</h4>
+                  <div className="space-y-1.5 text-xs text-amber-700">
+                    <p><strong>T-VER-AG-001:</strong> การจัดการขยะมีชีวิต (Methane avoidance)</p>
+                    <p><strong>T-VER-WT-001:</strong> บำบัดน้ำเสีย (Wastewater treatment)</p>
+                    <p><strong>T-VER-P-CC-001:</strong> การกักเก็บคาร์บอนผ่านไบโอชาร์</p>
+                    <p><strong>T-VER-P-RE-001:</strong> พลังงานทดแทน (Renewable energy)</p>
+                    <Separator className="my-2 bg-amber-200" />
+                    <p>CH₄ GWP = 25 (IPCC AR4)</p>
+                    <p>หัก uncertainty: 10% (โครงการ &lt;2 ปี), 5% (≥2 ปี)</p>
+                    <p>หน่วย: tCO₂e, พื้นที่: ไร่ (1 ไร่ = 0.16 ha)</p>
+                  </div>
+                </div>
+                <div className="rounded-lg bg-blue-50 border border-blue-200 p-4">
+                  <h4 className="text-sm font-bold text-blue-800 mb-2">🌐 International Standards</h4>
+                  <div className="space-y-1.5 text-xs text-blue-700">
+                    <p><strong>IPCC 2006 GL Vol. 5:</strong> Waste treatment</p>
+                    <p><strong>CDM AMS-III.H:</strong> Methane recovery in waste</p>
+                    <p><strong>CDM ACM-0014:</strong> Avoidance of methane</p>
+                    <p><strong>Verra VCS VM-0041:</strong> CCU methodology</p>
+                    <Separator className="my-2 bg-blue-200" />
+                    <p>CH₄ GWP = 28 (IPCC AR5)</p>
+                    <p>Uncertainty: Project-specific</p>
+                    <p>Units: tCO₂e, ha</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Monitoring Requirements by Bio Type */}
+              <h4 className="text-sm font-semibold mt-4">📋 ข้อกำหนดการติดตามตามประเภทโครงการ</h4>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                {[
+                  {
+                    type: 'Methanotrophs (จุลินทรีย์ย่อยสลายมีเทน)',
+                    tver: 'T-VER-AG-001',
+                    measurements: [
+                      'วัด CH₄ inlet/outlet ด้วย FID หรือ GC — รายวัน',
+                      'บันทึกอุณหภูมิและ pH ของไบโอฟิลเตอร์ — ต่อเนื่อง',
+                      'วัดอัตราการไหลของก๊าซ (flow rate) — รายวัน',
+                      'นับ CFU ของ methanotrophs — รายสัปดาห์',
+                      'ส่งตัวอย่างควบคุม (QA/QC) — รายเดือน',
+                      'วิเคราะห์ชนิดของจุลินทรีย์ (16S rRNA) — รายไตรมาส',
+                    ],
+                    frequency: 'รายเดือน → รายปี',
+                  },
+                  {
+                    type: 'SynMEC (สหชีวภาพผลิตมีเทน)',
+                    tver: 'T-VER-WT-001',
+                    measurements: [
+                      'วัด H₂ partial pressure ด้วย GC — รายสัปดาห์',
+                      'วิเคราะห์ VFA (Volatile Fatty Acids) — รายสัปดาห์',
+                      'บันทึก biogas production และส่วนผสม — รายวัน',
+                      'วัด COD/BOD น้ำเสียเข้า/ออก — รายสัปดาห์',
+                      'ตรวจ pH/อุณหภูมิ/VS — ต่อเนื่อง',
+                      'คำนวณ mass balance — รายเดือน',
+                    ],
+                    frequency: 'รายเดือน → รายปี',
+                  },
+                  {
+                    type: 'CCU (การดักจับและใช้ประโยชน์ CO₂)',
+                    tver: 'T-VER-P-RE-001 (emerging)',
+                    measurements: [
+                      'วัด CO₂ inlet/outlet ด้วย NDIR — รายวัน',
+                      'บันทึก flow rate ของก๊าซเข้า — รายวัน',
+                      'วิเคราะห์ผลิตภัณฑ์ (acetate, ethanol, biomass) — รายสัปดาห์',
+                      'ตรวจสอบ mass balance ของคาร์บอน — รายเดือน',
+                      'วัดประสิทธิภาพจับ CO₂ — รายสัปดาห์',
+                      'บันทึก TRL และ operational parameters — รายเดือน',
+                    ],
+                    frequency: 'รายเดือน → รายปี',
+                  },
+                  {
+                    type: 'Waste-to-Value (เปลี่ยนของเสียเป็นผลิตภัณฑ์)',
+                    tver: 'T-VER-AG-001',
+                    measurements: [
+                      'ชั่งน้ำหนักของเสียเข้า — รายวัน',
+                      'วัดไบโอก๊าซด้วย flow meter — รายวัน',
+                      'วิเคราะห์ผลิตภัณฑ์ — รายสัปดาห์',
+                      'ตรวจสอบ mass balance — รายเดือน',
+                      'วิเคราะห์ส่วนผสม CH₄/CO₂ ในไบโอก๊าซ — รายวัน',
+                      'วัดอุณหภูมิกระบวนการ — ต่อเนื่อง',
+                    ],
+                    frequency: 'รายเดือน → รายปี',
+                  },
+                  {
+                    type: 'Bioremediation (การบำบัดทางชีวภาพ)',
+                    tver: 'T-VER-WT-001',
+                    measurements: [
+                      'วัดสารพิษก่อน/หลังบำบัด — รายสัปดาห์',
+                      'บันทึกจุลินทรีย์ CFU — รายสัปดาห์',
+                      'วิเคราะห์คุณภาพน้ำ (BOD/COD/N/P) — รายเดือน',
+                      'วัดอัตราการย่อยสลาย — รายสัปดาห์',
+                      'บันทึกสภาพแวดล้อม (temp/pH/DO) — ต่อเนื่อง',
+                      'ตรวจสอบประสิทธิภาพรวม — รายเดือน',
+                    ],
+                    frequency: 'รายเดือน → รายปี',
+                  },
+                ].map((proto) => (
+                  <Card key={proto.type} className="shadow-none">
+                    <CardContent className="p-4 space-y-2">
+                      <div className="flex items-center justify-between mb-1">
+                        <p className="text-sm font-semibold">{proto.type}</p>
+                        <Badge className="bg-amber-100 text-amber-800 text-[9px]">{proto.tver}</Badge>
+                      </div>
+                      <ul className="space-y-1">
+                        {proto.measurements.map((m, i) => (
+                          <li key={i} className="text-xs text-muted-foreground flex items-start gap-1.5">
+                            <CheckCircle2 className="h-3 w-3 text-emerald-500 shrink-0 mt-0.5" />
+                            <span>{m}</span>
+                          </li>
+                        ))}
+                      </ul>
+                      <p className="text-[10px] text-muted-foreground mt-1">ความถี่รายงาน: {proto.frequency}</p>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Calculation Methodology */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Calculator className="h-4 w-4 text-emerald-600" />
+                ระเบียบวิธีการคำนวณ (Calculation Methodology)
+              </CardTitle>
+              <CardDescription>สูตรคำนวณเครดิตคาร์บอนตามมาตรฐาน T-VER</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* T-VER Formulas */}
+                <div className="space-y-3">
+                  <h5 className="text-xs font-bold text-amber-800">🇹🇭 T-VER (GWP = 25, AR4)</h5>
+                  {[
+                    { name: 'Methanotrophs', formula: 'ER = CH₄_avoided × 25 × (1 - unc.)', detail: 'unc. = 10% (<2yr), 5% (≥2yr)' },
+                    { name: 'SynMEC/AD', formula: 'ER = VS × yield × 0.65 × 25 × (1-unc.)', detail: '0.65 = CH₄ fraction in biogas' },
+                    { name: 'CCU (CO₂)', formula: 'ER = CO₂_captured × (1 - unc.)', detail: 'Direct CO₂, no GWP multiplication' },
+                    { name: 'Waste-to-Value', formula: 'ER = Waste × 365 × MCF × eff × 25 × (1-unc.)', detail: 'MCF = 0.05 (managed waste)' },
+                    { name: 'Bioremediation', formula: 'ER = Pollutant × 365 × EF × eff × 25 × (1-unc.)', detail: 'EF = 0.001 ton CH₄/m³' },
+                  ].map((item) => (
+                    <div key={item.name} className="rounded-lg bg-amber-50/50 border border-amber-100 p-3">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs font-semibold">{item.name}</span>
+                      </div>
+                      <p className="text-[11px] font-mono text-amber-900">{item.formula}</p>
+                      <p className="text-[10px] text-amber-600 mt-0.5">{item.detail}</p>
+                    </div>
+                  ))}
+                </div>
+
+                {/* IPCC Formulas */}
+                <div className="space-y-3">
+                  <h5 className="text-xs font-bold text-blue-800">🌐 International/IPCC (GWP = 28, AR5)</h5>
+                  {[
+                    { name: 'Methanotrophs (CDM AMS-III.H)', formula: 'ER = CH₄_avoided × 28', detail: 'Tool: CDM Methodological Tool 11' },
+                    { name: 'SynMEC (CDM ACM-0014)', formula: 'ER = BE - PE', detail: 'BE = Baseline, PE = Project emissions' },
+                    { name: 'CCU (VCS VM-0041)', formula: 'ER = CO₂_captured × CF', detail: 'CF = Capture factor' },
+                    { name: 'Waste (CDM AMS-III.F)', formula: 'ER = CH₄_avoided × 28 - PE', detail: 'PE = Project + leakage emissions' },
+                    { name: 'Bioremediation', formula: 'ER = (BE - PE) × GWP', detail: 'Baseline - Project approach' },
+                  ].map((item) => (
+                    <div key={item.name} className="rounded-lg bg-blue-50/50 border border-blue-100 p-3">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs font-semibold">{item.name}</span>
+                      </div>
+                      <p className="text-[11px] font-mono text-blue-900">{item.formula}</p>
+                      <p className="text-[10px] text-blue-600 mt-0.5">{item.detail}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* QA/QC */}
+              <div className="mt-4 pt-3 border-t">
+                <h5 className="text-sm font-semibold mb-2">🔬 การควบคุมคุณภาพ (QA/QC)</h5>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  {[
+                    { title: 'Data Quality', items: ['Calibrate instruments monthly', 'Duplicate samples (10%)', 'Use certified reference materials', 'Chain of custody documentation'] },
+                    { title: 'Verification', items: ['Third-party validation (VVB)', 'Cross-check with IPCC defaults', 'Statistical uncertainty analysis', 'Annual third-party audit'] },
+                    { title: 'Documentation', items: ['Monitoring reports per T-VER', 'Data management system (DMS)', 'Archived raw data ≥ 2 years', 'Transparent calculation sheets'] },
+                  ].map((qa) => (
+                    <div key={qa.title} className="rounded-lg border p-3 bg-slate-50">
+                      <p className="text-xs font-semibold mb-2">{qa.title}</p>
+                      <ul className="space-y-1">
+                        {qa.items.map((item, i) => (
+                          <li key={i} className="text-[10px] text-muted-foreground flex items-start gap-1">
+                            <CheckCircle2 className="h-3 w-3 text-emerald-500 shrink-0 mt-0.5" />
+                            {item}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
         {/* ============ AI LAB TAB ============ */}
         <TabsContent value="ailab" className="space-y-6">
           <Card>
@@ -1054,7 +1268,7 @@ export default function BioCarbonView({ initialTab = 'overview' }: BioCarbonView
 
       {/* Footer */}
       <div className="text-center text-[10px] text-muted-foreground py-4">
-        BioCarbon Simulation Lab — Based on BIOTEC-NSTDA Research | Thailand T-VER Carbon Credit Standard | GWP: IPCC AR5
+        BioCarbon Simulation Lab — Based on BIOTEC-NSTDA Research | Thailand T-VER Carbon Credit Standard | 🇹🇭 T-VER: GWP=25 (AR4) | 🌐 Int'l: GWP=28 (AR5)
       </div>
     </div>
   );

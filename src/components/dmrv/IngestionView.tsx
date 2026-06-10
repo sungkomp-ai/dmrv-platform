@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Upload, Lock, Unlock, FileUp, Clock, CheckCircle2, AlertCircle, RefreshCw, AlertCircle as ErrorIcon } from 'lucide-react';
+import { Upload, Lock, Unlock, FileUp, Clock, CheckCircle2, AlertCircle, RefreshCw, AlertCircle as ErrorIcon, FlaskConical, Thermometer, Beaker, Wind, Droplets } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -45,6 +45,53 @@ const SOURCE_DESCRIPTIONS: Record<string, string> = {
   Bioremediation: 'การบำบัดทางชีวภาพ',
   'Waste-to-Value': 'เปลี่ยนของเสียเป็นผลิตภัณฑ์',
   'Bio-Digest': 'การย่อยสลายทางชีวภาพ',
+};
+
+// Bio-specific extra fields per source type
+const BIO_EXTRA_FIELDS: Record<string, { key: string; label: string; placeholder: string; type?: 'text' | 'number' | 'select'; options?: string[] }[]> = {
+  Methanotroph: [
+    { key: 'strainName', label: 'สายพันธุ์จุลินทรีย์ (Strain)', placeholder: 'e.g., Methylococcus capsulatus', type: 'select', options: ['Methylococcus capsulatus', 'Methylosinus trichosporium', 'Methylocystis parvus', 'Methylomonas methanica', 'Methylocaldum szegediense', 'Ca. Methylomirabilis oxyfera'] },
+    { key: 'ch4Concentration', label: 'ความเข้มข้น CH₄ (%)', placeholder: 'e.g., 50', type: 'number' },
+    { key: 'temperature', label: 'อุณหภูมิ (°C)', placeholder: 'e.g., 37', type: 'number' },
+    { key: 'ph', label: 'ค่า pH', placeholder: 'e.g., 7.0', type: 'number' },
+    { key: 'oxidationRate', label: 'อัตราย่อยสลาย CH₄ (g/g biomass/day)', placeholder: 'e.g., 12.5', type: 'number' },
+    { key: 'samplingMethod', label: 'วิธีการเก็บตัวอย่าง', placeholder: 'e.g., Biofilter gas sampling', type: 'select', options: ['Biofilter gas sampling', 'Soil pore gas', 'Bioreactor headspace', 'Flux chamber', 'Direct measurement'] },
+  ],
+  SynMEC: [
+    { key: 'organismGroup', label: 'กลุ่มจุลินทรีย์', placeholder: '', type: 'select', options: ['Syntrophic Bacteria', 'Methanogens (H₂-utilizing)', 'Methanogens (Acetoclastic)', 'Mixed Consortium'] },
+    { key: 'organicLoad', label: 'ปริมาณสารอินทรีย์ (ton VS/day)', placeholder: 'e.g., 50', type: 'number' },
+    { key: 'biogasYield', label: 'ผลผลิตไบโอก๊าซ (m³/ton VS)', placeholder: 'e.g., 35', type: 'number' },
+    { key: 'h2PartialPressure', label: 'H₂ partial pressure (atm × 10⁻³)', placeholder: 'e.g., 0.5', type: 'number' },
+    { key: 'reactorType', label: 'ประเภทเครื่องปฏิกรณ์', placeholder: '', type: 'select', options: ['UASB', 'CSTR', 'Fixed-bed', 'Fluidized-bed', 'Anaerobic filter'] },
+  ],
+  CCU: [
+    { key: 'captureOrganism', label: 'จุลินทรีย์ที่ใช้จับ CO₂', placeholder: '', type: 'select', options: ['Clostridium ljungdahlii', 'Synechocystis sp. PCC 6803', 'Chlorella vulgaris', 'Sporomusa ovata', 'Mixed culture'] },
+    { key: 'co2Concentration', label: 'ความเข้มข้น CO₂ ขาเข้า (%)', placeholder: 'e.g., 15', type: 'number' },
+    { key: 'captureEfficiency', label: 'ประสิทธิภาพการจับ (%)', placeholder: 'e.g., 85', type: 'number' },
+    { key: 'pathway', label: 'Metabolic pathway', placeholder: '', type: 'select', options: ['Wood-Ljungdahl', 'Calvin-Benson', 'Serpentine', 'Electro-fermentation', '3-HP/4-HB cycle'] },
+    { key: 'productType', label: 'ผลิตภัณฑ์', placeholder: '', type: 'select', options: ['Acetate', 'Ethanol', 'Biomass', 'Bioplastic (PHA)', 'Lipids', 'Formate'] },
+  ],
+  Bioremediation: [
+    { key: 'pollutantType', label: 'ประเภทสารพิษ', placeholder: '', type: 'select', options: ['Heavy Metals', 'Hydrocarbons/PAHs', 'Organic Pollutants', 'Oil Spills', 'CH₄ from Landfill', 'Nutrients/BOD'] },
+    { key: 'remediationType', label: 'วิธีบำบัด', placeholder: '', type: 'select', options: ['Phytoremediation', 'Mycoremediation', 'Bioaugmentation', 'Biostimulation', 'Methanotrophic Biocover', 'Constructed Wetland'] },
+    { key: 'treatmentEfficiency', label: 'ประสิทธิภาพการบำบัด (%)', placeholder: 'e.g., 75', type: 'number' },
+    { key: 'pollutantLoad', label: 'ปริมาณสารพิษ (m³/day)', placeholder: 'e.g., 500', type: 'number' },
+    { key: 'treatmentDuration', label: 'ระยะเวลาบำบัด (วัน)', placeholder: 'e.g., 30', type: 'number' },
+  ],
+  'Waste-to-Value': [
+    { key: 'wasteType', label: 'ประเภทของเสีย', placeholder: '', type: 'select', options: ['Organic Waste', 'Food Waste', 'Agricultural Residue', 'Wastewater', 'Syngas/CO₂'] },
+    { key: 'processType', label: 'กระบวนการ', placeholder: '', type: 'select', options: ['Anaerobic Digestion', 'Gas Fermentation', 'Composting', 'Nutrient Recovery (Struvite)', 'Dark Fermentation'] },
+    { key: 'wasteInput', label: 'ปริมาณของเสีย (ton/day)', placeholder: 'e.g., 100', type: 'number' },
+    { key: 'processEfficiency', label: 'ประสิทธิภาพกระบวนการ (%)', placeholder: 'e.g., 75', type: 'number' },
+    { key: 'outputProduct', label: 'ผลิตภัณฑ์ที่ได้', placeholder: '', type: 'select', options: ['Biogas', 'Ethanol', 'Compost', 'Struvite fertilizer', 'Hydrogen', 'Bioplastic'] },
+  ],
+  'Bio-Digest': [
+    { key: 'feedstockType', label: 'วัตถุดิบ', placeholder: '', type: 'select', options: ['Livestock manure', 'Food waste', 'Crop residue', 'Wastewater sludge', 'Energy crop'] },
+    { key: 'retentionTime', label: 'Retention time (วัน)', placeholder: 'e.g., 20', type: 'number' },
+    { key: 'temperature', label: 'อุณหภูมิ (°C)', placeholder: 'e.g., 37', type: 'number' },
+    { key: 'ph', label: 'ค่า pH', placeholder: 'e.g., 7.0', type: 'number' },
+    { key: 'vsContent', label: 'Volatile Solids (%)', placeholder: 'e.g., 75', type: 'number' },
+  ],
 };
 
 type SourceType = (typeof SOURCE_TYPES)[number];
@@ -92,6 +139,28 @@ export default function IngestionView() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string>('');
   const [projectsLoading, setProjectsLoading] = useState(true);
+  const [bioFields, setBioFields] = useState<Record<string, string>>({});
+  const [monitoringProtocol, setMonitoringProtocol] = useState<string>('');
+
+  // Get extra fields for current source type
+  const extraFields = BIO_EXTRA_FIELDS[sourceType] || [];
+  const isBioSource = sourceType in BIO_EXTRA_FIELDS;
+
+  // Monitoring protocols per bio source type
+  const BIO_MONITORING_PROTOCOLS: Record<string, string> = {
+    Methanotroph: 'T-VER-AG-001: วัด CH₄ inlet/outlet ด้วย FID/GC, บันทึกอุณหภูมิ/pH รายวัน, นับ CFU รายสัปดาห์, ส่งตัวอย่างควบคุม (QA/QC) รายเดือน',
+    SynMEC: 'T-VER-WT-001: วัด H₂ partial pressure ด้วย GC, วิเคราะห์ VFA รายสัปดาห์, บันทึก biogas production รายวัน, ตรวจ pH/อุณหภูมิ ต่อเนื่อง',
+    CCU: 'T-VER-P-RE-001: วัด CO₂ inlet/outlet ด้วย NDIR, บันทึก flow rate รายวัน, วิเคราะห์ผลิตภัณฑ์รายสัปดาห์, ตรวจสอบ mass balance รายเดือน',
+    Bioremediation: 'T-VER-WT-001: วัดสารพิษก่อน/หลังบำบัด, บันทึกจุลินทรีย์ CFU รายสัปดาห์, วิเคราะห์คุณภาพน้ำรายเดือน, ตรวจ BOD/COD รายสัปดาห์',
+    'Waste-to-Value': 'T-VER-AG-001: ชั่งน้ำหนักของเสียเข้ารายวัน, วัดไบโอก๊าซด้วย flow meter, วิเคราะห์ผลิตภัณฑ์รายสัปดาห์, ตรวจสอบ mass balance รายเดือน',
+    'Bio-Digest': 'T-VER-AG-001: วัดปริมาณไบโอก๊าซด้วย gas meter, วิเคราะห์ส่วนผสม CH₄/CO₂ ด้วย GC, บันทึกอุณหภูมิ/pH รายวัน, วิเคราะห์ VS/TS รายสัปดาห์',
+  };
+
+  // Update monitoring protocol when source type changes
+  useEffect(() => {
+    setMonitoringProtocol(BIO_MONITORING_PROTOCOLS[sourceType] || '');
+    setBioFields({});
+  }, [sourceType]);
 
   // Fetch available projects
   useEffect(() => {
@@ -152,17 +221,26 @@ export default function IngestionView() {
 
     setIsSubmitting(true);
     try {
+      // Build payload with bio-specific fields
+      const payload: Record<string, unknown> = {
+        fileName: fileName.trim(),
+        description: description.trim(),
+        classification,
+      };
+
+      // Add bio-specific fields if present
+      if (isBioSource && Object.keys(bioFields).length > 0) {
+        payload.bioMetadata = bioFields;
+        payload.monitoringProtocol = monitoringProtocol;
+      }
+
       const res = await fetch('/api/dmrv/ingestion', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           sourceType: sourceType.toLowerCase(),
           activityType: 'data_upload',
-          payload: {
-            fileName: fileName.trim(),
-            description: description.trim(),
-            classification,
-          },
+          payload,
           evidenceUrl: '',
           projectId: selectedProjectId,
         }),
@@ -179,10 +257,11 @@ export default function IngestionView() {
       setLogs((prev) => [newLog, ...prev]);
       setFileName('');
       setDescription('');
+      setBioFields({});
 
       toast({
         title: 'Data Ingested',
-        description: `${sourceType} data "${fileName}" ingested successfully as ${newLog.classification}`,
+        description: `${sourceType} data "${fileName}" ingested successfully as ${newLog.classification}${isBioSource ? ' (with bio metadata)' : ''}`,
       });
     } catch (err) {
       toast({
@@ -315,7 +394,7 @@ export default function IngestionView() {
                 <SelectContent>
                   {SOURCE_TYPES.map((type) => (
                     <SelectItem key={type} value={type}>
-                      {type}
+                      {type} {SOURCE_DESCRIPTIONS[type] ? `— ${SOURCE_DESCRIPTIONS[type]}` : ''}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -325,7 +404,7 @@ export default function IngestionView() {
             <div className="space-y-2">
               <Label>File / Data Name</Label>
               <Input
-                placeholder="e.g., sentinel2_2024_bangkok.tif"
+                placeholder={isBioSource ? `e.g., ${sourceType.toLowerCase()}_sampling_2024.csv` : 'e.g., sentinel2_2024_bangkok.tif'}
                 value={fileName}
                 onChange={(e) => setFileName(e.target.value)}
               />
@@ -334,12 +413,69 @@ export default function IngestionView() {
             <div className="space-y-2">
               <Label>Description</Label>
               <Textarea
-                placeholder="Describe the data being ingested..."
+                placeholder={isBioSource ? `Describe the bio data being ingested (e.g., strain, conditions, sampling date)...` : 'Describe the data being ingested...'}
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 rows={3}
               />
             </div>
+
+            {/* Bio-specific extra fields */}
+            {isBioSource && extraFields.length > 0 && (
+              <div className="space-y-4">
+                <Separator />
+                <div className="flex items-center gap-2">
+                  <FlaskConical className="h-4 w-4 text-emerald-600" />
+                  <Label className="text-sm font-semibold">
+                    ข้อมูลเฉพาะทางชีวภาพ — {SOURCE_DESCRIPTIONS[sourceType] || sourceType}
+                  </Label>
+                </div>
+
+                {monitoringProtocol && (
+                  <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 text-xs text-amber-800">
+                    <div className="flex items-center gap-1.5 font-semibold mb-1">
+                      <Beaker className="h-3.5 w-3.5" />
+                      แนวทางการเก็บข้อมูล (Monitoring Protocol)
+                    </div>
+                    <p>{monitoringProtocol}</p>
+                  </div>
+                )}
+
+                {extraFields.map((field) => (
+                  <div key={field.key} className="space-y-1.5">
+                    <Label className="text-xs">{field.label}</Label>
+                    {field.type === 'select' && field.options ? (
+                      <Select
+                        value={bioFields[field.key] || ''}
+                        onValueChange={(v) => setBioFields({ ...bioFields, [field.key]: v })}
+                      >
+                        <SelectTrigger className="h-9">
+                          <SelectValue placeholder={field.placeholder || 'เลือก...'} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {field.options.map((opt) => (
+                            <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <Input
+                        type={field.type === 'number' ? 'number' : 'text'}
+                        placeholder={field.placeholder}
+                        value={bioFields[field.key] || ''}
+                        onChange={(e) => setBioFields({ ...bioFields, [field.key]: e.target.value })}
+                        className="h-9"
+                      />
+                    )}
+                  </div>
+                ))}
+
+                <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-2.5 text-[10px] text-emerald-700">
+                  <p className="font-semibold mb-0.5">📋 T-VER Data Requirements</p>
+                  <p>ข้อมูลเหล่านี้จะถูกบันทึกเป็น bioMetadata พร้อม monitoring protocol สำหรับการตรวจสอบ T-VER</p>
+                </div>
+              </div>
+            )}
 
             <div className="space-y-2">
               <Label>Classification</Label>
@@ -371,7 +507,7 @@ export default function IngestionView() {
               ) : (
                 <>
                   <FileUp className="h-4 w-4" />
-                  Ingest Data
+                  Ingest Data{isBioSource ? ' (with Bio Metadata)' : ''}
                 </>
               )}
             </Button>
@@ -388,6 +524,7 @@ export default function IngestionView() {
             <div className="grid grid-cols-2 gap-2">
               {SOURCE_TYPES.map((type) => {
                 const count = logs.filter((l) => l.sourceType.toLowerCase() === type.toLowerCase()).length;
+                const isBio = type in BIO_EXTRA_FIELDS;
                 return (
                   <button
                     key={type}
@@ -395,13 +532,21 @@ export default function IngestionView() {
                     className={`flex items-center justify-between rounded-lg border p-3 text-sm transition-colors ${
                       sourceType === type
                         ? 'border-emerald-300 bg-emerald-50 text-emerald-700'
-                        : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                        : isBio
+                          ? 'border-purple-200 bg-purple-50/30 hover:border-purple-300 hover:bg-purple-50'
+                          : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
                     }`}
                   >
                     <div className="flex flex-col items-start gap-0.5">
-                      <span className="font-medium">{type}</span>
+                      <span className="font-medium flex items-center gap-1">
+                        {isBio && <FlaskConical className="h-3 w-3 text-purple-500" />}
+                        {type}
+                      </span>
                       {SOURCE_DESCRIPTIONS[type] && (
                         <span className="text-[10px] text-muted-foreground leading-tight">{SOURCE_DESCRIPTIONS[type]}</span>
+                      )}
+                      {isBio && (
+                        <span className="text-[9px] text-purple-500">{BIO_EXTRA_FIELDS[type]?.length || 0} fields</span>
                       )}
                     </div>
                     {count > 0 && (
@@ -457,12 +602,16 @@ export default function IngestionView() {
                 <TableBody>
                   {logs.map((log) => {
                     const StatusIcon = statusIcons['ingested'] || CheckCircle2;
+                    const isBioLog = ['methanotroph', 'synmec', 'ccu', 'bioremediation', 'waste-to-value', 'bio-digest'].includes(log.sourceType.toLowerCase());
                     return (
-                      <TableRow key={log.id}>
+                      <TableRow key={log.id} className={isBioLog ? 'bg-purple-50/30' : ''}>
                         <TableCell>
-                          <Badge variant="secondary" className="text-[10px] h-5 capitalize">
-                            {log.sourceType}
-                          </Badge>
+                          <div className="flex items-center gap-1.5">
+                            {isBioLog && <FlaskConical className="h-3 w-3 text-purple-500" />}
+                            <Badge variant="secondary" className="text-[10px] h-5 capitalize">
+                              {log.sourceType}
+                            </Badge>
+                          </div>
                         </TableCell>
                         <TableCell className="font-mono text-xs max-w-[200px] truncate">
                           {log.activityType}
