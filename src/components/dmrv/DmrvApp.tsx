@@ -93,6 +93,7 @@ const BioBioremediationView = dynamic(() => import('./bio/BioBioremediationView'
 const BioCalculatorView = dynamic(() => import('./bio/BioCalculatorView'), { ssr: false });
 const BioAILabView = dynamic(() => import('./bio/BioAILabView'), { ssr: false });
 const BioSimulatorView = dynamic(() => import('./BioSimulatorView'), { ssr: false });
+const IoTIngestionView = dynamic(() => import('./IoTIngestionView'), { ssr: false });
 import { ErrorBoundary } from './ErrorBoundary';
 
 type ModuleKey =
@@ -133,7 +134,8 @@ type ModuleKey =
   | 'bio-bioremediation'
   | 'bio-calculator'
   | 'bio-ailab'
-  | 'bio-simulator';
+  | 'bio-simulator'
+  | 'iot-ingestion';
 
 interface MenuItem {
   key: ModuleKey;
@@ -213,6 +215,7 @@ const menuItems: MenuItem[] = [
   { key: 'bio-bioremediation', label: '💧 Bioremediation', icon: Droplets },
   { key: 'bio-calculator', label: '🧮 Bio Calculator', icon: Calculator },
   { key: 'bio-ailab', label: '🤖 Bio AI Lab', icon: Bot },
+  { key: 'iot-ingestion', label: '📡 IoT Ingestion', icon: Database },
 
   // Enterprise: Integration & Bridge
   { key: 'bridge', label: 'Cross-Chain Bridge', icon: Layers, section: 'INTEGRATION' },
@@ -257,6 +260,7 @@ const moduleComponents: Record<ModuleKey, React.ComponentType> = {
   'bio-calculator': BioCalculatorView,
   'bio-ailab': BioAILabView,
   'bio-simulator': BioSimulatorView,
+  'iot-ingestion': IoTIngestionView,
   bridge: CrossChainBridgeView,
 };
 
