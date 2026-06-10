@@ -30,7 +30,22 @@ const SOURCE_TYPES = [
   'Biogas',
   'Solar',
   'Agri-Activity',
+  'Methanotroph',
+  'SynMEC',
+  'CCU',
+  'Bioremediation',
+  'Waste-to-Value',
+  'Bio-Digest',
 ] as const;
+
+const SOURCE_DESCRIPTIONS: Record<string, string> = {
+  Methanotroph: 'จุลินทรีย์ย่อยสลายมีเทน',
+  SynMEC: 'สหชีวภาพผลิตมีเทน',
+  CCU: 'การดักจับและใช้ประโยชน์ CO₂',
+  Bioremediation: 'การบำบัดทางชีวภาพ',
+  'Waste-to-Value': 'เปลี่ยนของเสียเป็นผลิตภัณฑ์',
+  'Bio-Digest': 'การย่อยสลายทางชีวภาพ',
+};
 
 type SourceType = (typeof SOURCE_TYPES)[number];
 
@@ -199,7 +214,7 @@ export default function IngestionView() {
         <div>
           <h2 className="text-2xl font-bold tracking-tight text-gray-900">Data Ingestion</h2>
           <p className="text-muted-foreground text-sm mt-1">
-            Collect and normalize data from 13 source types with automatic classification & encryption
+            Collect and normalize data from {SOURCE_TYPES.length} source types with automatic classification & encryption
           </p>
         </div>
         <Button variant="outline" size="sm" onClick={fetchLogs} className="gap-2">
@@ -268,7 +283,7 @@ export default function IngestionView() {
               <Upload className="h-4 w-4 text-emerald-600" />
               Ingest New Data
             </CardTitle>
-            <CardDescription>Submit data from any of the 13 supported source types</CardDescription>
+            <CardDescription>Submit data from any of the {SOURCE_TYPES.length} supported source types</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
@@ -367,7 +382,7 @@ export default function IngestionView() {
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Supported Source Types</CardTitle>
-            <CardDescription>13 data sources for comprehensive carbon monitoring</CardDescription>
+            <CardDescription>{SOURCE_TYPES.length} data sources for comprehensive carbon monitoring</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 gap-2">
@@ -383,9 +398,14 @@ export default function IngestionView() {
                         : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
                     }`}
                   >
-                    <span className="font-medium">{type}</span>
+                    <div className="flex flex-col items-start gap-0.5">
+                      <span className="font-medium">{type}</span>
+                      {SOURCE_DESCRIPTIONS[type] && (
+                        <span className="text-[10px] text-muted-foreground leading-tight">{SOURCE_DESCRIPTIONS[type]}</span>
+                      )}
+                    </div>
                     {count > 0 && (
-                      <Badge variant="secondary" className="text-[10px] h-5">
+                      <Badge variant="secondary" className="text-[10px] h-5 shrink-0">
                         {count}
                       </Badge>
                     )}

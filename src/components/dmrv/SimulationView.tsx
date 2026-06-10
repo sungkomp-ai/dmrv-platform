@@ -14,7 +14,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 
-type SimType = 'AWD' | 'Biogas' | 'Solar' | 'Biochar' | 'Footprint';
+type SimType = 'AWD' | 'Biogas' | 'Solar' | 'Biochar' | 'Footprint' | 'Methanotrophs' | 'SynMEC' | 'CO2Capture' | 'WasteToValue' | 'Bioremediation';
 
 const simTypeToApi: Record<SimType, string> = {
   AWD: 'awd',
@@ -22,6 +22,11 @@ const simTypeToApi: Record<SimType, string> = {
   Solar: 'solar',
   Biochar: 'biochar',
   Footprint: 'footprint',
+  Methanotrophs: 'methanotrophs',
+  SynMEC: 'synmec',
+  CO2Capture: 'ccu',
+  WasteToValue: 'waste-to-value',
+  Bioremediation: 'bioremediation',
 };
 
 interface SimResult {
@@ -80,6 +85,36 @@ const simFields: Record<SimType, { key: string; label: string; placeholder: stri
     { key: 'diesel', label: 'Diesel usage (kL/year)', placeholder: 'e.g., 500' },
     { key: 'years', label: 'Project duration (years)', placeholder: 'e.g., 10' },
     { key: 'pricePerTco2e', label: 'Credit price (฿/tCO2e)', placeholder: 'e.g., 500' },
+  ],
+  Methanotrophs: [
+    { key: 'ch4Emission', label: 'CH₄ Emission (ton/yr)', placeholder: 'e.g., 100' },
+    { key: 'efficiency', label: 'Oxidation Efficiency (%)', placeholder: 'e.g., 85' },
+    { key: 'years', label: 'Project duration (years)', placeholder: 'e.g., 10' },
+    { key: 'pricePerTco2e', label: 'Credit price (฿/tCO₂e)', placeholder: 'e.g., 550' },
+  ],
+  SynMEC: [
+    { key: 'organicLoad', label: 'Organic Load (ton VS/day)', placeholder: 'e.g., 50' },
+    { key: 'biogasYield', label: 'Biogas Yield (m³/ton VS)', placeholder: 'e.g., 35' },
+    { key: 'years', label: 'Project duration (years)', placeholder: 'e.g., 10' },
+    { key: 'pricePerTco2e', label: 'Credit price (฿/tCO₂e)', placeholder: 'e.g., 520' },
+  ],
+  CO2Capture: [
+    { key: 'co2Input', label: 'CO₂ Input (ton/yr)', placeholder: 'e.g., 5000' },
+    { key: 'captureEfficiency', label: 'Capture Efficiency (%)', placeholder: 'e.g., 80' },
+    { key: 'years', label: 'Project duration (years)', placeholder: 'e.g., 10' },
+    { key: 'pricePerTco2e', label: 'Credit price (฿/tCO₂e)', placeholder: 'e.g., 600' },
+  ],
+  WasteToValue: [
+    { key: 'wasteInput', label: 'Waste Input (ton/day)', placeholder: 'e.g., 100' },
+    { key: 'processEfficiency', label: 'Process Efficiency (%)', placeholder: 'e.g., 65' },
+    { key: 'years', label: 'Project duration (years)', placeholder: 'e.g., 10' },
+    { key: 'pricePerTco2e', label: 'Credit price (฿/tCO₂e)', placeholder: 'e.g., 480' },
+  ],
+  Bioremediation: [
+    { key: 'pollutantLoad', label: 'Pollutant Load (m³/day)', placeholder: 'e.g., 500' },
+    { key: 'treatmentEfficiency', label: 'Treatment Efficiency (%)', placeholder: 'e.g., 75' },
+    { key: 'years', label: 'Project duration (years)', placeholder: 'e.g., 10' },
+    { key: 'pricePerTco2e', label: 'Credit price (฿/tCO₂e)', placeholder: 'e.g., 450' },
   ],
 };
 
@@ -161,6 +196,41 @@ export default function SimulationView() {
         base.dieselLiters = diesel * 1000;
         break;
       }
+      case 'Methanotrophs': {
+        const ch4E = parseFloat(inputs['ch4Emission'] || '0');
+        const eff = parseFloat(inputs['efficiency'] || '0');
+        base.ch4Emission = ch4E;
+        base.efficiency = eff;
+        break;
+      }
+      case 'SynMEC': {
+        const ol = parseFloat(inputs['organicLoad'] || '0');
+        const by = parseFloat(inputs['biogasYield'] || '0');
+        base.organicLoad = ol;
+        base.biogasYield = by;
+        break;
+      }
+      case 'CO2Capture': {
+        const co2 = parseFloat(inputs['co2Input'] || '0');
+        const ce = parseFloat(inputs['captureEfficiency'] || '0');
+        base.co2Input = co2;
+        base.captureEfficiency = ce;
+        break;
+      }
+      case 'WasteToValue': {
+        const wi = parseFloat(inputs['wasteInput'] || '0');
+        const pe = parseFloat(inputs['processEfficiency'] || '0');
+        base.wasteInput = wi;
+        base.processEfficiency = pe;
+        break;
+      }
+      case 'Bioremediation': {
+        const pl = parseFloat(inputs['pollutantLoad'] || '0');
+        const te = parseFloat(inputs['treatmentEfficiency'] || '0');
+        base.pollutantLoad = pl;
+        base.treatmentEfficiency = te;
+        break;
+      }
     }
 
     return base;
@@ -211,6 +281,41 @@ export default function SimulationView() {
         const elec = parseFloat(inputs['electricity'] || '0');
         const diesel = parseFloat(inputs['diesel'] || '0');
         tco2e = (elec * 0.5086 + diesel * 2.68) * years;
+        break;
+      }
+      case 'Methanotrophs': {
+        const ch4Emission = parseFloat(inputs['ch4Emission'] || '0');
+        const efficiency = parseFloat(inputs['efficiency'] || '0') / 100;
+        // CH₄ captured × GWP (AR4 = 25)
+        tco2e = ch4Emission * efficiency * years * 25;
+        break;
+      }
+      case 'SynMEC': {
+        const organicLoad = parseFloat(inputs['organicLoad'] || '0');
+        const biogasYield = parseFloat(inputs['biogasYield'] || '0');
+        // AD with CH₄ content ~65%, GWP=25, 10% uncertainty deduction (T-VER)
+        tco2e = organicLoad * 365 * (biogasYield / 1000) * 0.65 * years * 25 * 0.9;
+        break;
+      }
+      case 'CO2Capture': {
+        const co2Input = parseFloat(inputs['co2Input'] || '0');
+        const captureEfficiency = parseFloat(inputs['captureEfficiency'] || '0') / 100;
+        // Direct CO₂ avoidance
+        tco2e = co2Input * captureEfficiency * years;
+        break;
+      }
+      case 'WasteToValue': {
+        const wasteInput = parseFloat(inputs['wasteInput'] || '0');
+        const processEfficiency = parseFloat(inputs['processEfficiency'] || '0') / 100;
+        // Avoided CH₄ from landfill: 5% CH₄ potential × efficiency × GWP
+        tco2e = wasteInput * 365 * 0.05 * processEfficiency * years * 25;
+        break;
+      }
+      case 'Bioremediation': {
+        const pollutantLoad = parseFloat(inputs['pollutantLoad'] || '0');
+        const treatmentEfficiency = parseFloat(inputs['treatmentEfficiency'] || '0') / 100;
+        // Avoided emissions from pollutant degradation: small CH₄ factor × efficiency × GWP
+        tco2e = pollutantLoad * 365 * 0.001 * treatmentEfficiency * years * 25;
         break;
       }
     }
@@ -300,7 +405,7 @@ export default function SimulationView() {
       <div>
         <h2 className="text-2xl font-bold tracking-tight text-gray-900">Pre-Assessment Simulator</h2>
         <p className="text-muted-foreground text-sm mt-1">
-          Estimate carbon credit potential before formal project submission
+          Estimate carbon credit potential before formal project submission — includes Bio Carbon simulation types (Methanotrophs, SynMEC, CO₂ Capture, Waste-to-Value, Bioremediation) based on BIOTEC-NSTDA research data
         </p>
       </div>
 

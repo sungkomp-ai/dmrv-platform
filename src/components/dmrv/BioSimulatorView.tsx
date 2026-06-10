@@ -6,7 +6,7 @@ import {
   Play, Square, RotateCcw, Send, Activity, BarChart3, TrendingDown,
   TrendingUp, MapPin, Zap, Clock, RefreshCw, ChevronDown,
   CheckCircle2, Shield, FileCheck, Eye, Leaf, Gauge,
-  Droplets, Thermometer, Wind, Beaker, Bacteria, FlaskConical,
+  Droplets, Thermometer, Wind, Beaker, Bug, FlaskConical,
   AlertTriangle, TreePine,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -418,7 +418,7 @@ export default function BioSimulatorView() {
         </div>
         <div className="relative z-10">
           <div className="flex items-center gap-3 mb-2 flex-wrap">
-            <Bacteria className="h-7 w-7" />
+            <Bug className="h-7 w-7" />
             <h2 className="text-2xl font-bold">Bio & Microorganism Carbon Simulator</h2>
             <Badge className="bg-white/20 text-white hover:bg-white/30 text-xs">จุลินทรีย์กินมีเทน</Badge>
             <Badge className="bg-amber-500/80 text-white text-[9px]">T-VER-AG-001</Badge>
@@ -685,7 +685,7 @@ export default function BioSimulatorView() {
           <Card className="border-l-4" style={{ borderLeftColor: cfg.color }}>
             <CardHeader className="pb-2">
               <CardTitle className="text-base flex items-center gap-2">
-                <Bacteria className="h-4 w-4 text-emerald-600" />
+                <Bug className="h-4 w-4 text-emerald-600" />
                 Microorganism Detail — {cfg.label}
                 <Badge variant="secondary" className="text-[9px] h-4">{station.microorganisms.length} species</Badge>
               </CardTitle>
@@ -827,7 +827,7 @@ export default function BioSimulatorView() {
               <TabsTrigger value="methane" className="text-xs h-6 gap-1"><Wind className="h-3 w-3" /> CH₄ Dynamics</TabsTrigger>
               <TabsTrigger value="carbon" className="text-xs h-6 gap-1"><Leaf className="h-3 w-3" /> Carbon Credits</TabsTrigger>
               <TabsTrigger value="bioproduct" className="text-xs h-6 gap-1"><FlaskConical className="h-3 w-3" /> Bio-products</TabsTrigger>
-              <TabsTrigger value="microbe" className="text-xs h-6 gap-1"><Bacteria className="h-3 w-3" /> Microorganisms</TabsTrigger>
+              <TabsTrigger value="microbe" className="text-xs h-6 gap-1"><Bug className="h-3 w-3" /> Microorganisms</TabsTrigger>
               <TabsTrigger value="environment" className="text-xs h-6 gap-1"><Thermometer className="h-3 w-3" /> Environment</TabsTrigger>
             </TabsList>
 

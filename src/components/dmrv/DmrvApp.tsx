@@ -92,6 +92,7 @@ const BioWasteValueView = dynamic(() => import('./bio/BioWasteValueView'), { ssr
 const BioBioremediationView = dynamic(() => import('./bio/BioBioremediationView'), { ssr: false });
 const BioCalculatorView = dynamic(() => import('./bio/BioCalculatorView'), { ssr: false });
 const BioAILabView = dynamic(() => import('./bio/BioAILabView'), { ssr: false });
+const BioSimulatorView = dynamic(() => import('./BioSimulatorView'), { ssr: false });
 import { ErrorBoundary } from './ErrorBoundary';
 
 type ModuleKey =
@@ -131,7 +132,8 @@ type ModuleKey =
   | 'bio-waste'
   | 'bio-bioremediation'
   | 'bio-calculator'
-  | 'bio-ailab';
+  | 'bio-ailab'
+  | 'bio-simulator';
 
 interface MenuItem {
   key: ModuleKey;
@@ -203,7 +205,8 @@ const menuItems: MenuItem[] = [
   { key: 'awd', label: 'AWD Rice Simulator', icon: Sprout },
   { key: 'lidar', label: 'LIDAR Verification', icon: Radar },
   { key: 'biocarbon', label: 'BioCarbon Lab', icon: Microscope },
-  { key: 'bio-methanotrophs', label: '🔬 Methanotrophs', icon: Bug, section: 'BIO SIMULATION' },
+  { key: 'bio-simulator', label: 'Bio Simulator', icon: Activity },
+  { key: 'bio-methanotrophs', label: '🔬 Methanotrophs', icon: Bug },
   { key: 'bio-synmec', label: '⚛️ SynMEC', icon: Atom },
   { key: 'bio-ccu', label: '🌿 CO₂ Capture', icon: Leaf },
   { key: 'bio-waste', label: '♻️ Waste→Value', icon: Recycle },
@@ -253,6 +256,7 @@ const moduleComponents: Record<ModuleKey, React.ComponentType> = {
   'bio-bioremediation': BioBioremediationView,
   'bio-calculator': BioCalculatorView,
   'bio-ailab': BioAILabView,
+  'bio-simulator': BioSimulatorView,
   bridge: CrossChainBridgeView,
 };
 
