@@ -40,6 +40,12 @@ import {
   Sprout,
   Radar,
   Microscope,
+  Atom,
+  Recycle,
+  Calculator,
+  Bot,
+  Droplets,
+  Bug,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from '@/components/ui/sheet';
@@ -79,6 +85,13 @@ const PyrolysisSimulatorView = dynamic(() => import('./PyrolysisSimulatorView'),
 const AWDSimulatorView = dynamic(() => import('./AWDSimulatorView'), { ssr: false });
 const LidarSimulatorView = dynamic(() => import('./LidarSimulatorView'), { ssr: false });
 const BioCarbonView = dynamic(() => import('./BioCarbonView'), { ssr: false });
+const BioMethanotrophsView = dynamic(() => import('./bio/BioMethanotrophsView'), { ssr: false });
+const BioSynMECView = dynamic(() => import('./bio/BioSynMECView'), { ssr: false });
+const BioCCUView = dynamic(() => import('./bio/BioCCUView'), { ssr: false });
+const BioWasteValueView = dynamic(() => import('./bio/BioWasteValueView'), { ssr: false });
+const BioBioremediationView = dynamic(() => import('./bio/BioBioremediationView'), { ssr: false });
+const BioCalculatorView = dynamic(() => import('./bio/BioCalculatorView'), { ssr: false });
+const BioAILabView = dynamic(() => import('./bio/BioAILabView'), { ssr: false });
 import { ErrorBoundary } from './ErrorBoundary';
 
 type ModuleKey =
@@ -111,7 +124,14 @@ type ModuleKey =
   | 'pyrolysis'
   | 'awd'
   | 'lidar'
-  | 'biocarbon';
+  | 'biocarbon'
+  | 'bio-methanotrophs'
+  | 'bio-synmec'
+  | 'bio-ccu'
+  | 'bio-waste'
+  | 'bio-bioremediation'
+  | 'bio-calculator'
+  | 'bio-ailab';
 
 interface MenuItem {
   key: ModuleKey;
@@ -183,6 +203,13 @@ const menuItems: MenuItem[] = [
   { key: 'awd', label: 'AWD Rice Simulator', icon: Sprout },
   { key: 'lidar', label: 'LIDAR Verification', icon: Radar },
   { key: 'biocarbon', label: 'BioCarbon Lab', icon: Microscope },
+  { key: 'bio-methanotrophs', label: '🔬 Methanotrophs', icon: Bug, section: 'BIO SIMULATION' },
+  { key: 'bio-synmec', label: '⚛️ SynMEC', icon: Atom },
+  { key: 'bio-ccu', label: '🌿 CO₂ Capture', icon: Leaf },
+  { key: 'bio-waste', label: '♻️ Waste→Value', icon: Recycle },
+  { key: 'bio-bioremediation', label: '💧 Bioremediation', icon: Droplets },
+  { key: 'bio-calculator', label: '🧮 Bio Calculator', icon: Calculator },
+  { key: 'bio-ailab', label: '🤖 Bio AI Lab', icon: Bot },
 
   // Enterprise: Integration & Bridge
   { key: 'bridge', label: 'Cross-Chain Bridge', icon: Layers, section: 'INTEGRATION' },
@@ -219,6 +246,13 @@ const moduleComponents: Record<ModuleKey, React.ComponentType> = {
   awd: AWDSimulatorView,
   lidar: LidarSimulatorView,
   biocarbon: BioCarbonView,
+  'bio-methanotrophs': BioMethanotrophsView,
+  'bio-synmec': BioSynMECView,
+  'bio-ccu': BioCCUView,
+  'bio-waste': BioWasteValueView,
+  'bio-bioremediation': BioBioremediationView,
+  'bio-calculator': BioCalculatorView,
+  'bio-ailab': BioAILabView,
   bridge: CrossChainBridgeView,
 };
 

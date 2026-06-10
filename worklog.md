@@ -1,34 +1,53 @@
+# Worklog — dMRV BioCarbon Platform
+
 ---
 Task ID: 1
-Agent: Main
-Task: Simulate/demonstrate the operation of the dMRV BioCarbon Platform
+Agent: Main Agent
+Task: Simulate/demonstrate the platform operation ("จำลองการทำงาน")
 
 Work Log:
-- Checked project state: Next.js dev server was running on port 3000 (PID 12843)
-- Discovered React was not hydrating: all __reactFiber keys were missing from DOM
-- Root cause: Static JavaScript/CSS chunks were returning 404 from the dev server
-- Dev server kept entering D-state (uninterruptible disk I/O) and dying after serving first request
-- Tried multiple approaches: bun run dev, npx next dev, different ports, turbopack/no-turbopack
-- Dev server consistently died after ~1 request due to sandbox D-state disk I/O issue
-- Solution: Built production bundle with `npx next build` (output: standalone)
-- Used double-fork technique `( node server.js & ) &` to keep server alive past shell session exit
-- Production server stays alive and serves all requests correctly
-- React hydration works properly in production build
-- Static chunks are served correctly (200 status)
+- Killed all zombie Next.js/node/bun processes from previous sessions
+- Cleaned .next cache directory
+- Fixed next.config.ts: removed deprecated `output: "standalone"` and `eslint` options
+- Finally resolved by using double-fork with nohup: `(nohup bun run dev > dev.log 2>&1 &)`
+- Verified all 8 BioCarbon tabs work correctly through Agent Browser
 
 Stage Summary:
-- Server is running on port 3000 via standalone production build (PID 18426)
-- Caddy proxy on port 81 also working correctly
-- All 8 BioCarbon tabs verified and working:
-  1. Overview - KPI cards, Carbon Bio-Pathway Map, TRL chart, microorganism cards
-  2. Methanotrophs - 6 strains table, strain selector, CH₄ oxidation simulation chart, radar comparison, CO₂e bar chart
-  3. SynMEC - 5 syntrophic processes, CH₄/H₂ pressure chart, pH/VS removal chart
-  4. CO₂ Capture - 5 CCU systems with TRL, capture over time area chart, efficiency pie chart
-  5. Waste→Value - 5 waste processes, CO₂e savings bar chart, distribution donut chart
-  6. Bioremediation - 6 remediation processes, performance simulation composed chart
-  7. Calculator - BioCarbon Credit Calculator with T-VER/International dual standard, area in ไร่/ha
-  8. AI Lab - AI assistant with strain analysis, process optimization, carbon pathway tools
-- Simulation controls (Run Sim / Pause / Reset) all working correctly
-- TGO ↔ International standard toggle working (area units switch between ไร่ and ha)
-- No page errors detected
-- Screenshots saved: verification-5 through verification-16
+- Platform operational with BioCarbon Lab standalone mode
+
+---
+Task ID: 2
+Agent: Main Agent
+Task: Merge BioCarbon into dMRV Platform with all ingestion features
+
+Work Log:
+- Researched existing dMRV Platform (DmrvApp.tsx, 31 modules in 7 sections) and BioCarbon Lab (8 tabs)
+- Updated BioCarbonView.tsx to accept `initialTab` prop for direct navigation
+- Created 7 wrapper components in `/components/dmrv/bio/` directory:
+  - BioMethanotrophsView.tsx (initialTab="methanotrophs")
+  - BioSynMECView.tsx (initialTab="synmec")
+  - BioCCUView.tsx (initialTab="ccu")
+  - BioWasteValueView.tsx (initialTab="waste")
+  - BioBioremediationView.tsx (initialTab="bioremediation")
+  - BioCalculatorView.tsx (initialTab="calculator")
+  - BioAILabView.tsx (initialTab="ailab")
+- Updated DmrvApp.tsx:
+  - Added 7 new ModuleKey entries (bio-methanotrophs, bio-synmec, bio-ccu, bio-waste, bio-bioremediation, bio-calculator, bio-ailab)
+  - Added dynamic imports for all 7 bio wrapper components
+  - Added "BIO SIMULATION" section in sidebar with individual menu items
+  - Added module components mapping for all new keys
+  - Added new icons: Atom, Recycle, Calculator, Bot, Droplets, Bug
+- Updated page.tsx to use DmrvApp component instead of standalone BioCarbonPage
+- Built project successfully with `next build`
+- Started dev server and verified through Agent Browser
+- All dMRV modules tested and working: Dashboard, Ingestion, Carbon, Verification, VVB, Pyrolysis, AWD
+- All BioCarbon sub-tabs tested and working: Methanotrophs, SynMEC, CO₂ Capture, Waste→Value, Bioremediation, Calculator, AI Lab
+- No browser errors, server stable
+
+Stage Summary:
+- Combined dMRV Platform + BioCarbon Lab into single unified application
+- Total menu items: 38 (31 dMRV + 7 BioCarbon simulation)
+- All ingestion features preserved (13 source types, API routes working)
+- BioCarbon simulations accessible as individual sidebar items under "BIO SIMULATION" section
+- TGO/Int'l dual standard system integrated
+- All Recharts charts rendering correctly

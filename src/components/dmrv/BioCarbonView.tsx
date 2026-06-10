@@ -176,8 +176,12 @@ const GWP_N2O = 298;
 
 type BioTab = 'overview' | 'methanotrophs' | 'synmec' | 'ccu' | 'waste' | 'bioremediation' | 'calculator' | 'ailab';
 
-export default function BioCarbonView() {
-  const [activeTab, setActiveTab] = useState<BioTab>('overview');
+interface BioCarbonViewProps {
+  initialTab?: BioTab;
+}
+
+export default function BioCarbonView({ initialTab = 'overview' }: BioCarbonViewProps) {
+  const [activeTab, setActiveTab] = useState<BioTab>(initialTab);
   const [standardMode, setStandardMode] = useState<'international' | 'tgo'>('tgo');
   const [simRunning, setSimRunning] = useState(false);
   const [simTime, setSimTime] = useState(0);

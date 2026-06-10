@@ -1,0 +1,15 @@
+$ bun --hot index.ts
+🛩️  LIDAR Carbon Credit Verification Simulator running on port 3033
+   WebSocket: ws://0.0.0.0:3033
+   REST API:  http://0.0.0.0:3033/api/status|readings|summary
+   Health:    http://0.0.0.0:3033/health
+   Speed: 1 sec = 1 month | 72 sec = 5-year monitoring
+   Standards: IPCC 2006 GL / Verra VCS + TGO T-VER-FOR-001 / T-VER-BC-001
+   Areas:
+     • Khao Yai Evergreen Forest (อุทยานแห่งชาติเขาใหญ่) — 2168 ha, Tropical Evergreen Forest
+       Baseline: 127 tC/ha, Growth: +3.5 tC/ha/yr
+     • Mae Wong Deciduous Forest (อุทยานแห่งชาติแม่วงก์) — 894 ha, Mixed Deciduous Forest
+       Baseline: 69 tC/ha, Growth: +2.1 tC/ha/yr
+     • Samut Songkhram Mangrove (ป่าชายเลิมสมุทรสงคราม) — 312 ha, Mangrove Forest
+       Baseline: 65.8 tC/ha, Growth: +5.8 tC/ha/yr
+       Soil Carbon: 350 tC/ha (Blue Carbon)

@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BioCarbon Dashboard — จุลินทรีย์และคาร์บอน</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f0fdf4;color:#1a1a2e;min-height:100vh;display:flex;flex-direction:column}
+header{position:sticky;top:0;z-index:50;background:rgba(255,255,255,0.95);backdrop-filter:blur(8px);border-bottom:1px solid #d1fae5;padding:10px 20px;display:flex;justify-content:space-between;align-items:center}
+.logo{display:flex;align-items:center;gap:8px}
+.logo-icon{padding:6px 10px;border-radius:8px;background:linear-gradient(135deg,#10b981,#0d9488);color:white;font-size:16px}
+.logo-text h1{font-size:16px;font-weight:700;background:linear-gradient(to right,#059669,#0d9488);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.logo-text p{font-size:9px;color:#9ca3af}
+.live-badge{display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:9999px;font-size:11px;font-weight:600;background:#d1fae5;color:#065f46}
+.live-dot{width:6px;height:6px;background:#10b981;border-radius:50%;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+main{flex:1;max-width:1200px;margin:0 auto;padding:16px;width:100%}
+.tabs{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:20px;padding:4px;background:#ecfdf5;border-radius:12px}
+.tab{padding:6px 14px;border-radius:8px;font-size:12px;font-weight:500;cursor:pointer;border:none;background:transparent;color:#6b7280;display:flex;align-items:center;gap:4px;transition:all .15s}
+.tab:hover{background:#d1fae5}
+.tab.active{background:#10b981;color:white}
+.tab-content{display:none}
+.tab-content.active{display:block}
+.hero{background:linear-gradient(135deg,#064e3b,#0f766e,#155e75);border-radius:16px;padding:28px 24px;margin-bottom:20px;position:relative;overflow:hidden}
+.hero h1{font-size:24px;font-weight:700;color:white;margin-bottom:6px}
+.hero p{font-size:13px;color:#a7f3d0;max-width:600px}
+.hero-badges{display:flex;gap:6px;margin-top:12px;flex-wrap:wrap}
+.hero-badge{padding:3px 10px;border-radius:9999px;font-size:11px;font-weight:600}
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:20px}
+.stat-card{background:white;border-radius:12px;padding:16px;box-shadow:0 1px 3px rgba(0,0,0,.06);border:1px solid #e2e8f0;position:relative;overflow:hidden;transition:transform .15s,box-shadow .15s}
+.stat-card:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(0,0,0,.1)}
+.stat-card .accent{position:absolute;top:0;right:0;width:60px;height:60px;border-radius:0 0 0 60px;opacity:.12}
+.stat-label{font-size:10px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:.5px}
+.stat-value{font-size:22px;font-weight:700;margin-top:2px}
+.stat-unit{font-size:10px;color:#9ca3af;margin-top:1px}
+.card{background:white;border-radius:12px;padding:16px;box-shadow:0 1px 3px rgba(0,0,0,.06);border:1px solid #e2e8f0;margin-bottom:16px}
+.card h3{font-size:14px;font-weight:600;margin-bottom:12px;display:flex;align-items:center;gap:6px}
+.grid-2{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px}
+.grid-3{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+.badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:9999px;font-size:10px;font-weight:600}
+.badge-green{background:#d1fae5;color:#065f46}
+.badge-amber{background:#fef3c7;color:#92400e}
+.badge-cyan{background:#cffafe;color:#155e75}
+.badge-teal{background:#ccfbf1;color:#115e59}
+.badge-purple{background:#ede9fe;color:#5b21b6}
+.badge-red{background:#fee2e2;color:#991b1b}
+.badge-outline{background:transparent;border:1px solid #d1d5db;color:#374151;font-style:italic}
+.progress-bar{height:6px;background:#e2e8f0;border-radius:3px;overflow:hidden;margin-top:4px}
+.progress-fill{height:100%;border-radius:3px;transition:width .5s ease}
+table{width:100%;border-collapse:collapse}
+th{background:#f8fafc;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#6b7280;padding:8px 10px;text-align:left;border-bottom:1px solid #e2e8f0}
+td{font-size:11px;padding:8px 10px;border-bottom:1px solid #f1f5f9}
+tr:hover td{background:#f8fafc}
+.scrollable{max-height:400px;overflow-y:auto}
+.scrollable::-webkit-scrollbar{width:4px}
+.scrollable::-webkit-scrollbar-track{background:transparent}
+.scrollable::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:2px}
+.bar-chart{display:flex;align-items:flex-end;gap:6px;height:200px;padding:8px 0}
+.bar-group{display:flex;flex-direction:column;align-items:center;flex:1;gap:4px}
+.bar{border-radius:4px 4px 0 0;min-width:20px;transition:height .5s ease;position:relative}
+.bar:hover{opacity:.8}
+.bar-label{font-size:9px;color:#9ca3af;text-align:center}
+.bar-value{font-size:8px;color:#6b7280;font-weight:600;text-align:center}
+.pie-chart{width:200px;height:200px;border-radius:50%;position:relative;margin:0 auto}
+.pie-legend{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-top:12px}
+.pie-legend-item{display:flex;align-items:center;gap:4px;font-size:10px}
+.pie-legend-dot{width:10px;height:10px;border-radius:2px}
+.pathway-card{padding:12px;border-radius:8px;background:#f8fafc;border:1px solid #e2e8f0;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center}
+.pathway-name{font-size:13px;font-weight:500}
+.pathway-eq{font-size:11px;color:#6b7280;font-family:monospace;margin-top:2px}
+.pathway-rate{font-size:14px;font-weight:700;color:#10b981;text-align:right}
+.pathway-rate-label{font-size:10px;color:#9ca3af}
+.func-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+.func-card{padding:12px;border-radius:8px;background:#f8fafc;border:1px solid #e2e8f0}
+.func-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
+.func-name{font-size:12px;font-weight:600}
+.func-pct{font-size:12px;font-weight:700;color:#10b981}
+.func-desc{font-size:10px;color:#6b7280;margin-top:4px}
+.summary-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:16px;padding-top:16px;border-top:1px solid #e2e8f0}
+.summary-box{padding:12px;border-radius:8px;text-align:center}
+.summary-label{font-size:10px;color:#6b7280}
+.summary-value{font-size:20px;font-weight:700}
+.summary-unit{font-size:10px;color:#6b7280}
+.process-card{padding:14px;border-radius:10px;background:white;border:1px solid #e2e8f0;transition:transform .15s,box-shadow .15s}
+.process-card:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(0,0,0,.1)}
+.process-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px}
+.process-name{font-size:13px;font-weight:600}
+.process-detail{margin-bottom:6px}
+.process-detail-label{font-size:10px;color:#6b7280;margin-bottom:2px}
+.bacteria-card{padding:14px;border-radius:10px;background:white;border:1px solid #e2e8f0}
+.bacteria-card h4{font-size:14px;font-weight:600;margin-bottom:6px}
+.bacteria-card p{font-size:11px;color:#6b7280;margin-bottom:8px}
+.species-list{display:flex;flex-wrap:wrap;gap:3px;margin-bottom:8px}
+.product-list{display:flex;flex-wrap:wrap;gap:3px}
+footer{margin-top:auto;border-top:1px solid #d1fae5;background:#ecfdf5;padding:10px 20px}
+.footer-inner{max-width:1200px;margin:0 auto;display:flex;justify-content:space-between;font-size:11px;color:#9ca3af}
+@media(max-width:640px){.stats-grid{grid-template-columns:repeat(2,1fr)}.grid-2,.grid-3{grid-template-columns:1fr}.summary-grid{grid-template-columns:1fr}.hero h1{font-size:18px}}
+</style>
+</head>
+<body>
+<header>
+<div class="logo">
+<div class="logo-icon">🧪</div>
+<div class="logo-text"><h1>BioCarbon</h1><p>จุลินทรีย์และคาร์บอนไดออกไซด์</p></div>
+</div>
+<span class="live-badge"><span class="live-dot"></span> Live Simulation</span>
+</header>
+<main>
+<div class="tabs">
+<button class="tab active" onclick="showTab('overview')">🌍 Overview</button>
+<button class="tab" onclick="showTab('methanotrophs')">🦠 Methanotrophs</button>
+<button class="tab" onclick="showTab('synmec')">⚗️ SynMEC</button>
+<button class="tab" onclick="showTab('ccu')">🌿 CO₂ Capture</button>
+<button class="tab" onclick="showTab('waste')">♻️ Waste→Value</button>
+<button class="tab" onclick="showTab('calculator')">🧮 Calculator</button>
+</div>
+
+<!-- Overview Tab -->
+<div id="tab-overview" class="tab-content active">
+<div class="hero">
+<h1>🧬 BioCarbon Dashboard</h1>
+<p>จำลองข้อมูลทางด้านจุลินทรีย์และคาร์บอน — การย่อยสลายมีเทน การจับเก็บ CO₂ และกระบวนการไบโอรีเมดิเอชัน</p>
+<div class="hero-badges">
+<span class="hero-badge" style="background:rgba(16,185,129,.2);color:#a7f3d0;border:1px solid rgba(16,185,129,.3)">Methanotrophs</span>
+<span class="hero-badge" style="background:rgba(6,182,212,.2);color:#a5f3fc;border:1px solid rgba(6,182,212,.3)">SynMEC</span>
+<span class="hero-badge" style="background:rgba(20,184,166,.2);color:#99f6e4;border:1px solid rgba(20,184,166,.3)">CCU</span>
+</div>
+</div>
+<div class="stats-grid">
+<div class="stat-card"><div class="accent" style="background:#10b981"></div><div class="stat-label">CO₂ Reduction</div><div class="stat-value" style="color:#10b981">12,458.7</div><div class="stat-unit">tCO₂e</div></div>
+<div class="stat-card"><div class="accent" style="background:#06b6d4"></div><div class="stat-label">CH₄ Oxidized</div><div class="stat-value" style="color:#06b6d4">8,923.4</div><div class="stat-unit">tonnes</div></div>
+<div class="stat-card"><div class="accent" style="background:#8b5cf6"></div><div class="stat-label">Microbe Types</div><div class="stat-value" style="color:#8b5cf6">47</div><div class="stat-unit">species</div></div>
+<div class="stat-card"><div class="accent" style="background:#f59e0b"></div><div class="stat-label">Bioreactors</div><div class="stat-value" style="color:#f59e0b">12</div><div class="stat-unit">active</div></div>
+<div class="stat-card"><div class="accent" style="background:#14b8a6"></div><div class="stat-label">Carbon Credits</div><div class="stat-value" style="color:#14b8a6">3,421</div><div class="stat-unit">credits</div></div>
+<div class="stat-card"><div class="accent" style="background:#ef4444"></div><div class="stat-label">Biofuel</div><div class="stat-value" style="color:#ef4444">5,678.9</div><div class="stat-unit">liters</div></div>
+</div>
+<div class="grid-2">
+<div class="card">
+<h3>📈 Monthly Carbon & Methane Trends</h3>
+<div class="bar-chart" id="trend-chart"></div>
+<div style="display:flex;gap:16px;justify-content:center;margin-top:8px">
+<span style="font-size:10px;display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;background:#10b981;border-radius:2px;display:inline-block"></span>CO₂ Reduction</span>
+<span style="font-size:10px;display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;background:#06b6d4;border-radius:2px;display:inline-block"></span>CH₄ Oxidized</span>
+<span style="font-size:10px;display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;background:#f59e0b;border-radius:2px;display:inline-block"></span>Biofuel</span>
+</div>
+</div>
+<div class="card">
+<h3>📊 Monthly Biofuel Production</h3>
+<div class="bar-chart" id="biofuel-chart"></div>
+</div>
+</div>
+</div>
+
+<!-- Methanotrophs Tab -->
+<div id="tab-methanotrophs" class="tab-content">
+<div class="card">
+<h3>🥧 Methanotroph Species Distribution</h3>
+<div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap;justify-content:center">
+<div class="pie-chart" style="background:conic-gradient(#10b981 0% 45%,#06b6d4 45% 75%,#f59e0b 75% 90%,#ef4444 90% 100%)"></div>
+<div class="pie-legend">
+<div class="pie-legend-item"><div class="pie-legend-dot" style="background:#10b981"></div>Type I (γ-proteobacteria) 45%</div>
+<div class="pie-legend-item"><div class="pie-legend-dot" style="background:#06b6d4"></div>Type II (α-proteobacteria) 30%</div>
+<div class="pie-legend-item"><div class="pie-legend-dot" style="background:#f59e0b"></div>Type X (Verrucomicrobia) 15%</div>
+<div class="pie-legend-item"><div class="pie-legend-dot" style="background:#ef4444"></div>ANME (Archaea) 10%</div>
+</div>
+</div>
+</div>
+<div class="card">
+<h3>🔬 CH₄ Oxidation Process (24h Simulation)</h3>
+<div class="bar-chart" id="process-chart" style="height:180px"></div>
+<div style="display:flex;gap:16px;justify-content:center;margin-top:8px">
+<span style="font-size:10px;display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;background:#ef4444;border-radius:2px;display:inline-block"></span>CH₄ Conc.</span>
+<span style="font-size:10px;display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;background:#10b981;border-radius:2px;display:inline-block"></span>Oxidation Rate</span>
+<span style="font-size:10px;display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;background:#06b6d4;border-radius:2px;display:inline-block"></span>Biomass</span>
+</div>
+</div>
+<div class="card">
+<h3>🔬 Methanotroph Organisms</h3>
+<div class="scrollable">
+<table>
+<thead><tr><th>Name</th><th>Type</th><th>Temp</th><th>pH</th><th>CH₄ Rate</th><th>Lipid %</th><th>Product</th><th>Status</th></tr></thead>
+<tbody>
+<tr><td style="font-weight:500">Methylococcus capsulatus</td><td><span class="badge badge-outline">Type I</span></td><td>45°C</td><td>6.8</td><td>12.5 g/h</td><td>22.3%</td><td>Biofuel, Lipids</td><td><span class="badge badge-green">Active</span></td></tr>
+<tr><td style="font-weight:500">Methylosinus trichosporium</td><td><span class="badge badge-outline">Type II</span></td><td>30°C</td><td>6.5</td><td>9.8 g/h</td><td>28.5%</td><td>PHB Biopolymer</td><td><span class="badge badge-green">Active</span></td></tr>
+<tr><td style="font-weight:500">Methylobacter luteus</td><td><span class="badge badge-outline">Type I</span></td><td>35°C</td><td>7.0</td><td>11.2 g/h</td><td>18.7%</td><td>SCP</td><td><span class="badge badge-green">Active</span></td></tr>
+<tr><td style="font-weight:500">Methanomonas methanica</td><td><span class="badge badge-outline">Type I</span></td><td>28°C</td><td>7.2</td><td>8.5 g/h</td><td>15.4%</td><td>Biofuel</td><td><span class="badge badge-amber">Study</span></td></tr>
+<tr><td style="font-weight:500">Methylocystis parvus</td><td><span class="badge badge-outline">Type II</span></td><td>32°C</td><td>6.4</td><td>7.9 g/h</td><td>32.1%</td><td>Lipids, Bioplastics</td><td><span class="badge badge-green">Active</span></td></tr>
+<tr><td style="font-weight:500">Methylacidiphilum infernorum</td><td><span class="badge badge-outline">Type X</span></td><td>55°C</td><td>2.5</td><td>6.3 g/h</td><td>8.2%</td><td>Extremozymes</td><td><span class="badge badge-amber">Study</span></td></tr>
+<tr><td style="font-weight:500">Methylocella silvestris</td><td><span class="badge badge-outline">Type II</span></td><td>25°C</td><td>5.5</td><td>5.7 g/h</td><td>25.8%</td><td>Lipids, Acids</td><td><span class="badge badge-green">Active</span></td></tr>
+<tr><td style="font-weight:500">Methylomicrobium album</td><td><span class="badge badge-outline">Type I</span></td><td>38°C</td><td>7.5</td><td>10.8 g/h</td><td>20.1%</td><td>Biofuel, Feed</td><td><span class="badge badge-green">Active</span></td></tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+
+<!-- SynMEC Tab -->
+<div id="tab-synmec" class="tab-content">
+<div class="card">
+<h3>🎯 SynMEC Consortium Functions</h3>
+<div class="func-grid">
+<div class="func-card"><div class="func-header"><span class="func-name">H₂ Prevention</span><span class="func-pct">94%</span></div><div class="progress-bar"><div class="progress-fill" style="width:94%;background:#10b981"></div></div><div class="func-desc">Methanogens consume H₂ to prevent inhibition</div></div>
+<div class="func-card"><div class="func-header"><span class="func-name">CH₄ Production</span><span class="func-pct">87%</span></div><div class="progress-bar"><div class="progress-fill" style="width:87%;background:#06b6d4"></div></div><div class="func-desc">Syntrophic interaction enhances methane yield</div></div>
+<div class="func-card"><div class="func-header"><span class="func-name">pH Maintenance</span><span class="func-pct">91%</span></div><div class="progress-bar"><div class="progress-fill" style="width:91%;background:#8b5cf6"></div></div><div class="func-desc">Consortium stabilizes pH 6.5–7.5</div></div>
+<div class="func-card"><div class="func-header"><span class="func-name">Resilience</span><span class="func-pct">88%</span></div><div class="progress-bar"><div class="progress-fill" style="width:88%;background:#f59e0b"></div></div><div class="func-desc">Community tolerates environmental stresses</div></div>
+</div>
+</div>
+<div class="grid-2">
+<div class="bacteria-card">
+<h4 style="color:#10b981">🦠 Syntrophic Bacteria</h4>
+<p>Break down complex organic matter, produce H₂ and VFAs</p>
+<div class="process-detail"><div class="process-detail-label">Key Species:</div><div class="species-list"><span class="badge badge-outline">Syntrophomonas wolfei</span><span class="badge badge-outline">Syntrophobacter fumaroxidans</span><span class="badge badge-outline">Pelotomaculum thermopropionicum</span></div></div>
+<div class="process-detail"><div class="process-detail-label">Products:</div><div class="product-list"><span class="badge badge-teal">H₂</span><span class="badge badge-teal">Acetate</span><span class="badge badge-teal">Formate</span></div></div>
+</div>
+<div class="bacteria-card">
+<h4 style="color:#06b6d4">🧬 Methanogens</h4>
+<p>Consume H₂/acetate to produce methane</p>
+<div class="process-detail"><div class="process-detail-label">Key Species:</div><div class="species-list"><span class="badge badge-outline">Methanobacterium thermautotrophicum</span><span class="badge badge-outline">Methanosaeta concilii</span><span class="badge badge-outline">Methanosarcina barkeri</span></div></div>
+<div class="process-detail"><div class="process-detail-label">Products:</div><div class="product-list"><span class="badge badge-cyan">CH₄</span><span class="badge badge-cyan">CO₂</span></div></div>
+</div>
+</div>
+<div class="card">
+<h3>📈 SynMEC 30-Day Performance</h3>
+<div class="bar-chart" id="synmec-chart" style="height:180px"></div>
+<div style="display:flex;gap:16px;justify-content:center;margin-top:8px">
+<span style="font-size:10px;display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;background:#10b981;border-radius:2px;display:inline-block"></span>CH₄ (L/d)</span>
+<span style="font-size:10px;display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;background:#f59e0b;border-radius:2px;display:inline-block"></span>H₂ (mM)</span>
+</div>
+</div>
+<div class="card">
+<h3>⚗️ Metabolic Pathways</h3>
+<div class="pathway-card"><div><div class="pathway-name">Hydrogenotrophic methanogenesis</div><div class="pathway-eq">4H₂ + CO₂ → CH₄ + 2H₂O</div></div><div><div class="pathway-rate">8.5</div><div class="pathway-rate-label">mmol/g/h</div></div></div>
+<div class="pathway-card"><div><div class="pathway-name">Acetoclastic methanogenesis</div><div class="pathway-eq">CH₃COOH → CH₄ + CO₂</div></div><div><div class="pathway-rate">6.2</div><div class="pathway-rate-label">mmol/g/h</div></div></div>
+<div class="pathway-card"><div><div class="pathway-name">Syntrophic acetate oxidation</div><div class="pathway-eq">CH₃COOH + 2H₂O → 4H₂ + 2CO₂</div></div><div><div class="pathway-rate">3.1</div><div class="pathway-rate-label">mmol/g/h</div></div></div>
+</div>
+</div>
+
+<!-- CCU Tab -->
+<div id="tab-ccu" class="tab-content">
+<div class="card">
+<h3>🌿 CO₂ Capture Monthly Trend</h3>
+<div class="bar-chart" id="ccu-chart" style="height:180px"></div>
+</div>
+<div class="grid-3">
+<div class="process-card"><div class="process-header"><span class="process-name">Microbial CO₂ Capture</span><span class="badge badge-amber">Pilot</span></div><div class="process-detail"><div class="process-detail-label">Microorganisms:</div><div class="species-list"><span class="badge badge-outline">Acetogens</span><span class="badge badge-outline">Cyanobacteria</span><span class="badge badge-outline">Microalgae</span></div></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px"><div><div class="process-detail-label">Input</div><div style="font-size:11px;font-weight:500">CO₂ from flue gas</div></div><div><div class="process-detail-label">CO₂ Captured</div><div style="font-size:11px;font-weight:700;color:#10b981">2,340 t</div></div></div><div><div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:2px"><span>Efficiency</span><span style="font-weight:600">78%</span></div><div class="progress-bar"><div class="progress-fill" style="width:78%;background:#10b981"></div></div></div><div class="process-detail" style="margin-top:6px"><div class="process-detail-label">Products:</div><div class="product-list"><span class="badge badge-teal">Acetic acid</span><span class="badge badge-teal">Bioethanol</span><span class="badge badge-teal">Biopolymers</span></div></div></div>
+<div class="process-card"><div class="process-header"><span class="process-name">Algae Biofuel</span><span class="badge badge-green">Commercial</span></div><div class="process-detail"><div class="process-detail-label">Microorganisms:</div><div class="species-list"><span class="badge badge-outline">Chlorella</span><span class="badge badge-outline">Spirulina</span><span class="badge badge-outline">Nannochloropsis</span></div></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px"><div><div class="process-detail-label">Input</div><div style="font-size:11px;font-weight:500">CO₂ + Sunlight</div></div><div><div class="process-detail-label">CO₂ Captured</div><div style="font-size:11px;font-weight:700;color:#10b981">1,870 t</div></div></div><div><div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:2px"><span>Efficiency</span><span style="font-weight:600">65%</span></div><div class="progress-bar"><div class="progress-fill" style="width:65%;background:#10b981"></div></div></div><div class="process-detail" style="margin-top:6px"><div class="process-detail-label">Products:</div><div class="product-list"><span class="badge badge-teal">Biodiesel</span><span class="badge badge-teal">Bioethanol</span><span class="badge badge-teal">Bioplastics</span></div></div></div>
+<div class="process-card"><div class="process-header"><span class="process-name">Electro-microbial</span><span class="badge badge-purple">Lab</span></div><div class="process-detail"><div class="process-detail-label">Microorganisms:</div><div class="species-list"><span class="badge badge-outline">Sporomusa ovata</span><span class="badge badge-outline">C. ljungdahlii</span></div></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px"><div><div class="process-detail-label">Input</div><div style="font-size:11px;font-weight:500">CO₂ + Electricity</div></div><div><div class="process-detail-label">CO₂ Captured</div><div style="font-size:11px;font-weight:700;color:#10b981">890 t</div></div></div><div><div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:2px"><span>Efficiency</span><span style="font-weight:600">52%</span></div><div class="progress-bar"><div class="progress-fill" style="width:52%;background:#8b5cf6"></div></div></div><div class="process-detail" style="margin-top:6px"><div class="process-detail-label">Products:</div><div class="product-list"><span class="badge badge-teal">Acetate</span><span class="badge badge-teal">Ethanol</span><span class="badge badge-teal">Butanol</span></div></div></div>
+<div class="process-card"><div class="process-header"><span class="process-name">Cyanobacterial Bioplastics</span><span class="badge badge-amber">Pilot</span></div><div class="process-detail"><div class="process-detail-label">Microorganisms:</div><div class="species-list"><span class="badge badge-outline">Synechocystis</span><span class="badge badge-outline">Synechococcus</span></div></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px"><div><div class="process-detail-label">Input</div><div style="font-size:11px;font-weight:500">CO₂ + Sunlight</div></div><div><div class="process-detail-label">CO₂ Captured</div><div style="font-size:11px;font-weight:700;color:#10b981">520 t</div></div></div><div><div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:2px"><span>Efficiency</span><span style="font-weight:600">44%</span></div><div class="progress-bar"><div class="progress-fill" style="width:44%;background:#f59e0b"></div></div></div><div class="process-detail" style="margin-top:6px"><div class="process-detail-label">Products:</div><div class="product-list"><span class="badge badge-teal">PHA</span><span class="badge badge-teal">PHB</span><span class="badge badge-teal">Bioethylene</span></div></div></div>
+<div class="process-card"><div class="process-header"><span class="process-name">Microbial Mineralization</span><span class="badge badge-amber">Pilot</span></div><div class="process-detail"><div class="process-detail-label">Microorganisms:</div><div class="species-list"><span class="badge badge-outline">B. pasteurii</span><span class="badge badge-outline">S. pasteurii</span></div></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px"><div><div class="process-detail-label">Input</div><div style="font-size:11px;font-weight:500">CO₂ + Ca²⁺</div></div><div><div class="process-detail-label">CO₂ Captured</div><div style="font-size:11px;font-weight:700;color:#10b981">3,120 t</div></div></div><div><div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:2px"><span>Efficiency</span><span style="font-weight:600">85%</span></div><div class="progress-bar"><div class="progress-fill" style="width:85%;background:#10b981"></div></div></div><div class="process-detail" style="margin-top:6px"><div class="process-detail-label">Products:</div><div class="product-list"><span class="badge badge-teal">CaCO₃</span><span class="badge badge-teal">Building materials</span></div></div></div>
+<div class="process-card"><div class="process-header"><span class="process-name">Formate Bioprocessing</span><span class="badge badge-cyan">Demo</span></div><div class="process-detail"><div class="process-detail-label">Microorganisms:</div><div class="species-list"><span class="badge badge-outline">C. necator</span><span class="badge badge-outline">E. coli (eng.)</span></div></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px"><div><div class="process-detail-label">Input</div><div style="font-size:11px;font-weight:500">CO₂ + H₂</div></div><div><div class="process-detail-label">CO₂ Captured</div><div style="font-size:11px;font-weight:700;color:#10b981">1,450 t</div></div></div><div><div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:2px"><span>Efficiency</span><span style="font-weight:600">60%</span></div><div class="progress-bar"><div class="progress-fill" style="width:60%;background:#06b6d4"></div></div></div><div class="process-detail" style="margin-top:6px"><div class="process-detail-label">Products:</div><div class="product-list"><span class="badge badge-teal">Protein feed</span><span class="badge badge-teal">PHB</span><span class="badge badge-teal">Oleochemicals</span></div></div></div>
+</div>
+</div>
+
+<!-- Waste to Value Tab -->
+<div id="tab-waste" class="tab-content">
+<div class="grid-3">
+<div class="process-card"><div class="process-header"><span class="process-name">Anaerobic Digestion</span><span class="badge badge-green">Industrial</span></div><div class="process-detail"><div class="process-detail-label">Inputs:</div><div class="species-list"><span class="badge badge-outline">Livestock waste</span><span class="badge badge-outline">Food waste</span><span class="badge badge-outline">Crop residues</span></div></div><div class="process-detail"><div class="process-detail-label">Outputs:</div><div class="product-list"><span class="badge badge-teal">Biogas</span><span class="badge badge-teal">Digestate</span><span class="badge badge-teal">Biohydrogen</span></div></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px"><div style="padding:8px;border-radius:6px;background:#f8fafc"><div class="process-detail-label">Carbon Impact</div><div style="font-size:13px;font-weight:700;color:#10b981">-2.5 tCO₂e</div></div><div style="padding:8px;border-radius:6px;background:#f8fafc"><div class="process-detail-label">Yield</div><div style="font-size:13px;font-weight:700">850 kg/day</div></div></div></div>
+<div class="process-card"><div class="process-header"><span class="process-name">Gas Fermentation (LanzaTech)</span><span class="badge badge-cyan">Commercial</span></div><div class="process-detail"><div class="process-detail-label">Inputs:</div><div class="species-list"><span class="badge badge-outline">CO + CO₂ syngas</span></div></div><div class="process-detail"><div class="process-detail-label">Outputs:</div><div class="product-list"><span class="badge badge-teal">Ethanol</span><span class="badge badge-teal">SAF</span><span class="badge badge-teal">Acetone</span></div></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px"><div style="padding:8px;border-radius:6px;background:#f8fafc"><div class="process-detail-label">Carbon Impact</div><div style="font-size:13px;font-weight:700;color:#10b981">-1.8 tCO₂e</div></div><div style="padding:8px;border-radius:6px;background:#f8fafc"><div class="process-detail-label">Yield</div><div style="font-size:13px;font-weight:700">620 kg/day</div></div></div></div>
+<div class="process-card"><div class="process-header"><span class="process-name">Nutrient Recovery</span><span class="badge badge-amber">Pilot</span></div><div class="process-detail"><div class="process-detail-label">Inputs:</div><div class="species-list"><span class="badge badge-outline">Digestate</span><span class="badge badge-outline">Wastewater</span></div></div><div class="process-detail"><div class="process-detail-label">Outputs:</div><div class="product-list"><span class="badge badge-teal">Struvite</span><span class="badge badge-teal">Biofertilizers</span></div></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px"><div style="padding:8px;border-radius:6px;background:#f8fafc"><div class="process-detail-label">Carbon Impact</div><div style="font-size:13px;font-weight:700;color:#10b981">-0.3 tCO₂e</div></div><div style="padding:8px;border-radius:6px;background:#f8fafc"><div class="process-detail-label">Yield</div><div style="font-size:13px;font-weight:700">280 kg/day</div></div></div></div>
+<div class="process-card"><div class="process-header"><span class="process-name">Composting & Biochar</span><span class="badge badge-cyan">Commercial</span></div><div class="process-detail"><div class="process-detail-label">Inputs:</div><div class="species-list"><span class="badge badge-outline">Organic waste</span><span class="badge badge-outline">Green waste</span></div></div><div class="process-detail"><div class="process-detail-label">Outputs:</div><div class="product-list"><span class="badge badge-teal">Compost</span><span class="badge badge-teal">Biochar</span><span class="badge badge-teal">Carbon seq.</span></div></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px"><div style="padding:8px;border-radius:6px;background:#f8fafc"><div class="process-detail-label">Carbon Impact</div><div style="font-size:13px;font-weight:700;color:#10b981">-0.9 tCO₂e</div></div><div style="padding:8px;border-radius:6px;background:#f8fafc"><div class="process-detail-label">Yield</div><div style="font-size:13px;font-weight:700">420 kg/day</div></div></div></div>
+<div class="process-card"><div class="process-header"><span class="process-name">Insect Bioconversion</span><span class="badge badge-amber">Pilot</span></div><div class="process-detail"><div class="process-detail-label">Inputs:</div><div class="species-list"><span class="badge badge-outline">Food waste</span><span class="badge badge-outline">Organic byproducts</span></div></div><div class="process-detail"><div class="process-detail-label">Outputs:</div><div class="product-list"><span class="badge badge-teal">Insect protein</span><span class="badge badge-teal">Frass</span><span class="badge badge-teal">Chitin</span></div></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px"><div style="padding:8px;border-radius:6px;background:#f8fafc"><div class="process-detail-label">Carbon Impact</div><div style="font-size:13px;font-weight:700;color:#10b981">-1.2 tCO₂e</div></div><div style="padding:8px;border-radius:6px;background:#f8fafc"><div class="process-detail-label">Yield</div><div style="font-size:13px;font-weight:700">350 kg/day</div></div></div></div>
+</div>
+<div class="card">
+<h3>♻️ Material Flow Analysis</h3>
+<div class="bar-chart" id="material-chart" style="height:200px"></div>
+<div style="display:flex;gap:16px;justify-content:center;margin-top:8px">
+<span style="font-size:10px;display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;background:#ef4444;border-radius:2px;display:inline-block"></span>Waste</span>
+<span style="font-size:10px;display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;background:#f59e0b;border-radius:2px;display:inline-block"></span>CO₂</span>
+<span style="font-size:10px;display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;background:#06b6d4;border-radius:2px;display:inline-block"></span>CH₄</span>
+</div>
+</div>
+</div>
+
+<!-- Calculator Tab -->
+<div id="tab-calculator" class="tab-content">
+<div class="card">
+<h3>🧮 Carbon Footprint Calculator</h3>
+<p style="font-size:11px;color:#6b7280;margin-bottom:12px">Based on Bioremediation & Carbon Footprint Excel Templates</p>
+<div class="scrollable">
+<table>
+<thead><tr><th>Process</th><th>Factor (tCO₂e/t)</th><th>Activity Data (t)</th><th>CO₂e (t)</th><th>Notes</th></tr></thead>
+<tbody id="calc-tbody"></tbody>
+</table>
+</div>
+<div class="summary-grid" id="calc-summary"></div>
+</div>
+</div>
+</main>
+<footer>
+<div class="footer-inner">
+<span>BioCarbon Dashboard — จำลองข้อมูลจุลินทรีย์และคาร์บอน</span>
+<span>Powered by NSTDA & BIOTEC Research Data</span>
+</div>
+</footer>
+<script>
+function showTab(id){
+document.querySelectorAll('.tab-content').forEach(el=>el.classList.remove('active'));
+document.querySelectorAll('.tab').forEach(el=>el.classList.remove('active'));
+document.getElementById('tab-'+id).classList.add('active');
+event.target.classList.add('active');
+}
+
+// Trend Chart
+const trendData=[{m:'Jan',co2:980,ch4:720,bf:450},{m:'Feb',co2:1050,ch4:780,bf:480},{m:'Mar',co2:1120,ch4:830,bf:510},{m:'Apr',co2:1080,ch4:790,bf:490},{m:'May',co2:1200,ch4:870,bf:530},{m:'Jun',co2:1150,ch4:850,bf:520},{m:'Jul',co2:1280,ch4:920,bf:560},{m:'Aug',co2:1320,ch4:950,bf:580},{m:'Sep',co2:1180,ch4:860,bf:510},{m:'Oct',co2:1090,ch4:800,bf:470},{m:'Nov',co2:1020,ch4:750,bf:440},{m:'Dec',co2:988,ch4:703,bf:458}];
+const maxTrend=Math.max(...trendData.map(d=>d.co2));
+document.getElementById('trend-chart').innerHTML=trendData.map(d=>`<div class="bar-group"><div class="bar" style="height:${d.co2/maxTrend*160}px;background:#10b981" title="CO₂: ${d.co2}"></div><div class="bar" style="height:${d.ch4/maxTrend*160}px;background:#06b6d4" title="CH₄: ${d.ch4}"></div><div class="bar" style="height:${d.bf/maxTrend*160}px;background:#f59e0b" title="Biofuel: ${d.bf}"></div><div class="bar-label">${d.m}</div></div>`).join('');
+
+// Biofuel Chart
+document.getElementById('biofuel-chart').innerHTML=trendData.map(d=>`<div class="bar-group"><div class="bar" style="height:${d.bf/580*160}px;background:#f59e0b" title="${d.bf}L"></div><div class="bar-label">${d.m}</div><div class="bar-value">${d.bf}</div></div>`).join('');
+
+// Process Chart
+const procData=[];for(let h=0;h<=24;h+=2)procData.push({h,ch4:Math.max(5,Math.round((100-h*3.5+Math.sin(h*.5)*5)*10)/10),ox:h===0?0:Math.round(Math.min(15,h*.8+Math.sin(h*.3)*1.2)*100)/100,bio:h===0?0:Math.round(Math.min(.85,h*.035+Math.cos(h*.2)*.02)*1000)/1000});
+document.getElementById('process-chart').innerHTML=procData.map(d=>`<div class="bar-group"><div class="bar" style="height:${d.ch4/100*140}px;background:#ef4444" title="CH₄: ${d.ch4}"></div><div class="bar" style="height:${d.ox/15*140}px;background:#10b981" title="Ox: ${d.ox}"></div><div class="bar" style="height:${d.bio/.85*140}px;background:#06b6d4" title="Bio: ${d.bio}"></div><div class="bar-label">${d.h}h</div></div>`).join('');
+
+// SynMEC Chart
+const synData=[];for(let d=1;d<=30;d++){const lag=d<=5?.3:d<=10?.6:d<=15?.85:1;synData.push({d,ch4:Math.round((.5+d*.12+Math.sin(d*.4)*.15)*lag*100)/100,h2:Math.round(Math.max(.1,2.1-d*.05+Math.cos(d*.3)*.3)*100)/100})}
+const maxSyn=Math.max(...synData.map(d=>d.ch4));
+document.getElementById('synmec-chart').innerHTML=synData.filter((_,i)=>i%3===0).map(d=>`<div class="bar-group"><div class="bar" style="height:${d.ch4/maxSyn*140}px;background:#10b981" title="CH₄: ${d.ch4}"></div><div class="bar" style="height:${d.h2/2.1*140}px;background:#f59e0b" title="H₂: ${d.h2}"></div><div class="bar-label">D${d.d}</div></div>`).join('');
+
+// CCU Chart
+const ccuData=[450,480,520,560,610,650,680,670,620,570,510,470];
+const maxCCU=Math.max(...ccuData);
+document.getElementById('ccu-chart').innerHTML=trendData.map((d,i)=>`<div class="bar-group"><div class="bar" style="height:${ccuData[i]/maxCCU*140}px;background:#10b981" title="CO₂: ${ccuData[i]}t"></div><div class="bar-label">${d.m}</div><div class="bar-value">${ccuData[i]}</div></div>`).join('');
+
+// Material Flow Chart
+const matData=[{s:'Input',w:10000,c:5000,m:3000},{s:'Process',w:3000,c:2500,m:1500},{s:'Output',w:500,c:800,m:200},{s:'Product',w:0,c:200,m:0}];
+const maxMat=Math.max(...matData.map(d=>d.w));
+document.getElementById('material-chart').innerHTML=matData.map(d=>`<div class="bar-group"><div class="bar" style="height:${d.w/maxMat*160}px;background:#ef4444" title="Waste: ${d.w}"></div><div class="bar" style="height:${d.c/maxMat*160}px;background:#f59e0b" title="CO₂: ${d.c}"></div><div class="bar" style="height:${d.m/maxMat*160}px;background:#06b6d4" title="CH₄: ${d.m}"></div><div class="bar-label">${d.s}</div></div>`).join('');
+
+// Calculator
+const ef=[{p:'Bioremediation - Soil',f:0.5,n:'CO₂ from microbial metabolism'},{p:'Bioremediation - Water',f:0.6,n:'CO₂ from microbial degradation'},{p:'Biodegradation - Composting',f:0.2,n:'Aerobic CO₂ emission'},{p:'Methane Oxidation - Biofilter',f:-28,n:'CH₄ oxidized (GWP 28)'},{p:'Methane Oxidation - Bioreactor',f:-28,n:'Controlled oxidation'},{p:'Microbial CO₂ Capture',f:-1,n:'Negative = CO₂ removed'},{p:'Algae Biofuel Production',f:0.2,n:'Offsets fossil fuel'},{p:'Biogas from Livestock',f:0.25,n:'Energy recovery Scope 2'},{p:'Biohydrogen Production',f:0.1,n:'H₂ replaces fossil fuel'},{p:'Bioethanol Production',f:0.15,n:'Partially offsets gasoline'},{p:'Gas Fermentation',f:-0.8,n:'CO₂ utilized in fermentation'},{p:'Nutrient Recovery',f:0.05,n:'Reduces synthetic fertilizer'}];
+const calcState=ef.map(e=>({...e,a:0,co2e:0}));
+function renderCalc(){
+const tbody=document.getElementById('calc-tbody');
+tbody.innerHTML=calcState.map((e,i)=>`<tr><td style="font-weight:500">${e.p}</td><td style="font-family:monospace;color:${e.f<0?'#10b981':'#d97706'}">${e.f}</td><td><input type="number" min="0" value="${e.a||''}" onchange="updateCalc(${i},this.value)" style="width:90px;padding:4px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:11px"></td><td style="font-weight:700;color:${e.co2e<0?'#10b981':e.co2e>0?'#ef4444':'#374151'}">${e.co2e.toFixed(1)}</td><td style="color:#9ca3af">${e.n}</td></tr>`).join('');
+const red=calcState.reduce((s,e)=>s+(e.co2e<0?Math.abs(e.co2e):0),0);
+const emi=calcState.reduce((s,e)=>s+(e.co2e>0?e.co2e:0),0);
+const net=calcState.reduce((s,e)=>s+e.co2e,0);
+document.getElementById('calc-summary').innerHTML=`
+<div class="summary-box" style="background:#d1fae5"><div class="summary-label">Total Reductions</div><div class="summary-value" style="color:#10b981">-${red.toLocaleString('en',{maximumFractionDigits:1})}</div><div class="summary-unit">tCO₂e</div></div>
+<div class="summary-box" style="background:#fee2e2"><div class="summary-label">Total Emissions</div><div class="summary-value" style="color:#ef4444">+${emi.toLocaleString('en',{maximumFractionDigits:1})}</div><div class="summary-unit">tCO₂e</div></div>
+<div class="summary-box" style="background:${net<0?'#d1fae5':'#fee2e2'}"><div class="summary-label">Net Balance</div><div class="summary-value" style="color:${net<0?'#10b981':'#ef4444'}">${net<0?'':'+'}${net.toLocaleString('en',{maximumFractionDigits:1})}</div><div class="summary-unit">tCO₂e</div></div>`;
+}
+function updateCalc(i,v){calcState[i].a=parseFloat(v)||0;calcState[i].co2e=calcState[i].a*calcState[i].f;renderCalc()}
+renderCalc();
+</script>
+</body>
+</html>
