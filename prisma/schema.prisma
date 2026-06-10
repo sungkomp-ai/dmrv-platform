@@ -396,3 +396,126 @@ model BridgeTransaction {
 
   bridge CrossChainBridge @relation(fields: [bridgeId], references: [id], onDelete: Cascade)
 }
+
+// ─── IoT Ingestion Models ──────────────────────────────────────────────────
+
+model IoTEdgeNode {
+  id              String   @id @default(cuid())
+  nodeId          String   @unique // Unique edge node identifier (e.g., EDGE-BKK-001)
+  name            String   // Display name
+  nameTh          String   @default("") // Thai name
+  province        String   @default("")
+  lat             Float    @default(0)
+  lng             Float    @default(0)
+  firmwareVersion String   @default("1.0.0")
+  protocol        String   @default("MQTT") // MQTT, HTTP, WebSocket, LoRaWAN
+  status          String   @default("offline") // online, offline, maintenance, provisioning
+  lastHeartbeat   DateTime?
+  batteryLevel    Int      @default(100)
+  signalStrength  Int      @default(0) // dBm
+  totalReadings   Int      @default(0)
+  certificationKey String  @default("") // Public key for data signing
+  signingStatus   String   @default("UNSIGNED") // UNSIGNED, SIGNED, EXPIRED, REVOKED
+  metadata        String   @default("{}") // JSON: additional config (sampling rate, buffer size, etc.)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  sensors         IoTSensorV2[]
+  readings        IoTSensorReading[]
+  batchJobs       IoTBatchJob[]
+}
+
+model IoTSensorV2 {
+  id            String   @id @default(cuid())
+  edgeNodeId    String
+  sensorId      String   @unique // Sensor identifier (e.g., CH4-SENSOR-001)
+  sensorType    String   // ch4, co2, temperature, humidity, soil_moisture, water_level, ph, wind_speed, solar_irradiance, dissolved_oxygen, cod, bod, nitrogen, phosphorus
+  manufacturer  String   @default("")
+  model         String   @default("")
+  unit          String   @default("") // ppm, °C, %, mg/L, m, pH, m/s, W/m²
+  minRange      Float    @default(0)
+  maxRange      Float    @default(100)
+  resolution    Float    @default(0.01)
+  accuracy      Float    @default(0) // ±value
+  samplingRate  Int      @default(60) // seconds between readings
+  status        String   @default("active") // active, inactive, calibration, error
+  lastReading   Float    @default(0)
+  lastReadingAt DateTime?
+  calibrationDate DateTime?
+  metadata      String   @default("{}") // JSON: sensor-specific config
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  edgeNode      IoTEdgeNode     @relation(fields: [edgeNodeId], references: [id], onDelete: Cascade)
+  readings      IoTSensorReading[]
+}
+
+model IoTSensorReading {
+  id              String   @id @default(cuid())
+  edgeNodeId      String
+  sensorId        String?  // Reference to IoTSensorV2.sensorId
+  sensorType      String
+  value           Float
+  unit            String   @default("")
+  timestamp       DateTime // Actual measurement time
+  receivedAt      DateTime @default(now()) // Server receipt time
+  ingestionMode   String   @default("realtime") // realtime, batch
+  batchJobId      String?  // Reference to IoTBatchJob if batch mode
+  qualityFlag     String   @default("RAW") // RAW, VALIDATED, CERTIFIED, REJECTED, ANOMALY
+  integrityHash   String   @default("") // SHA-256 of (sensorId + value + timestamp)
+  signature       String   @default("") // Edge node digital signature
+  metadata        String   @default("{}") // JSON: additional reading metadata
+  createdAt       DateTime @default(now())
+
+  edgeNode       IoTEdgeNode    @relation(fields: [edgeNodeId], references: [id], onDelete: Cascade)
+  sensor         IoTSensorV2?   @relation(fields: [sensorId], references: [sensorId], onDelete: SetNull)
+  batchJob       IoTBatchJob?   @relation(fields: [batchJobId], references: [id], onDelete: SetNull)
+}
+
+model IoTBatchJob {
+  id              String   @id @default(cuid())
+  edgeNodeId      String
+  fileName        String   @default("")
+  fileType        String   @default("CSV") // CSV, JSON, XML, PARQUET
+  totalRecords    Int      @default(0)
+  processedRecords Int     @default(0)
+  validRecords    Int      @default(0)
+  rejectedRecords Int      @default(0)
+  anomalyRecords  Int      @default(0)
+  status          String   @default("UPLOADED") // UPLOADED, VALIDATING, PROCESSING, CERTIFYING, COMPLETED, FAILED
+  certificationStatus String @default("PENDING") // PENDING, CERTIFIED, PARTIAL, REJECTED
+  merkleRoot      String   @default("") // Merkle root hash of all readings in batch
+  integrityReport String   @default("{}") // JSON: detailed integrity report
+  startedAt       DateTime?
+  completedAt     DateTime?
+  errorMessage    String   @default("")
+  metadata        String   @default("{}")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  edgeNode       IoTEdgeNode      @relation(fields: [edgeNodeId], references: [id], onDelete: Cascade)
+  readings       IoTSensorReading[]
+  certificationLogs IoTCertificationLog[]
+}
+
+model IoTCertificationLog {
+  id              String   @id @default(cuid())
+  batchJobId      String?  // Reference to IoTBatchJob (null for realtime certification)
+  batchJob        IoTBatchJob?  @relation(fields: [batchJobId], references: [id], onDelete: SetNull)
+  edgeNodeId      String   @default("")
+  sensorId        String   @default("")
+  readingCount    Int      @default(0)
+  passedCount     Int      @default(0)
+  failedCount     Int      @default(0)
+  anomalyCount    Int      @default(0)
+  certificationType String @default("BATCH") // BATCH, REALTIME, PERIODIC
+  status          String   @default("PENDING") // PENDING, IN_PROGRESS, CERTIFIED, REJECTED
+  integrityHash   String   @default("") // SHA-256 of entire certification
+  merkleRoot      String   @default("") // Merkle root for batch certification
+  rules           String   @default("[]") // JSON: list of certification rules applied
+  report          String   @default("{}") // JSON: detailed certification report
+  certifiedBy     String   @default("")
+  certifiedAt     DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
