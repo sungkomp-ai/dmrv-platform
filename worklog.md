@@ -40,3 +40,24 @@ Stage Summary:
 - All components: Gateway (port 3035), API routes (5 endpoints), Frontend (6 tabs), Prisma schema (5 models)
 - Simulation generates realistic sensor data with integrity hashing and quality flags
 - Ready for Thai language explanation
+---
+Task ID: 1
+Agent: main
+Task: Update project configuration to comply with Prisma 7 requirements
+
+Work Log:
+- Researched Prisma 7 breaking changes (provider rename, required output field, removed datasource url, driver adapters required, new prisma.config.ts)
+- Updated prisma/schema.prisma: changed `provider = "prisma-client-js"` to `provider = "prisma-client"`, added required `output = "../src/generated/prisma"`, removed `url` from datasource block
+- Created prisma.config.ts at project root with datasource URL configuration
+- Updated package.json: upgraded `@prisma/client` and `prisma` to ^7.0.0, added `@prisma/adapter-better-sqlite3` ^7.0.0
+- Rewrote src/lib/db.ts: changed import from `@prisma/client` to `@/generated/prisma/client`, added `PrismaBetterSqlite3` driver adapter
+- Added `src/generated/` to .gitignore and eslint.config.mjs ignores
+- Ran `bun install`, `prisma generate`, `prisma db push` — all successful
+- Verified dev server starts cleanly, lint passes, and browser renders the full dashboard with live data
+
+Stage Summary:
+- Prisma upgraded from 6.19.2 → 7.8.0
+- Key changes: new `prisma-client` provider, explicit output path, driver adapter required, datasource URL moved to prisma.config.ts
+- Generated client at `src/generated/prisma/`
+- All 29 models (including 5 IoT models) work correctly with the new adapter
+- Browser verification confirmed: page loads with full dashboard, KPIs show real data, API routes return 200 OK

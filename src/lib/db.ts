@@ -1,22 +1,17 @@
-import { PrismaClient } from '@prisma/client'
+import { PrismaClient } from '@/generated/prisma/client'
+import { PrismaBetterSqlite3 } from '@prisma/adapter-better-sqlite3'
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined
 }
 
-// Force new PrismaClient to pick up schema changes
-// Check if cached client has the latest models; if not, discard it
-if (globalForPrisma.prisma) {
-  const cached = globalForPrisma.prisma as unknown as Record<string, unknown>;
-  if (!cached.aIGenerationSession || !cached.crossChainBridge || !cached.bridgeTransaction) {
-    globalForPrisma.prisma = undefined as unknown as PrismaClient;
-  }
+function createPrismaClient() {
+  const adapter = new PrismaBetterSqlite3({
+    url: process.env.DATABASE_URL || 'file:./db/custom.db',
+  })
+  return new PrismaClient({ adapter })
 }
 
-export const db =
-  globalForPrisma.prisma ??
-  new PrismaClient({
-    log: ['query'],
-  })
+export const db = globalForPrisma.prisma ?? createPrismaClient()
 
 if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = db
