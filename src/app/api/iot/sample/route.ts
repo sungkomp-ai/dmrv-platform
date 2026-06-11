@@ -10,7 +10,7 @@ const IOT_PORT = 3035;
 
 export async function GET() {
   try {
-    const res = await fetch(`http://localhost:${IOT_PORT}/api/sample-data`);
+    const res = await fetch(`http://127.0.0.1:${IOT_PORT}/api/sample-data`, { signal: AbortSignal.timeout(5000) });
     if (!res.ok) {
       // Return inline sample data if gateway is not available
       return NextResponse.json(getInlineSampleData());

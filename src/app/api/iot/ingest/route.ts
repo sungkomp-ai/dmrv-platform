@@ -12,10 +12,11 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     
-    const res = await fetch(`http://localhost:${IOT_PORT}/api/realtime-ingest`, {
+    const res = await fetch(`http://127.0.0.1:${IOT_PORT}/api/realtime-ingest`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
+      signal: AbortSignal.timeout(5000),
     });
 
     if (!res.ok) {
@@ -40,7 +41,7 @@ export async function GET(req: NextRequest) {
     if (edgeNodeId) params.set('edgeNodeId', edgeNodeId);
     if (sensorType) params.set('sensorType', sensorType);
 
-    const res = await fetch(`http://localhost:${IOT_PORT}/api/readings?${params}`);
+    const res = await fetch(`http://127.0.0.1:${IOT_PORT}/api/readings?${params}`, { signal: AbortSignal.timeout(5000) });
     if (!res.ok) {
       return NextResponse.json({ error: 'Gateway unavailable' }, { status: 502 });
     }

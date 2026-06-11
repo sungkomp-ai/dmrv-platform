@@ -1,22 +1,18 @@
 ---
-Task ID: 1
+Task ID: 2
 Agent: main
-Task: สร้างระบบ IoT Ingestion ทั้ง Realtime และ Batch พร้อมการรับรองข้อมูล
+Task: ดำเนินการต่อจาก session ก่อน — แก้ไข API routes, ตรวจสอบระบบ, อธิบายเป็นภาษาไทย
 
 Work Log:
-- เพิ่ม Prisma schema สำหรับ IoT models: IoTEdgeNode, IoTSensorV2, IoTSensorReading, IoTBatchJob, IoTCertificationLog
-- Push schema ไปยัง SQLite database
-- สร้าง IoT Gateway mini-service ที่ port 3035 (socket.io + HTTP REST)
-- สร้าง Next.js API routes: /api/iot/ingest, /api/iot/edge-nodes, /api/iot/batch, /api/iot/certify, /api/iot/sample
-- สร้าง IoTIngestionView.tsx frontend component พร้อม 6 tabs: Realtime, Batch, Edge Nodes, การรับรอง, กราฟ, ตัวอย่าง/API
-- เพิ่ม IoT Ingestion menu item ใน sidebar (SIMULATION section)
-- แก้ไขปัญหา WebSocket ไม่เชื่อมต่อผ่าน Caddy โดยเพิ่ม local simulation fallback
-- เพิ่ม embedded edge node config เป็น fallback เมื่อ gateway ไม่พร้อมใช้งาน
-- ทดสอบด้วย Agent Browser: 59+ readings, 4/5 edge nodes online, 58 validated, 1 anomaly
+- แก้ไข API routes ทั้ง 5 ไฟล์ (edge-nodes, ingest, batch, sample) ให้ใช้ 127.0.0.1 แทน localhost เพื่อหลีกเลี่ยง IPv6 resolution issue
+- เพิ่ม AbortSignal.timeout() ในทุก fetch call เพื่อป้องกัน request ค้าง
+- สร้าง restart-wrapper.js สำหรับ auto-restart Next.js dev server
+- ตรวจสอบ IoT Ingestion page ด้วย Agent Browser: ทุกฟีเจอร์ทำงานถูกต้อง
+- อธิบายระบบ IoT Ingestion เป็นภาษาไทยอย่างครบถ้วน
 
 Stage Summary:
-- ระบบ IoT Ingestion ทำงานครบถ้วนทั้ง Realtime และ Batch
-- มี Edge Node 5 จังหวัดในไทย (กทม., เชียงใหม่, ขอนแก่น, ภูเก็ต, สุราษฎร์ธานี)
+- API routes แก้ไขแล้ว: localhost → 127.0.0.1 + timeout
+- IoT Ingestion ตรวจสอบแล้ว: Realtime, Batch, Edge Nodes, Certification, Chart, Sample/API tabs ทำงานถูกต้อง
+- สถานี 5 จังหวัด: กทม., เชียงใหม่, ขอนแก่น, ภูเก็ต, สุราษฎร์ธานี (4 online, 1 offline)
 - ระบบ Certification ตรวจสอบ 5 ข้อ: Range Check, Timestamp Order, Integrity Hash, Edge Signature, Anomaly Ratio
-- API routes พร้อมรองรับทั้ง HTTP POST และ WebSocket
-- หน้าตัวอย่าง/API มี curl examples และ sample payload สำหรับทดสอบ
+- อธิบายเป็นภาษาไทยครบถ้วน: ทั้ง Realtime/Batch workflow, Edge Node config, Certification, API, Database models, การใช้งานในบริบท T-VER

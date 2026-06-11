@@ -12,10 +12,11 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
 
-    const res = await fetch(`http://localhost:${IOT_PORT}/api/batch-upload`, {
+    const res = await fetch(`http://127.0.0.1:${IOT_PORT}/api/batch-upload`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
+      signal: AbortSignal.timeout(10000),
     });
 
     if (!res.ok) {
@@ -32,7 +33,7 @@ export async function POST(req: NextRequest) {
 
 export async function GET(req: NextRequest) {
   try {
-    const res = await fetch(`http://localhost:${IOT_PORT}/api/batch-jobs`);
+    const res = await fetch(`http://127.0.0.1:${IOT_PORT}/api/batch-jobs`, { signal: AbortSignal.timeout(5000) });
     if (!res.ok) {
       return NextResponse.json({ error: 'Gateway unavailable' }, { status: 502 });
     }
