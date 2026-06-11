@@ -20,3 +20,23 @@ Stage Summary:
 - 5 simulated edge nodes with 25+ sensors covering 14 sensor types (CH4, CO2, temperature, etc.)
 - All API endpoints tested and working correctly
 - Frontend view complete with Thai language support
+---
+Task ID: 6
+Agent: Main Agent
+Task: Verify IoT Ingestion system and provide Thai explanation
+
+Work Log:
+- Verified all IoT system components are running and functional
+- IoT Gateway running on port 3035 with 5 edge nodes and 25 sensors
+- Next.js dev server running on port 3000
+- Tested IoT Ingestion page via Agent Browser
+- Confirmed simulation generates sensor data correctly (Realtime mode)
+- Verified all 6 tabs: Realtime, Batch, Edge Nodes, การรับรอง, กราฟ, ตัวอย่าง/API
+- KPI cards showing correct data (readings, validated, anomalies)
+- Edge node status (4/5 online, 1 offline) displaying correctly
+
+Stage Summary:
+- Complete IoT Ingestion system is verified and working
+- All components: Gateway (port 3035), API routes (5 endpoints), Frontend (6 tabs), Prisma schema (5 models)
+- Simulation generates realistic sensor data with integrity hashing and quality flags
+- Ready for Thai language explanation
