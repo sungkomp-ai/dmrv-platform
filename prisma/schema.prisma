@@ -8,6 +8,7 @@ generator client {
 
 datasource db {
   provider = "sqlite"
+  // URL is configured in prisma.config.ts (Prisma 7 pattern)
 }
 
 // ─── Core Models ──────────────────────────────────────────────────────────
