@@ -1,0 +1,1069 @@
+     1→/**
+     2→ * GET /api/soil-carbon/sample
+     3→ * ──────────────────────────────────────────────
+     4→ * ส่งข้อมูลตัวอย่าง/ข้อมูลเริ่มต้นสำหรับทดสอบ API
+     5→ * รองรับพื้นที่ลาดชัน/ขั้นบันไดบนภูเขา (Terraced Farming / Sediment Trap)
+     6→ * รองรับหญ้าแฝกบนคันขอบ (Vetiver Grass Ridge) และการเปลี่ยนผ่านจากไร่เลื่อนลอย
+     7→ *
+     8→ * ข้อมูลตัวอย่าง 8 แปลงบนพื้นที่ลาดชัน:
+     9→ * 1. SOIL-CMD-001: เชียงใหม่ — นาขั้นบันไดข้าวอินทรีย์ (850 ม.รทก., 25°, 5 ชั้น, 5 ฝาย)
+    10→ * 2. SOIL-KKN-002: ขอนแก่น — ไร่มันสำปะหลังขั้นบันได (280 ม.รทก., 18°, 4 ชั้น)
+    11→ * 3. SOIL-SPB-003: สุพรรณบุรี — สวนผลไม้ลาดชัน (120 ม.รทก., 15°, 3 ชั้น)
+    12→ * 4. SOIL-SRN-004: สุรินทร์ — ปลูกข้าวกักตะกอนดิน (180 ม.รทก., 20°, 4 ชั้น)
+    13→ * 5. SOIL-PKT-005: ภูเก็ต — วนเกษตรยางพาราลาดชัน (95 ม.รทก., 22°, 3 ชั้น)
+    14→ * 6. SOIL-NNN-006: น่าน — สวนกาแฟขั้นบันได (เดิมไร่เลื่อนลอย) (680 ม.รทก., 30°, 6 ชั้น)
+    15→ * 7. SOIL-NNN-007: น่าน — สวนมะคาเดเมียขั้นบันได (เดิมไร่เลื่อนลอย) (720 ม.รทก., 28°, 5 ชั้น)
+    16→ * 8. SOIL-NNN-008: น่าน — สวนกาแฟอาราบิก้าขั้นบันได (เดิมไร่เลื่อนลอย) (1050 ม.รทก., 35°, 7 ชั้น)
+    17→ *
+    18→ * มิติขั้นบันได (แก้ไขแล้ว):
+    19→ * - คันขอบปลูกหญ้าแฝก (Vetiver Grass Ridge): 0.7-1.0 เมตร
+    20→ * - พื้นที่ปลูกพืชหลัก (Main Crop Planting Area): 1.5-2.0 เมตร
+    21→ * - ความกว้างรวมต่อชั้น (Total Terrace Width): 2.0-2.7 เมตร
+    22→ *
+    23→ * เมื่อ ?seed=true จะสร้างแปลง ชั้นปลูก ฝาย และข้อมูลการวัดพร้อมตะกอนดิน
+    24→ */
+    25→import { NextRequest, NextResponse } from 'next/server';
+    26→import { db } from '@/lib/db';
+    27→
+    28→// ─── ข้อมูลแปลงตัวอย่าง 8 แปลง (พื้นที่ลาดชัน/ขั้นบันได + หญ้าแฝก) ───
+    29→const SAMPLE_PLOTS = [
+    30→  {
+    31→    plotId: 'SOIL-CMD-001',
+    32→    name: 'Chiang Mai Terraced Organic Rice',
+    33→    nameTh: 'นาขั้นบันไดข้าวอินทรีย์ เชียงใหม่',
+    34→    province: 'เชียงใหม่',
+    35→    lat: 18.7883,
+    36→    lng: 98.9853,
+    37→    altitudeMasl: 850,
+    38→    slopeDegree: 25,
+    39→    slopeAspect: 'NE',
+    40→    areaRai: 25,
+    41→    areaHa: 4.0,
+    42→    terraceCount: 5,
+    43→    terraceWidthM: 2.5,
+    44→    plantingAreaWidthM: 1.7,
+    45→    ridgeWidthMPlot: 0.8,
+    46→    terraceHeightM: 1.8,
+    47→    checkDamCount: 5,
+    48→    checkDamType: 'STONE',
+    49→    landUseType: 'terraced_farming',
+    50→    previousLandUse: 'conventional',
+    51→    vetiverGrassCoveragePct: 85,
+    52→    soilType: 'Clay Loam',
+    53→    cropType: 'Rice',
+    54→    practiceType: 'sediment_trap',
+    55→    baselineSOC: 28.5,
+    56→    projectSOC: 35.2,
+    57→    baselineSediment: 18.5,
+    58→    projectSediment: 4.2,
+    59→    sedimentTrapRate: 22.7,
+    60→    baselineEmission: 4.8,
+    61→    projectEmission: 2.1,
+    62→    monitoringYear: 2,
+    63→    status: 'MONITORING',
+    64→    methodology: 'T-VER-SOIL-01',
+    65→  },
+    66→  {
+    67→    plotId: 'SOIL-KKN-002',
+    68→    name: 'Khon Kaen Terraced Cassava',
+    69→    nameTh: 'ไร่มันสำปะหลังขั้นบันได ขอนแก่น',
+    70→    province: 'ขอนแก่น',
+    71→    lat: 16.4322,
+    72→    lng: 102.8236,
+    73→    altitudeMasl: 280,
+    74→    slopeDegree: 18,
+    75→    slopeAspect: 'SE',
+    76→    areaRai: 50,
+    77→    areaHa: 8.0,
+    78→    terraceCount: 4,
+    79→    terraceWidthM: 2.7,
+    80→    plantingAreaWidthM: 1.9,
+    81→    ridgeWidthMPlot: 0.8,
+    82→    terraceHeightM: 1.5,
+    83→    checkDamCount: 3,
+    84→    checkDamType: 'CONCRETE',
+    85→    landUseType: 'terraced_farming',
+    86→    previousLandUse: 'conventional',
+    87→    vetiverGrassCoveragePct: 80,
+    88→    soilType: 'Sandy Loam',
+    89→    cropType: 'Cassava',
+    90→    practiceType: 'sediment_trap',
+    91→    baselineSOC: 18.2,
+    92→    projectSOC: 24.8,
+    93→    baselineSediment: 22.0,
+    94→    projectSediment: 6.5,
+    95→    sedimentTrapRate: 29.5,
+    96→    baselineEmission: 6.5,
+    97→    projectEmission: 3.2,
+    98→    monitoringYear: 3,
+    99→    status: 'VERIFIED',
+   100→    methodology: 'T-VER-SOIL-01',
+   101→  },
+   102→  {
+   103→    plotId: 'SOIL-SPB-003',
+   104→    name: 'Suphanburi Sloping Fruit Orchard',
+   105→    nameTh: 'สวนผลไม้ลาดชัน สุพรรณบุรี',
+   106→    province: 'สุพรรณบุรี',
+   107→    lat: 14.4746,
+   108→    lng: 100.1182,
+   109→    altitudeMasl: 120,
+   110→    slopeDegree: 15,
+   111→    slopeAspect: 'S',
+   112→    areaRai: 100,
+   113→    areaHa: 16.0,
+   114→    terraceCount: 3,
+   115→    terraceWidthM: 2.5,
+   116→    plantingAreaWidthM: 1.8,
+   117→    ridgeWidthMPlot: 0.7,
+   118→    terraceHeightM: 1.2,
+   119→    checkDamCount: 2,
+   120→    checkDamType: 'GABION',
+   121→    landUseType: 'terraced_farming',
+   122→    previousLandUse: 'conventional',
+   123→    vetiverGrassCoveragePct: 90,
+   124→    soilType: 'Clay',
+   125→    cropType: 'Fruit trees',
+   126→    practiceType: 'contour_planting',
+   127→    baselineSOC: 22.1,
+   128→    projectSOC: 32.5,
+   129→    baselineSediment: 14.0,
+   130→    projectSediment: 5.0,
+   131→    sedimentTrapRate: 35.7,
+   132→    baselineEmission: 8.2,
+   133→    projectEmission: 3.8,
+   134→    monitoringYear: 1,
+   135→    status: 'MONITORING',
+   136→    methodology: 'T-VER-SOIL-01',
+   137→  },
+   138→  {
+   139→    plotId: 'SOIL-SRN-004',
+   140→    name: 'Surin Sediment Trap Rice',
+   141→    nameTh: 'ปลูกข้าวกักตะกอนดิน สุรินทร์',
+   142→    province: 'สุรินทร์',
+   143→    lat: 14.8818,
+   144→    lng: 103.4937,
+   145→    altitudeMasl: 180,
+   146→    slopeDegree: 20,
+   147→    slopeAspect: 'SW',
+   148→    areaRai: 30,
+   149→    areaHa: 4.8,
+   150→    terraceCount: 4,
+   151→    terraceWidthM: 2.2,
+   152→    plantingAreaWidthM: 1.5,
+   153→    ridgeWidthMPlot: 0.7,
+   154→    terraceHeightM: 1.6,
+   155→    checkDamCount: 4,
+   156→    checkDamType: 'LOG',
+   157→    landUseType: 'terraced_farming',
+   158→    previousLandUse: 'conventional',
+   159→    vetiverGrassCoveragePct: 85,
+   160→    soilType: 'Loam',
+   161→    cropType: 'Rice',
+   162→    practiceType: 'sediment_trap',
+   163→    baselineSOC: 25.3,
+   164→    projectSOC: 29.8,
+   165→    baselineSediment: 20.0,
+   166→    projectSediment: 5.5,
+   167→    sedimentTrapRate: 27.5,
+   168→    baselineEmission: 5.6,
+   169→    projectEmission: 2.4,
+   170→    monitoringYear: 2,
+   171→    status: 'REGISTERED',
+   172→    methodology: 'T-VER-SOIL-01',
+   173→  },
+   174→  {
+   175→    plotId: 'SOIL-PKT-005',
+   176→    name: 'Phuket Sloping Agroforestry Rubber',
+   177→    nameTh: 'วนเกษตรยางพาราลาดชัน ภูเก็ต',
+   178→    province: 'ภูเก็ต',
+   179→    lat: 7.8804,
+   180→    lng: 98.3923,
+   181→    altitudeMasl: 95,
+   182→    slopeDegree: 22,
+   183→    slopeAspect: 'W',
+   184→    areaRai: 40,
+   185→    areaHa: 6.4,
+   186→    terraceCount: 3,
+   187→    terraceWidthM: 2.5,
+   188→    plantingAreaWidthM: 1.7,
+   189→    ridgeWidthMPlot: 0.8,
+   190→    terraceHeightM: 1.4,
+   191→    checkDamCount: 3,
+   192→    checkDamType: 'VEGETATION',
+   193→    landUseType: 'agroforestry',
+   194→    previousLandUse: 'degraded_forest',
+   195→    vetiverGrassCoveragePct: 100,
+   196→    soilType: 'Sandy Clay Loam',
+   197→    cropType: 'Rubber',
+   198→    practiceType: 'agroforestry',
+   199→    baselineSOC: 32.5,
+   200→    projectSOC: 42.1,
+   201→    baselineSediment: 16.0,
+   202→    projectSediment: 3.8,
+   203→    sedimentTrapRate: 23.8,
+   204→    baselineEmission: 3.2,
+   205→    projectEmission: 1.5,
+   206→    monitoringYear: 4,
+   207→    status: 'CERTIFIED',
+   208→    methodology: 'T-VER-SOIL-01',
+   209→  },
+   210→  // ─── แปลงจังหวัดน่าน (เดิมไร่เลื่อนลอย → เกษตรกักตะกอนดิน) ───
+   211→  {
+   212→    plotId: 'SOIL-NNN-006',
+   213→    name: 'Nan Coffee Terraced Farm (Former Slash-and-Burn)',
+   214→    nameTh: 'สวนกาแฟขั้นบันได อ.ท่าวังผา จ.น่าน (เดิมไร่เลื่อนลอย)',
+   215→    province: 'น่าน',
+   216→    lat: 19.1056,
+   217→    lng: 100.8028,
+   218→    altitudeMasl: 680,
+   219→    slopeDegree: 30,
+   220→    slopeAspect: 'SW',
+   221→    areaRai: 20,
+   222→    areaHa: 3.2,
+   223→    terraceCount: 6,
+   224→    terraceWidthM: 2.5,
+   225→    plantingAreaWidthM: 1.7,
+   226→    ridgeWidthMPlot: 0.8,
+   227→    terraceHeightM: 1.5,
+   228→    checkDamCount: 6,
+   229→    checkDamType: 'STONE',
+   230→    landUseType: 'terraced_farming',
+   231→    previousLandUse: 'slash_and_burn',
+   232→    vetiverGrassCoveragePct: 95,
+   233→    soilType: 'Sandy Clay Loam',
+   234→    cropType: 'Coffee',
+   235→    practiceType: 'sediment_trap',
+   236→    baselineSOC: 15.2,
+   237→    projectSOC: 24.8,
+   238→    baselineSediment: 28.0,
+   239→    projectSediment: 5.5,
+   240→    sedimentTrapRate: 80.4,
+   241→    baselineEmission: 8.5,
+   242→    projectEmission: 2.8,
+   243→    monitoringYear: 2,
+   244→    status: 'MONITORING',
+   245→    methodology: 'T-VER-SOIL-01',
+   246→  },
+   247→  {
+   248→    plotId: 'SOIL-NNN-007',
+   249→    name: 'Nan Macadamia Terraced Farm (Former Slash-and-Burn)',
+   250→    nameTh: 'สวนมะคาเดเมียขั้นบันได อ.ปัว จ.น่าน (เดิมไร่เลื่อนลอย)',
+   251→    province: 'น่าน',
+   252→    lat: 19.2189,
+   253→    lng: 100.7314,
+   254→    altitudeMasl: 720,
+   255→    slopeDegree: 28,
+   256→    slopeAspect: 'SE',
+   257→    areaRai: 30,
+   258→    areaHa: 4.8,
+   259→    terraceCount: 5,
+   260→    terraceWidthM: 2.7,
+   261→    plantingAreaWidthM: 1.9,
+   262→    ridgeWidthMPlot: 0.8,
+   263→    terraceHeightM: 1.6,
+   264→    checkDamCount: 5,
+   265→    checkDamType: 'GABION',
+   266→    landUseType: 'terraced_farming',
+   267→    previousLandUse: 'slash_and_burn',
+   268→    vetiverGrassCoveragePct: 90,
+   269→    soilType: 'Clay Loam',
+   270→    cropType: 'Macadamia',
+   271→    practiceType: 'sediment_trap',
+   272→    baselineSOC: 16.8,
+   273→    projectSOC: 27.5,
+   274→    baselineSediment: 25.0,
+   275→    projectSediment: 4.8,
+   276→    sedimentTrapRate: 80.8,
+   277→    baselineEmission: 7.8,
+   278→    projectEmission: 2.2,
+   279→    monitoringYear: 3,
+   280→    status: 'VERIFIED',
+   281→    methodology: 'T-VER-SOIL-01',
+   282→  },
+   283→  {
+   284→    plotId: 'SOIL-NNN-008',
+   285→    name: 'Nan Arabica Coffee High Altitude (Former Slash-and-Burn)',
+   286→    nameTh: 'สวนกาแฟอาราบิก้าขั้นบันได อ.เฉลิมพระเกียรติ จ.น่าน (เดิมไร่เลื่อนลอย)',
+   287→    province: 'น่าน',
+   288→    lat: 18.9567,
+   289→    lng: 100.6542,
+   290→    altitudeMasl: 1050,
+   291→    slopeDegree: 35,
+   292→    slopeAspect: 'NE',
+   293→    areaRai: 15,
+   294→    areaHa: 2.4,
+   295→    terraceCount: 7,
+   296→    terraceWidthM: 2.2,
+   297→    plantingAreaWidthM: 1.5,
+   298→    ridgeWidthMPlot: 0.7,
+   299→    terraceHeightM: 1.3,
+   300→    checkDamCount: 7,
+   301→    checkDamType: 'STONE',
+   302→    landUseType: 'terraced_farming',
+   303→    previousLandUse: 'slash_and_burn',
+   304→    vetiverGrassCoveragePct: 100,
+   305→    soilType: 'Loam',
+   306→    cropType: 'Arabica Coffee',
+   307→    practiceType: 'sediment_trap',
+   308→    baselineSOC: 13.5,
+   309→    projectSOC: 22.2,
+   310→    baselineSediment: 32.0,
+   311→    projectSediment: 6.2,
+   312→    sedimentTrapRate: 80.6,
+   313→    baselineEmission: 9.2,
+   314→    projectEmission: 3.1,
+   315→    monitoringYear: 1,
+   316→    status: 'REGISTERED',
+   317→    methodology: 'T-VER-SOIL-01',
+   318→  },
+   319→];
+   320→
+   321→// ─── ข้อมูลชั้นปลูกสำหรับแต่ละแปลง (พร้อมข้อมูลหญ้าแฝก) ───
+   322→const SAMPLE_TERRACES: Record<string, Array<{
+   323→  layerNumber: number;
+   324→  layerNameTh: string;
+   325→  elevationMasl: number;
+   326→  sedimentTrappedKg: number;
+   327→  organicCarbonPct: number;
+   328→  sedimentDepthCm: number;
+   329→  waterFlowInLMin: number;
+   330→  waterFlowOutLMin: number;
+   331→  ridgeWidthM: number;
+   332→  plantingAreaWidthM: number;
+   333→  vetiverGrassStatus: string;
+   334→  vetiverRootDepthCm: number;
+   335→  vetiverPlantDensity: number;
+   336→  vetiverErosionPreventionPct: number;
+   337→  vetiverSedimentAccumulationKg: number;
+   338→  vetiverCarbonSequestrationKg: number;
+   339→}>> = {
+   340→  'SOIL-CMD-001': [
+   341→    { layerNumber: 1, layerNameTh: 'ชั้นปลูกที่ 1 (ข้าวหอมมะลิ)', elevationMasl: 850, sedimentTrappedKg: 320, organicCarbonPct: 2.8, sedimentDepthCm: 5.2, waterFlowInLMin: 15.0, waterFlowOutLMin: 8.5, ridgeWidthM: 0.8, plantingAreaWidthM: 1.7, vetiverGrassStatus: 'ESTABLISHED', vetiverRootDepthCm: 240, vetiverPlantDensity: 7, vetiverErosionPreventionPct: 78, vetiverSedimentAccumulationKg: 72, vetiverCarbonSequestrationKg: 3.2 },
+   342→    { layerNumber: 2, layerNameTh: 'ชั้นปลูกที่ 2 (ข้าวเหนียว)', elevationMasl: 848.2, sedimentTrappedKg: 285, organicCarbonPct: 2.5, sedimentDepthCm: 4.8, waterFlowInLMin: 8.5, waterFlowOutLMin: 5.2, ridgeWidthM: 0.8, plantingAreaWidthM: 1.7, vetiverGrassStatus: 'ESTABLISHED', vetiverRootDepthCm: 230, vetiverPlantDensity: 7, vetiverErosionPreventionPct: 75, vetiverSedimentAccumulationKg: 65, vetiverCarbonSequestrationKg: 2.9 },
+   343→    { layerNumber: 3, layerNameTh: 'ชั้นปลูกที่ 3 (ข้าวอินทรีย์)', elevationMasl: 846.4, sedimentTrappedKg: 260, organicCarbonPct: 2.3, sedimentDepthCm: 4.5, waterFlowInLMin: 5.2, waterFlowOutLMin: 3.0, ridgeWidthM: 0.8, plantingAreaWidthM: 1.7, vetiverGrassStatus: 'PLANTED', vetiverRootDepthCm: 210, vetiverPlantDensity: 6, vetiverErosionPreventionPct: 70, vetiverSedimentAccumulationKg: 55, vetiverCarbonSequestrationKg: 2.5 },
+   344→    { layerNumber: 4, layerNameTh: 'ชั้นปลูกที่ 4 (ผักบุ้ง)', elevationMasl: 844.6, sedimentTrappedKg: 240, organicCarbonPct: 2.1, sedimentDepthCm: 4.0, waterFlowInLMin: 3.0, waterFlowOutLMin: 1.8, ridgeWidthM: 0.8, plantingAreaWidthM: 1.7, vetiverGrassStatus: 'PLANTED', vetiverRootDepthCm: 200, vetiverPlantDensity: 6, vetiverErosionPreventionPct: 68, vetiverSedimentAccumulationKg: 48, vetiverCarbonSequestrationKg: 2.2 },
+   345→    { layerNumber: 5, layerNameTh: 'ชั้นปลูกที่ 5 (สมุนไพร)', elevationMasl: 842.8, sedimentTrappedKg: 210, organicCarbonPct: 1.9, sedimentDepthCm: 3.5, waterFlowInLMin: 1.8, waterFlowOutLMin: 0.8, ridgeWidthM: 0.8, plantingAreaWidthM: 1.7, vetiverGrassStatus: 'PLANTED', vetiverRootDepthCm: 190, vetiverPlantDensity: 5, vetiverErosionPreventionPct: 65, vetiverSedimentAccumulationKg: 40, vetiverCarbonSequestrationKg: 1.8 },
+   346→  ],
+   347→  'SOIL-KKN-002': [
+   348→    { layerNumber: 1, layerNameTh: 'ชั้นปลูกที่ 1 (มันสำปะหลัง)', elevationMasl: 280, sedimentTrappedKg: 420, organicCarbonPct: 1.8, sedimentDepthCm: 6.0, waterFlowInLMin: 22.0, waterFlowOutLMin: 14.0, ridgeWidthM: 0.8, plantingAreaWidthM: 1.9, vetiverGrassStatus: 'ESTABLISHED', vetiverRootDepthCm: 235, vetiverPlantDensity: 7, vetiverErosionPreventionPct: 72, vetiverSedimentAccumulationKg: 68, vetiverCarbonSequestrationKg: 3.0 },
+   349→    { layerNumber: 2, layerNameTh: 'ชั้นปลูกที่ 2 (ถั่วลิสง)', elevationMasl: 278.5, sedimentTrappedKg: 380, organicCarbonPct: 1.6, sedimentDepthCm: 5.5, waterFlowInLMin: 14.0, waterFlowOutLMin: 8.5, ridgeWidthM: 0.8, plantingAreaWidthM: 1.9, vetiverGrassStatus: 'PLANTED', vetiverRootDepthCm: 210, vetiverPlantDensity: 6, vetiverErosionPreventionPct: 68, vetiverSedimentAccumulationKg: 58, vetiverCarbonSequestrationKg: 2.6 },
+   350→    { layerNumber: 3, layerNameTh: 'ชั้นปลูกที่ 3 (มันสำปะหลัง)', elevationMasl: 277.0, sedimentTrappedKg: 350, organicCarbonPct: 1.5, sedimentDepthCm: 5.0, waterFlowInLMin: 8.5, waterFlowOutLMin: 4.2, ridgeWidthM: 0.8, plantingAreaWidthM: 1.9, vetiverGrassStatus: 'PLANTED', vetiverRootDepthCm: 200, vetiverPlantDensity: 6, vetiverErosionPreventionPct: 65, vetiverSedimentAccumulationKg: 50, vetiverCarbonSequestrationKg: 2.2 },
+   351→    { layerNumber: 4, layerNameTh: 'ชั้นปลูกที่ 4 (ข้าวโพด)', elevationMasl: 275.5, sedimentTrappedKg: 310, organicCarbonPct: 1.3, sedimentDepthCm: 4.2, waterFlowInLMin: 4.2, waterFlowOutLMin: 2.0, ridgeWidthM: 0.8, plantingAreaWidthM: 1.9, vetiverGrassStatus: 'PLANTED', vetiverRootDepthCm: 190, vetiverPlantDensity: 5, vetiverErosionPreventionPct: 62, vetiverSedimentAccumulationKg: 42, vetiverCarbonSequestrationKg: 1.9 },
+   352→  ],
+   353→  'SOIL-SPB-003': [
+   354→    { layerNumber: 1, layerNameTh: 'ชั้นปลูกที่ 1 (มะม่วง)', elevationMasl: 120, sedimentTrappedKg: 550, organicCarbonPct: 2.5, sedimentDepthCm: 7.0, waterFlowInLMin: 30.0, waterFlowOutLMin: 22.0, ridgeWidthM: 0.7, plantingAreaWidthM: 1.8, vetiverGrassStatus: 'MATURE', vetiverRootDepthCm: 270, vetiverPlantDensity: 8, vetiverErosionPreventionPct: 85, vetiverSedimentAccumulationKg: 88, vetiverCarbonSequestrationKg: 3.9 },
+   355→    { layerNumber: 2, layerNameTh: 'ชั้นปลูกที่ 2 (ขนุน)', elevationMasl: 118.8, sedimentTrappedKg: 480, organicCarbonPct: 2.2, sedimentDepthCm: 6.2, waterFlowInLMin: 22.0, waterFlowOutLMin: 16.5, ridgeWidthM: 0.7, plantingAreaWidthM: 1.8, vetiverGrassStatus: 'MATURE', vetiverRootDepthCm: 260, vetiverPlantDensity: 8, vetiverErosionPreventionPct: 82, vetiverSedimentAccumulationKg: 78, vetiverCarbonSequestrationKg: 3.5 },
+   356→    { layerNumber: 3, layerNameTh: 'ชั้นปลูกที่ 3 (ทับทิม)', elevationMasl: 117.6, sedimentTrappedKg: 420, organicCarbonPct: 2.0, sedimentDepthCm: 5.5, waterFlowInLMin: 16.5, waterFlowOutLMin: 10.0, ridgeWidthM: 0.7, plantingAreaWidthM: 1.8, vetiverGrassStatus: 'ESTABLISHED', vetiverRootDepthCm: 240, vetiverPlantDensity: 7, vetiverErosionPreventionPct: 78, vetiverSedimentAccumulationKg: 68, vetiverCarbonSequestrationKg: 3.0 },
+   357→  ],
+   358→  'SOIL-SRN-004': [
+   359→    { layerNumber: 1, layerNameTh: 'ชั้นปลูกที่ 1 (ข้าวหอม)', elevationMasl: 180, sedimentTrappedKg: 380, organicCarbonPct: 2.6, sedimentDepthCm: 5.8, waterFlowInLMin: 18.0, waterFlowOutLMin: 12.0, ridgeWidthM: 0.7, plantingAreaWidthM: 1.5, vetiverGrassStatus: 'ESTABLISHED', vetiverRootDepthCm: 245, vetiverPlantDensity: 7, vetiverErosionPreventionPct: 80, vetiverSedimentAccumulationKg: 75, vetiverCarbonSequestrationKg: 3.4 },
+   360→    { layerNumber: 2, layerNameTh: 'ชั้นปลูกที่ 2 (ข้าวกล้อง)', elevationMasl: 178.4, sedimentTrappedKg: 340, organicCarbonPct: 2.3, sedimentDepthCm: 5.2, waterFlowInLMin: 12.0, waterFlowOutLMin: 7.0, ridgeWidthM: 0.7, plantingAreaWidthM: 1.5, vetiverGrassStatus: 'ESTABLISHED', vetiverRootDepthCm: 230, vetiverPlantDensity: 7, vetiverErosionPreventionPct: 76, vetiverSedimentAccumulationKg: 65, vetiverCarbonSequestrationKg: 2.9 },
+   361→    { layerNumber: 3, layerNameTh: 'ชั้นปลูกที่ 3 (ผักอีสาน)', elevationMasl: 176.8, sedimentTrappedKg: 300, organicCarbonPct: 2.0, sedimentDepthCm: 4.5, waterFlowInLMin: 7.0, waterFlowOutLMin: 3.5, ridgeWidthM: 0.7, plantingAreaWidthM: 1.5, vetiverGrassStatus: 'PLANTED', vetiverRootDepthCm: 210, vetiverPlantDensity: 6, vetiverErosionPreventionPct: 70, vetiverSedimentAccumulationKg: 52, vetiverCarbonSequestrationKg: 2.3 },
+   362→    { layerNumber: 4, layerNameTh: 'ชั้นปลูกที่ 4 (สมุนไพรอีสาน)', elevationMasl: 175.2, sedimentTrappedKg: 270, organicCarbonPct: 1.8, sedimentDepthCm: 4.0, waterFlowInLMin: 3.5, waterFlowOutLMin: 1.5, ridgeWidthM: 0.7, plantingAreaWidthM: 1.5, vetiverGrassStatus: 'PLANTED', vetiverRootDepthCm: 195, vetiverPlantDensity: 5, vetiverErosionPreventionPct: 66, vetiverSedimentAccumulationKg: 45, vetiverCarbonSequestrationKg: 2.0 },
+   363→  ],
+   364→  'SOIL-PKT-005': [
+   365→    { layerNumber: 1, layerNameTh: 'ชั้นปลูกที่ 1 (ยางพารา)', elevationMasl: 95, sedimentTrappedKg: 450, organicCarbonPct: 3.2, sedimentDepthCm: 6.5, waterFlowInLMin: 25.0, waterFlowOutLMin: 16.0, ridgeWidthM: 0.8, plantingAreaWidthM: 1.7, vetiverGrassStatus: 'MATURE', vetiverRootDepthCm: 280, vetiverPlantDensity: 9, vetiverErosionPreventionPct: 88, vetiverSedimentAccumulationKg: 92, vetiverCarbonSequestrationKg: 4.1 },
+   366→    { layerNumber: 2, layerNameTh: 'ชั้นปลูกที่ 2 (ยางพารา+ไม้ผล)', elevationMasl: 93.6, sedimentTrappedKg: 400, organicCarbonPct: 2.9, sedimentDepthCm: 5.8, waterFlowInLMin: 16.0, waterFlowOutLMin: 9.5, ridgeWidthM: 0.8, plantingAreaWidthM: 1.7, vetiverGrassStatus: 'MATURE', vetiverRootDepthCm: 270, vetiverPlantDensity: 8, vetiverErosionPreventionPct: 85, vetiverSedimentAccumulationKg: 82, vetiverCarbonSequestrationKg: 3.6 },
+   367→    { layerNumber: 3, layerNameTh: 'ชั้นปลูกที่ 3 (ไม้ยืนต้น)', elevationMasl: 92.2, sedimentTrappedKg: 360, organicCarbonPct: 2.6, sedimentDepthCm: 5.0, waterFlowInLMin: 9.5, waterFlowOutLMin: 5.0, ridgeWidthM: 0.8, plantingAreaWidthM: 1.7, vetiverGrassStatus: 'ESTABLISHED', vetiverRootDepthCm: 250, vetiverPlantDensity: 7, vetiverErosionPreventionPct: 80, vetiverSedimentAccumulationKg: 70, vetiverCarbonSequestrationKg: 3.1 },
+   368→  ],
+   369→  // ─── แปลงจังหวัดน่าน — เดิมไร่เลื่อนลอย → เกษตรกักตะกอนดิน ───
+   370→  'SOIL-NNN-006': [
+   371→    { layerNumber: 1, layerNameTh: 'ชั้นปลูกที่ 1 (กาแฟรอบชั้น)', elevationMasl: 680, sedimentTrappedKg: 450, organicCarbonPct: 2.8, sedimentDepthCm: 6.5, waterFlowInLMin: 18.0, waterFlowOutLMin: 10.0, ridgeWidthM: 0.8, plantingAreaWidthM: 1.7, vetiverGrassStatus: 'MATURE', vetiverRootDepthCm: 280, vetiverPlantDensity: 8, vetiverErosionPreventionPct: 85, vetiverSedimentAccumulationKg: 95, vetiverCarbonSequestrationKg: 4.2 },
+   372→    { layerNumber: 2, layerNameTh: 'ชั้นปลูกที่ 2 (กาแฟรอบชั้น)', elevationMasl: 678.5, sedimentTrappedKg: 410, organicCarbonPct: 2.5, sedimentDepthCm: 5.8, waterFlowInLMin: 10.0, waterFlowOutLMin: 6.5, ridgeWidthM: 0.8, plantingAreaWidthM: 1.7, vetiverGrassStatus: 'MATURE', vetiverRootDepthCm: 260, vetiverPlantDensity: 8, vetiverErosionPreventionPct: 82, vetiverSedimentAccumulationKg: 85, vetiverCarbonSequestrationKg: 3.8 },
+   373→    { layerNumber: 3, layerNameTh: 'ชั้นปลูกที่ 3 (กาแฟรอบชั้น)', elevationMasl: 677.0, sedimentTrappedKg: 375, organicCarbonPct: 2.3, sedimentDepthCm: 5.2, waterFlowInLMin: 6.5, waterFlowOutLMin: 4.0, ridgeWidthM: 0.8, plantingAreaWidthM: 1.7, vetiverGrassStatus: 'ESTABLISHED', vetiverRootDepthCm: 250, vetiverPlantDensity: 7, vetiverErosionPreventionPct: 78, vetiverSedimentAccumulationKg: 75, vetiverCarbonSequestrationKg: 3.3 },
+   374→    { layerNumber: 4, layerNameTh: 'ชั้นปลูกที่ 4 (กาแฟรอบชั้น)', elevationMasl: 675.5, sedimentTrappedKg: 340, organicCarbonPct: 2.1, sedimentDepthCm: 4.8, waterFlowInLMin: 4.0, waterFlowOutLMin: 2.5, ridgeWidthM: 0.8, plantingAreaWidthM: 1.7, vetiverGrassStatus: 'ESTABLISHED', vetiverRootDepthCm: 240, vetiverPlantDensity: 7, vetiverErosionPreventionPct: 75, vetiverSedimentAccumulationKg: 65, vetiverCarbonSequestrationKg: 2.9 },
+   375→    { layerNumber: 5, layerNameTh: 'ชั้นปลูกที่ 5 (กาแฟรอบชั้น)', elevationMasl: 674.0, sedimentTrappedKg: 305, organicCarbonPct: 1.9, sedimentDepthCm: 4.2, waterFlowInLMin: 2.5, waterFlowOutLMin: 1.5, ridgeWidthM: 0.8, plantingAreaWidthM: 1.7, vetiverGrassStatus: 'PLANTED', vetiverRootDepthCm: 220, vetiverPlantDensity: 6, vetiverErosionPreventionPct: 70, vetiverSedimentAccumulationKg: 55, vetiverCarbonSequestrationKg: 2.4 },
+   376→    { layerNumber: 6, layerNameTh: 'ชั้นปลูกที่ 6 (กาแฟรอบชั้น)', elevationMasl: 672.5, sedimentTrappedKg: 270, organicCarbonPct: 1.7, sedimentDepthCm: 3.8, waterFlowInLMin: 1.5, waterFlowOutLMin: 0.8, ridgeWidthM: 0.8, plantingAreaWidthM: 1.7, vetiverGrassStatus: 'PLANTED', vetiverRootDepthCm: 200, vetiverPlantDensity: 6, vetiverErosionPreventionPct: 66, vetiverSedimentAccumulationKg: 45, vetiverCarbonSequestrationKg: 2.0 },
+   377→  ],
+   378→  'SOIL-NNN-007': [
+   379→    { layerNumber: 1, layerNameTh: 'ชั้นปลูกที่ 1 (มะคาเดเมีย)', elevationMasl: 720, sedimentTrappedKg: 480, organicCarbonPct: 2.6, sedimentDepthCm: 7.0, waterFlowInLMin: 20.0, waterFlowOutLMin: 12.0, ridgeWidthM: 0.8, plantingAreaWidthM: 1.9, vetiverGrassStatus: 'MATURE', vetiverRootDepthCm: 290, vetiverPlantDensity: 8, vetiverErosionPreventionPct: 86, vetiverSedimentAccumulationKg: 98, vetiverCarbonSequestrationKg: 4.4 },
+   380→    { layerNumber: 2, layerNameTh: 'ชั้นปลูกที่ 2 (มะคาเดเมีย)', elevationMasl: 718.4, sedimentTrappedKg: 440, organicCarbonPct: 2.3, sedimentDepthCm: 6.2, waterFlowInLMin: 12.0, waterFlowOutLMin: 7.5, ridgeWidthM: 0.8, plantingAreaWidthM: 1.9, vetiverGrassStatus: 'MATURE', vetiverRootDepthCm: 270, vetiverPlantDensity: 8, vetiverErosionPreventionPct: 83, vetiverSedimentAccumulationKg: 88, vetiverCarbonSequestrationKg: 3.9 },
+   381→    { layerNumber: 3, layerNameTh: 'ชั้นปลูกที่ 3 (มะคาเดเมีย+กาแฟ)', elevationMasl: 716.8, sedimentTrappedKg: 400, organicCarbonPct: 2.1, sedimentDepthCm: 5.5, waterFlowInLMin: 7.5, waterFlowOutLMin: 4.5, ridgeWidthM: 0.8, plantingAreaWidthM: 1.9, vetiverGrassStatus: 'ESTABLISHED', vetiverRootDepthCm: 250, vetiverPlantDensity: 7, vetiverErosionPreventionPct: 79, vetiverSedimentAccumulationKg: 76, vetiverCarbonSequestrationKg: 3.4 },
+   382→    { layerNumber: 4, layerNameTh: 'ชั้นปลูกที่ 4 (มะคาเดเมีย)', elevationMasl: 715.2, sedimentTrappedKg: 360, organicCarbonPct: 1.9, sedimentDepthCm: 4.8, waterFlowInLMin: 4.5, waterFlowOutLMin: 2.5, ridgeWidthM: 0.8, plantingAreaWidthM: 1.9, vetiverGrassStatus: 'ESTABLISHED', vetiverRootDepthCm: 235, vetiverPlantDensity: 7, vetiverErosionPreventionPct: 75, vetiverSedimentAccumulationKg: 65, vetiverCarbonSequestrationKg: 2.9 },
+   383→    { layerNumber: 5, layerNameTh: 'ชั้นปลูกที่ 5 (มะคาเดเมีย+สมุนไพร)', elevationMasl: 713.6, sedimentTrappedKg: 320, organicCarbonPct: 1.7, sedimentDepthCm: 4.2, waterFlowInLMin: 2.5, waterFlowOutLMin: 1.2, ridgeWidthM: 0.8, plantingAreaWidthM: 1.9, vetiverGrassStatus: 'PLANTED', vetiverRootDepthCm: 215, vetiverPlantDensity: 6, vetiverErosionPreventionPct: 70, vetiverSedimentAccumulationKg: 55, vetiverCarbonSequestrationKg: 2.5 },
+   384→  ],
+   385→  'SOIL-NNN-008': [
+   386→    { layerNumber: 1, layerNameTh: 'ชั้นปลูกที่ 1 (กาแฟอาราบิก้า)', elevationMasl: 1050, sedimentTrappedKg: 520, organicCarbonPct: 3.0, sedimentDepthCm: 7.5, waterFlowInLMin: 22.0, waterFlowOutLMin: 13.0, ridgeWidthM: 0.7, plantingAreaWidthM: 1.5, vetiverGrassStatus: 'MATURE', vetiverRootDepthCm: 295, vetiverPlantDensity: 9, vetiverErosionPreventionPct: 88, vetiverSedimentAccumulationKg: 102, vetiverCarbonSequestrationKg: 4.5 },
+   387→    { layerNumber: 2, layerNameTh: 'ชั้นปลูกที่ 2 (กาแฟอาราบิก้า)', elevationMasl: 1048.7, sedimentTrappedKg: 475, organicCarbonPct: 2.7, sedimentDepthCm: 6.8, waterFlowInLMin: 13.0, waterFlowOutLMin: 8.0, ridgeWidthM: 0.7, plantingAreaWidthM: 1.5, vetiverGrassStatus: 'MATURE', vetiverRootDepthCm: 280, vetiverPlantDensity: 9, vetiverErosionPreventionPct: 86, vetiverSedimentAccumulationKg: 92, vetiverCarbonSequestrationKg: 4.1 },
+   388→    { layerNumber: 3, layerNameTh: 'ชั้นปลูกที่ 3 (กาแฟอาราบิก้า)', elevationMasl: 1047.4, sedimentTrappedKg: 430, organicCarbonPct: 2.5, sedimentDepthCm: 6.2, waterFlowInLMin: 8.0, waterFlowOutLMin: 5.0, ridgeWidthM: 0.7, plantingAreaWidthM: 1.5, vetiverGrassStatus: 'ESTABLISHED', vetiverRootDepthCm: 260, vetiverPlantDensity: 8, vetiverErosionPreventionPct: 82, vetiverSedimentAccumulationKg: 82, vetiverCarbonSequestrationKg: 3.6 },
+   389→    { layerNumber: 4, layerNameTh: 'ชั้นปลูกที่ 4 (กาแฟอาราบิก้า)', elevationMasl: 1046.1, sedimentTrappedKg: 390, organicCarbonPct: 2.2, sedimentDepthCm: 5.5, waterFlowInLMin: 5.0, waterFlowOutLMin: 3.0, ridgeWidthM: 0.7, plantingAreaWidthM: 1.5, vetiverGrassStatus: 'ESTABLISHED', vetiverRootDepthCm: 245, vetiverPlantDensity: 7, vetiverErosionPreventionPct: 78, vetiverSedimentAccumulationKg: 72, vetiverCarbonSequestrationKg: 3.2 },
+   390→    { layerNumber: 5, layerNameTh: 'ชั้นปลูกที่ 5 (กาแฟอาราบิก้า)', elevationMasl: 1044.8, sedimentTrappedKg: 355, organicCarbonPct: 2.0, sedimentDepthCm: 5.0, waterFlowInLMin: 3.0, waterFlowOutLMin: 1.8, ridgeWidthM: 0.7, plantingAreaWidthM: 1.5, vetiverGrassStatus: 'PLANTED', vetiverRootDepthCm: 225, vetiverPlantDensity: 7, vetiverErosionPreventionPct: 74, vetiverSedimentAccumulationKg: 60, vetiverCarbonSequestrationKg: 2.7 },
+   391→    { layerNumber: 6, layerNameTh: 'ชั้นปลูกที่ 6 (กาแฟอาราบิก้า)', elevationMasl: 1043.5, sedimentTrappedKg: 320, organicCarbonPct: 1.8, sedimentDepthCm: 4.5, waterFlowInLMin: 1.8, waterFlowOutLMin: 1.0, ridgeWidthM: 0.7, plantingAreaWidthM: 1.5, vetiverGrassStatus: 'PLANTED', vetiverRootDepthCm: 205, vetiverPlantDensity: 6, vetiverErosionPreventionPct: 70, vetiverSedimentAccumulationKg: 50, vetiverCarbonSequestrationKg: 2.2 },
+   392→    { layerNumber: 7, layerNameTh: 'ชั้นปลูกที่ 7 (กาแฟอาราบิก้า)', elevationMasl: 1042.2, sedimentTrappedKg: 285, organicCarbonPct: 1.6, sedimentDepthCm: 4.0, waterFlowInLMin: 1.0, waterFlowOutLMin: 0.5, ridgeWidthM: 0.7, plantingAreaWidthM: 1.5, vetiverGrassStatus: 'PLANTED', vetiverRootDepthCm: 190, vetiverPlantDensity: 5, vetiverErosionPreventionPct: 66, vetiverSedimentAccumulationKg: 42, vetiverCarbonSequestrationKg: 1.9 },
+   393→  ],
+   394→};
+   395→
+   396→// ─── ข้อมูลฝายชะลอน้ำสำหรับแต่ละแปลง ───
+   397→const SAMPLE_CHECK_DAMS: Record<string, Array<{
+   398→  damId: string;
+   399→  damNameTh: string;
+   400→  damType: string;
+   401→  sedimentVolumeM3: number;
+   402→  sedimentDepthCm: number;
+   403→  sedimentSOCpct: number;
+   404→  sedimentCarbonTc: number;
+   405→  flowRateLMin: number;
+   406→  flowReductionPct: number;
+   407→  trapEfficiencyPct: number;
+   408→  status: string;
+   409→}>> = {
+   410→  'SOIL-CMD-001': [
+   411→    { damId: 'DAM-CMD-001-01', damNameTh: 'ฝายชะลอน้ำชั้นที่ 1', damType: 'STONE', sedimentVolumeM3: 2.8, sedimentDepthCm: 8.5, sedimentSOCpct: 2.6, sedimentCarbonTc: 0.56, flowRateLMin: 8.5, flowReductionPct: 43.3, trapEfficiencyPct: 78.0, status: 'ACTIVE' },
+   412→    { damId: 'DAM-CMD-001-02', damNameTh: 'ฝายชะลอน้ำชั้นที่ 2', damType: 'STONE', sedimentVolumeM3: 2.4, sedimentDepthCm: 7.8, sedimentSOCpct: 2.3, sedimentCarbonTc: 0.45, flowRateLMin: 5.2, flowReductionPct: 38.8, trapEfficiencyPct: 75.0, status: 'ACTIVE' },
+   413→    { damId: 'DAM-CMD-001-03', damNameTh: 'ฝายชะลอน้ำชั้นที่ 3', damType: 'STONE', sedimentVolumeM3: 2.1, sedimentDepthCm: 7.0, sedimentSOCpct: 2.1, sedimentCarbonTc: 0.38, flowRateLMin: 3.0, flowReductionPct: 42.3, trapEfficiencyPct: 72.0, status: 'ACTIVE' },
+   414→    { damId: 'DAM-CMD-001-04', damNameTh: 'ฝายชะลอน้ำชั้นที่ 4', damType: 'STONE', sedimentVolumeM3: 1.8, sedimentDepthCm: 6.2, sedimentSOCpct: 1.9, sedimentCarbonTc: 0.30, flowRateLMin: 1.8, flowReductionPct: 40.0, trapEfficiencyPct: 70.0, status: 'ACTIVE' },
+   415→    { damId: 'DAM-CMD-001-05', damNameTh: 'ฝายชะลอน้ำชั้นที่ 5', damType: 'STONE', sedimentVolumeM3: 1.5, sedimentDepthCm: 5.5, sedimentSOCpct: 1.7, sedimentCarbonTc: 0.24, flowRateLMin: 0.8, flowReductionPct: 55.6, trapEfficiencyPct: 68.0, status: 'ACTIVE' },
+   416→  ],
+   417→  'SOIL-KKN-002': [
+   418→    { damId: 'DAM-KKN-002-01', damNameTh: 'ฝายชะลอน้ำชั้นที่ 1', damType: 'CONCRETE', sedimentVolumeM3: 4.2, sedimentDepthCm: 10.0, sedimentSOCpct: 1.7, sedimentCarbonTc: 0.58, flowRateLMin: 14.0, flowReductionPct: 36.4, trapEfficiencyPct: 82.0, status: 'ACTIVE' },
+   419→    { damId: 'DAM-KKN-002-02', damNameTh: 'ฝายชะลอน้ำชั้นที่ 2', damType: 'CONCRETE', sedimentVolumeM3: 3.5, sedimentDepthCm: 8.8, sedimentSOCpct: 1.5, sedimentCarbonTc: 0.44, flowRateLMin: 8.5, flowReductionPct: 39.3, trapEfficiencyPct: 79.0, status: 'ACTIVE' },
+   420→    { damId: 'DAM-KKN-002-03', damNameTh: 'ฝายชะลอน้ำชั้นที่ 3', damType: 'CONCRETE', sedimentVolumeM3: 2.8, sedimentDepthCm: 7.5, sedimentSOCpct: 1.3, sedimentCarbonTc: 0.32, flowRateLMin: 4.2, flowReductionPct: 50.6, trapEfficiencyPct: 76.0, status: 'ACTIVE' },
+   421→  ],
+   422→  'SOIL-SPB-003': [
+   423→    { damId: 'DAM-SPB-003-01', damNameTh: 'ฝายชะลอน้ำชั้นที่ 1', damType: 'GABION', sedimentVolumeM3: 5.5, sedimentDepthCm: 12.0, sedimentSOCpct: 2.3, sedimentCarbonTc: 0.82, flowRateLMin: 22.0, flowReductionPct: 26.7, trapEfficiencyPct: 85.0, status: 'ACTIVE' },
+   424→    { damId: 'DAM-SPB-003-02', damNameTh: 'ฝายชะลอน้ำชั้นที่ 2', damType: 'GABION', sedimentVolumeM3: 4.2, sedimentDepthCm: 9.5, sedimentSOCpct: 2.0, sedimentCarbonTc: 0.58, flowRateLMin: 16.5, flowReductionPct: 25.0, trapEfficiencyPct: 80.0, status: 'ACTIVE' },
+   425→  ],
+   426→  'SOIL-SRN-004': [
+   427→    { damId: 'DAM-SRN-004-01', damNameTh: 'ฝายชะลอน้ำชั้นที่ 1', damType: 'LOG', sedimentVolumeM3: 3.2, sedimentDepthCm: 9.0, sedimentSOCpct: 2.4, sedimentCarbonTc: 0.62, flowRateLMin: 12.0, flowReductionPct: 33.3, trapEfficiencyPct: 76.0, status: 'ACTIVE' },
+   428→    { damId: 'DAM-SRN-004-02', damNameTh: 'ฝายชะลอน้ำชั้นที่ 2', damType: 'LOG', sedimentVolumeM3: 2.8, sedimentDepthCm: 8.0, sedimentSOCpct: 2.1, sedimentCarbonTc: 0.50, flowRateLMin: 7.0, flowReductionPct: 41.7, trapEfficiencyPct: 73.0, status: 'ACTIVE' },
+   429→    { damId: 'DAM-SRN-004-03', damNameTh: 'ฝายชะลอน้ำชั้นที่ 3', damType: 'LOG', sedimentVolumeM3: 2.2, sedimentDepthCm: 6.8, sedimentSOCpct: 1.8, sedimentCarbonTc: 0.36, flowRateLMin: 3.5, flowReductionPct: 50.0, trapEfficiencyPct: 70.0, status: 'ACTIVE' },
+   430→    { damId: 'DAM-SRN-004-04', damNameTh: 'ฝายชะลอน้ำชั้นที่ 4', damType: 'LOG', sedimentVolumeM3: 1.8, sedimentDepthCm: 5.5, sedimentSOCpct: 1.6, sedimentCarbonTc: 0.26, flowRateLMin: 1.5, flowReductionPct: 57.1, trapEfficiencyPct: 67.0, status: 'ACTIVE' },
+   431→  ],
+   432→  'SOIL-PKT-005': [
+   433→    { damId: 'DAM-PKT-005-01', damNameTh: 'ฝายชะลอน้ำชั้นที่ 1', damType: 'VEGETATION', sedimentVolumeM3: 3.8, sedimentDepthCm: 9.5, sedimentSOCpct: 3.0, sedimentCarbonTc: 0.72, flowRateLMin: 16.0, flowReductionPct: 36.0, trapEfficiencyPct: 80.0, status: 'ACTIVE' },
+   434→    { damId: 'DAM-PKT-005-02', damNameTh: 'ฝายชะลอน้ำชั้นที่ 2', damType: 'VEGETATION', sedimentVolumeM3: 3.2, sedimentDepthCm: 8.2, sedimentSOCpct: 2.7, sedimentCarbonTc: 0.58, flowRateLMin: 9.5, flowReductionPct: 40.6, trapEfficiencyPct: 77.0, status: 'ACTIVE' },
+   435→    { damId: 'DAM-PKT-005-03', damNameTh: 'ฝายชะลอน้ำชั้นที่ 3', damType: 'VEGETATION', sedimentVolumeM3: 2.5, sedimentDepthCm: 7.0, sedimentSOCpct: 2.4, sedimentCarbonTc: 0.42, flowRateLMin: 5.0, flowReductionPct: 47.4, trapEfficiencyPct: 74.0, status: 'ACTIVE' },
+   436→  ],
+   437→  // ─── ฝายชะลอน้ำ จ.น่าน (เดิมไร่เลื่อนลอย) ───
+   438→  'SOIL-NNN-006': [
+   439→    { damId: 'DAM-NNN-006-01', damNameTh: 'ฝายชะลอน้ำชั้นที่ 1', damType: 'STONE', sedimentVolumeM3: 3.5, sedimentDepthCm: 9.2, sedimentSOCpct: 2.7, sedimentCarbonTc: 0.68, flowRateLMin: 10.0, flowReductionPct: 44.4, trapEfficiencyPct: 82.0, status: 'ACTIVE' },
+   440→    { damId: 'DAM-NNN-006-02', damNameTh: 'ฝายชะลอน้ำชั้นที่ 2', damType: 'STONE', sedimentVolumeM3: 3.0, sedimentDepthCm: 8.5, sedimentSOCpct: 2.4, sedimentCarbonTc: 0.55, flowRateLMin: 6.5, flowReductionPct: 35.0, trapEfficiencyPct: 79.0, status: 'ACTIVE' },
+   441→    { damId: 'DAM-NNN-006-03', damNameTh: 'ฝายชะลอน้ำชั้นที่ 3', damType: 'STONE', sedimentVolumeM3: 2.6, sedimentDepthCm: 7.8, sedimentSOCpct: 2.2, sedimentCarbonTc: 0.44, flowRateLMin: 4.0, flowReductionPct: 38.5, trapEfficiencyPct: 76.0, status: 'ACTIVE' },
+   442→    { damId: 'DAM-NNN-006-04', damNameTh: 'ฝายชะลอน้ำชั้นที่ 4', damType: 'STONE', sedimentVolumeM3: 2.2, sedimentDepthCm: 7.0, sedimentSOCpct: 2.0, sedimentCarbonTc: 0.36, flowRateLMin: 2.5, flowReductionPct: 37.5, trapEfficiencyPct: 73.0, status: 'ACTIVE' },
+   443→    { damId: 'DAM-NNN-006-05', damNameTh: 'ฝายชะลอน้ำชั้นที่ 5', damType: 'STONE', sedimentVolumeM3: 1.8, sedimentDepthCm: 6.2, sedimentSOCpct: 1.8, sedimentCarbonTc: 0.28, flowRateLMin: 1.5, flowReductionPct: 40.0, trapEfficiencyPct: 70.0, status: 'ACTIVE' },
+   444→    { damId: 'DAM-NNN-006-06', damNameTh: 'ฝายชะลอน้ำชั้นที่ 6', damType: 'STONE', sedimentVolumeM3: 1.5, sedimentDepthCm: 5.5, sedimentSOCpct: 1.6, sedimentCarbonTc: 0.22, flowRateLMin: 0.8, flowReductionPct: 46.7, trapEfficiencyPct: 67.0, status: 'ACTIVE' },
+   445→  ],
+   446→  'SOIL-NNN-007': [
+   447→    { damId: 'DAM-NNN-007-01', damNameTh: 'ฝายชะลอน้ำชั้นที่ 1', damType: 'GABION', sedimentVolumeM3: 4.0, sedimentDepthCm: 10.5, sedimentSOCpct: 2.5, sedimentCarbonTc: 0.72, flowRateLMin: 12.0, flowReductionPct: 40.0, trapEfficiencyPct: 84.0, status: 'ACTIVE' },
+   448→    { damId: 'DAM-NNN-007-02', damNameTh: 'ฝายชะลอน้ำชั้นที่ 2', damType: 'GABION', sedimentVolumeM3: 3.4, sedimentDepthCm: 9.2, sedimentSOCpct: 2.2, sedimentCarbonTc: 0.58, flowRateLMin: 7.5, flowReductionPct: 37.5, trapEfficiencyPct: 81.0, status: 'ACTIVE' },
+   449→    { damId: 'DAM-NNN-007-03', damNameTh: 'ฝายชะลอน้ำชั้นที่ 3', damType: 'GABION', sedimentVolumeM3: 2.8, sedimentDepthCm: 8.0, sedimentSOCpct: 2.0, sedimentCarbonTc: 0.46, flowRateLMin: 4.5, flowReductionPct: 40.0, trapEfficiencyPct: 78.0, status: 'ACTIVE' },
+   450→    { damId: 'DAM-NNN-007-04', damNameTh: 'ฝายชะลอน้ำชั้นที่ 4', damType: 'GABION', sedimentVolumeM3: 2.2, sedimentDepthCm: 7.0, sedimentSOCpct: 1.8, sedimentCarbonTc: 0.35, flowRateLMin: 2.5, flowReductionPct: 44.4, trapEfficiencyPct: 75.0, status: 'ACTIVE' },
+   451→    { damId: 'DAM-NNN-007-05', damNameTh: 'ฝายชะลอน้ำชั้นที่ 5', damType: 'GABION', sedimentVolumeM3: 1.8, sedimentDepthCm: 6.0, sedimentSOCpct: 1.6, sedimentCarbonTc: 0.26, flowRateLMin: 1.2, flowReductionPct: 52.0, trapEfficiencyPct: 72.0, status: 'ACTIVE' },
+   452→  ],
+   453→  'SOIL-NNN-008': [
+   454→    { damId: 'DAM-NNN-008-01', damNameTh: 'ฝายชะลอน้ำชั้นที่ 1', damType: 'STONE', sedimentVolumeM3: 4.5, sedimentDepthCm: 11.0, sedimentSOCpct: 2.9, sedimentCarbonTc: 0.82, flowRateLMin: 13.0, flowReductionPct: 40.9, trapEfficiencyPct: 86.0, status: 'ACTIVE' },
+   455→    { damId: 'DAM-NNN-008-02', damNameTh: 'ฝายชะลอน้ำชั้นที่ 2', damType: 'STONE', sedimentVolumeM3: 3.8, sedimentDepthCm: 9.8, sedimentSOCpct: 2.6, sedimentCarbonTc: 0.68, flowRateLMin: 8.0, flowReductionPct: 38.5, trapEfficiencyPct: 83.0, status: 'ACTIVE' },
+   456→    { damId: 'DAM-NNN-008-03', damNameTh: 'ฝายชะลอน้ำชั้นที่ 3', damType: 'STONE', sedimentVolumeM3: 3.2, sedimentDepthCm: 8.8, sedimentSOCpct: 2.4, sedimentCarbonTc: 0.56, flowRateLMin: 5.0, flowReductionPct: 37.5, trapEfficiencyPct: 80.0, status: 'ACTIVE' },
+   457→    { damId: 'DAM-NNN-008-04', damNameTh: 'ฝายชะลอน้ำชั้นที่ 4', damType: 'STONE', sedimentVolumeM3: 2.6, sedimentDepthCm: 7.8, sedimentSOCpct: 2.1, sedimentCarbonTc: 0.44, flowRateLMin: 3.0, flowReductionPct: 40.0, trapEfficiencyPct: 77.0, status: 'ACTIVE' },
+   458→    { damId: 'DAM-NNN-008-05', damNameTh: 'ฝายชะลอน้ำชั้นที่ 5', damType: 'STONE', sedimentVolumeM3: 2.1, sedimentDepthCm: 6.8, sedimentSOCpct: 1.9, sedimentCarbonTc: 0.34, flowRateLMin: 1.8, flowReductionPct: 40.0, trapEfficiencyPct: 74.0, status: 'ACTIVE' },
+   459→    { damId: 'DAM-NNN-008-06', damNameTh: 'ฝายชะลอน้ำชั้นที่ 6', damType: 'STONE', sedimentVolumeM3: 1.6, sedimentDepthCm: 5.8, sedimentSOCpct: 1.7, sedimentCarbonTc: 0.25, flowRateLMin: 1.0, flowReductionPct: 44.4, trapEfficiencyPct: 71.0, status: 'ACTIVE' },
+   460→    { damId: 'DAM-NNN-008-07', damNameTh: 'ฝายชะลอน้ำชั้นที่ 7', damType: 'STONE', sedimentVolumeM3: 1.2, sedimentDepthCm: 4.8, sedimentSOCpct: 1.5, sedimentCarbonTc: 0.18, flowRateLMin: 0.5, flowReductionPct: 50.0, trapEfficiencyPct: 68.0, status: 'ACTIVE' },
+   461→  ],
+   462→};
+   463→
+   464→// ─── สร้างข้อมูลการวัดตัวอย่างพร้อมข้อมูลตะกอนดิน ───
+   465→function generateSampleMeasurements(
+   466→  plotId: string,
+   467→  plotData: typeof SAMPLE_PLOTS[0],
+   468→  terraceIds?: string[]
+   469→) {
+   470→  const baseDate = new Date('2024-01-15');
+   471→  const measurements = [];
+   472→
+   473→  // สร้างข้อมูลการวัด 3 ครั้งต่อแปลง (ทุก 4 เดือน)
+   474→  for (let i = 0; i < 3; i++) {
+   475→    const date = new Date(baseDate.getTime() + i * 120 * 24 * 60 * 60 * 1000);
+   476→    const isAnomaly = i === 2 && plotId === 'SOIL-KKN-002'; // แปลงขอนแก่น มีข้อมูลผิดปกติในรอบสุดท้าย
+   477→
+   478→    // ข้อมูลตะกอนดินตามความลาดชัน
+   479→    const slopeFactor = plotData.slopeDegree / 20;
+   480→    const runoffVolumeL = Math.round((500 + slopeFactor * 2000 + Math.random() * 500) * 10) / 10;
+   481→    const sedimentConcGpL = Math.round((5 + slopeFactor * 15 + Math.random() * 5) * 100) / 100;
+   482→
+   483→    measurements.push({
+   484→      plotId,
+   485→      measurementDate: date.toISOString(),
+   486→      measurementType: i === 1 ? 'LAB' : 'FIELD',
+   487→      depthCm: 30,
+   488→      soilMoisture: isAnomaly ? 95 : 30 + Math.random() * 15,
+   489→      soilTemperature: 25 + Math.random() * 5,
+   490→      soilPH: 6.0 + Math.random() * 0.8,
+   491→      bulkDensity: isAnomaly ? 3.2 : 1.1 + Math.random() * 0.3,
+   492→      organicCarbonPct: plotData.baselineSOC / 30 + (i * 0.4) + Math.random() * 0.2,
+   493→      totalNitrogen: 0.12 + Math.random() * 0.05,
+   494→      cec: 12 + Math.random() * 8,
+   495→      aboveGroundBiomass: 3 + Math.random() * 2,
+   496→      belowGroundBiomass: 1.2 + Math.random() * 0.8,
+   497→      co2Flux: 2 + Math.random() * 3,
+   498→      ch4Flux: plotData.cropType === 'Rice' ? 5 + Math.random() * 10 : 0.5 + Math.random() * 2,
+   499→      n2oFlux: 10 + Math.random() * 30,
+   500→      runoffVolumeL,
+   501→      sedimentConcGpL,
+   502→      sedimentLoadKg: Math.round(runoffVolumeL * sedimentConcGpL / 1000 * 1000) / 1000,
+   503→      erosionRateTpHa: Math.round((plotData.baselineSediment / 3 + Math.random() * 3) * 1000) / 1000,
+   504→      waterFlowRateLMin: Math.round((5 + slopeFactor * 15 + Math.random() * 5) * 10) / 10,
+   505→      infiltrationMmHr: Math.round((20 + Math.random() * 30) * 10) / 10,
+   506→      ingestionMode: i === 2 ? 'batch' : 'realtime',
+   507→      qualityFlag: isAnomaly ? 'ANOMALY' : 'VALIDATED',
+   508→      sourceDevice: i === 1 ? `LAB-${plotId.split('-')[1]}-001` : `SENSOR-${plotId.split('-')[1]}-001`,
+   509→      notes: isAnomaly
+   510→        ? 'ค่า bulkDensity ผิดปกติ กรุณาตรวจสอบ'
+   511→        : `การวัดครั้งที่ ${i + 1} (พื้นที่ลาดชัน ${plotData.slopeDegree}°)`,
+   512→    });
+   513→
+   514→    // เพิ่มข้อมูลการวัดเฉพาะชั้นปลูก (ถ้ามี terraceIds)
+   515→    if (terraceIds && terraceIds.length > 0) {
+   516→      for (let t = 0; t < Math.min(terraceIds.length, 2); t++) {
+   517→        measurements.push({
+   518→          plotId,
+   519→          terraceLayerId: terraceIds[t],
+   520→          measurementDate: date.toISOString(),
+   521→          measurementType: 'FIELD',
+   522→          depthCm: 30,
+   523→          soilMoisture: 32 + Math.random() * 12,
+   524→          soilTemperature: 24 + Math.random() * 5,
+   525→          soilPH: 6.2 + Math.random() * 0.6,
+   526→          bulkDensity: 1.1 + Math.random() * 0.2,
+   527→          organicCarbonPct: plotData.baselineSOC / 30 + (t * 0.2) + Math.random() * 0.1,
+   528→          totalNitrogen: 0.10 + Math.random() * 0.04,
+   529→          cec: 14 + Math.random() * 6,
+   530→          aboveGroundBiomass: 2.5 + Math.random() * 1.5,
+   531→          belowGroundBiomass: 1.0 + Math.random() * 0.5,
+   532→          co2Flux: 2.5 + Math.random() * 2,
+   533→          ch4Flux: 1 + Math.random() * 3,
+   534→          n2oFlux: 12 + Math.random() * 20,
+   535→          runoffVolumeL: Math.round((200 + t * 100 + Math.random() * 100) * 10) / 10,
+   536→          sedimentConcGpL: Math.round((3 + plotData.slopeDegree / 10 + Math.random() * 3) * 100) / 100,
+   537→          sedimentLoadKg: 0, // จะคำนวณอัตโนมัติ
+   538→          erosionRateTpHa: Math.round((plotData.baselineSediment / 5 + Math.random() * 2) * 1000) / 1000,
+   539→          waterFlowRateLMin: Math.round((3 + t * 2 + Math.random() * 3) * 10) / 10,
+   540→          infiltrationMmHr: Math.round((25 + Math.random() * 20) * 10) / 10,
+   541→          ingestionMode: 'realtime',
+   542→          qualityFlag: 'VALIDATED',
+   543→          sourceDevice: `SENSOR-${plotId.split('-')[1]}-T${t + 1}`,
+   544→          notes: `การวัดชั้นปลูกที่ ${t + 1}`,
+   545→        });
+   546→      }
+   547→    }
+   548→  }
+   549→
+   550→  return measurements;
+   551→}
+   552→
+   553→// ─── คำสั่ง curl สำหรับทดสอบ ───
+   554→function generateCurlCommands() {
+   555→  return {
+   556→    plots: {
+   557→      list: {
+   558→        description: 'ดึงรายการแปลงทั้งหมด (List all terraced plots)',
+   559→        command: `curl -s http://localhost:3000/api/soil-carbon/plots | jq .`,
+   560→      },
+   561→      listWithSlope: {
+   562→        description: 'ค้นหาแปลงตามประเภทการปลูก (Filter by practiceType)',
+   563→        command: `curl -s "http://localhost:3000/api/soil-carbon/plots?practiceType=sediment_trap" | jq .`,
+   564→      },
+   565→      listNanProvince: {
+   566→        description: 'ค้นหาแปลงจังหวัดน่าน (Filter by province=น่าน)',
+   567→        command: `curl -s "http://localhost:3000/api/soil-carbon/plots?province=%E0%B8%99%E0%B9%88%E0%B8%B2%E0%B8%99" | jq .`,
+   568→      },
+   569→      createTerraced: {
+   570→        description: 'สร้างแปลงขั้นบันไดใหม่พร้อมหญ้าแฝก (Create a new terraced plot with vetiver grass)',
+   571→        command: `curl -s -X POST http://localhost:3000/api/soil-carbon/plots \\
+   572→  -H "Content-Type: application/json" \\
+   573→  -d '{
+   574→    "plotId": "SOIL-TEST-001",
+   575→    "name": "Test Terraced Field with Vetiver",
+   576→    "nameTh": "แปลงขั้นบันไดทดสอบ (หญ้าแฝก)",
+   577→    "province": "ลำพูน",
+   578→    "lat": 18.55,
+   579→    "lng": 99.05,
+   580→    "altitudeMasl": 600,
+   581→    "slopeDegree": 20,
+   582→    "slopeAspect": "NE",
+   583→    "areaRai": 15,
+   584→    "terraceCount": 4,
+   585→    "terraceWidthM": 2.5,
+   586→    "plantingAreaWidthM": 1.7,
+   587→    "ridgeWidthMPlot": 0.8,
+   588→    "terraceHeightM": 1.5,
+   589→    "checkDamCount": 3,
+   590→    "checkDamType": "STONE",
+   591→    "landUseType": "terraced_farming",
+   592→    "previousLandUse": "slash_and_burn",
+   593→    "vetiverGrassCoveragePct": 90,
+   594→    "soilType": "Loam",
+   595→    "cropType": "Rice",
+   596→    "practiceType": "sediment_trap",
+   597→    "baselineSOC": 22.0,
+   598→    "projectSOC": 30.0,
+   599→    "baselineSediment": 16.0,
+   600→    "projectSediment": 4.0,
+   601→    "baselineEmission": 4.0,
+   602→    "projectEmission": 1.8,
+   603→    "methodology": "T-VER-SOIL-01"
+   604→  }' | jq .`,
+   605→      },
+   606→    },
+   607→    measurements: {
+   608→      list: {
+   609→        description: 'ดึงรายการข้อมูลการวัด (List measurements)',
+   610→        command: `curl -s http://localhost:3000/api/soil-carbon/measurements | jq .`,
+   611→      },
+   612→      listByPlot: {
+   613→        description: 'ดึงข้อมูลการวัดตามแปลง (Filter by plotId)',
+   614→        command: `curl -s "http://localhost:3000/api/soil-carbon/measurements?plotId=SOIL-CMD-001" | jq .`,
+   615→      },
+   616→      listByTerrace: {
+   617→        description: 'ดึงข้อมูลการวัดตามชั้นปลูก (Filter by terraceLayerId)',
+   618→        command: `curl -s "http://localhost:3000/api/soil-carbon/measurements?terraceLayerId=TERRACE_ID" | jq .`,
+   619→      },
+   620→      createWithSediment: {
+   621→        description: 'สร้างข้อมูลการวัดพร้อมข้อมูลตะกอนดิน (Create with sediment data)',
+   622→        command: `curl -s -X POST http://localhost:3000/api/soil-carbon/measurements \\
+   623→  -H "Content-Type: application/json" \\
+   624→  -d '{
+   625→    "plotId": "SOIL-CMD-001",
+   626→    "measurementDate": "2024-06-15T10:30:00Z",
+   627→    "measurementType": "FIELD",
+   628→    "depthCm": 30,
+   629→    "soilMoisture": 38.5,
+   630→    "soilTemperature": 27.3,
+   631→    "soilPH": 6.5,
+   632→    "bulkDensity": 1.35,
+   633→    "organicCarbonPct": 2.8,
+   634→    "totalNitrogen": 0.15,
+   635→    "cec": 18.2,
+   636→    "aboveGroundBiomass": 4.2,
+   637→    "belowGroundBiomass": 1.8,
+   638→    "co2Flux": 3.5,
+   639→    "ch4Flux": 8.2,
+   640→    "n2oFlux": 25.0,
+   641→    "runoffVolumeL": 2500,
+   642→    "sedimentConcGpL": 12.5,
+   643→    "waterFlowRateLMin": 8.5,
+   644→    "infiltrationMmHr": 35.0,
+   645→    "sourceDevice": "SENSOR-CMD-001",
+   646→    "notes": "การวัดภาคสนามบนพื้นที่ลาดชัน"
+   647→  }' | jq .`,
+   648→      },
+   649→    },
+   650→    calculate: {
+   651→      description: 'คำนวณเครดิตคาร์บอนแบบ Sediment Trap (Calculate with sediment trap + vetiver grass methodology)',
+   652→      command: `curl -s -X POST http://localhost:3000/api/soil-carbon/calculate \\
+   653→  -H "Content-Type: application/json" \\
+   654→  -d '{
+   655→    "plotId": "SOIL-NNN-006",
+   656→    "monitoringPeriodStart": "2024-01-01",
+   657→    "monitoringPeriodEnd": "2024-12-31",
+   658→    "includeDetailReport": true
+   659→  }' | jq .`,
+   660→    },
+   661→    ingest: {
+   662→      description: 'นำเข้าข้อมูลเซ็นเซอร์แบบกลุ่มพร้อมข้อมูลตะกอนดิน (Bulk ingest with sediment data)',
+   663→      command: `curl -s -X POST http://localhost:3000/api/soil-carbon/ingest \\
+   664→  -H "Content-Type: application/json" \\
+   665→  -d '{
+   666→    "readings": [
+   667→      {
+   668→        "plotId": "SOIL-CMD-001",
+   669→        "measurementDate": "2024-08-01T09:00:00Z",
+   670→        "bulkDensity": 1.3,
+   671→        "organicCarbonPct": 2.5,
+   672→        "soilMoisture": 35.0,
+   673→        "soilTemperature": 28.0,
+   674→        "soilPH": 6.8,
+   675→        "co2Flux": 2.8,
+   676→        "ch4Flux": 6.5,
+   677→        "n2oFlux": 20.0,
+   678→        "runoffVolumeL": 1800,
+   679→        "sedimentConcGpL": 10.2,
+   680→        "waterFlowRateLMin": 7.5,
+   681→        "infiltrationMmHr": 32.0,
+   682→        "sourceDevice": "SENSOR-CMD-001"
+   683→      },
+   684→      {
+   685→        "plotId": "SOIL-KKN-002",
+   686→        "measurementDate": "2024-08-01T10:00:00Z",
+   687→        "bulkDensity": 1.15,
+   688→        "organicCarbonPct": 1.8,
+   689→        "soilMoisture": 28.0,
+   690→        "soilTemperature": 30.5,
+   691→        "soilPH": 6.2,
+   692→        "co2Flux": 4.2,
+   693→        "ch4Flux": 1.2,
+   694→        "n2oFlux": 35.0,
+   695→        "runoffVolumeL": 3500,
+   696→        "sedimentConcGpL": 15.0,
+   697→        "waterFlowRateLMin": 12.0,
+   698→        "infiltrationMmHr": 22.0,
+   699→        "sourceDevice": "SENSOR-KKN-001"
+   700→      }
+   701→    ]
+   702→  }' | jq .`,
+   703→    },
+   704→    seed: {
+   705→      description: 'สร้างข้อมูลตัวอย่างลงฐานข้อมูล (Seed sample data — 8 plots including Nan province)',
+   706→      command: `curl -s "http://localhost:3000/api/soil-carbon/sample?seed=true" | jq .`,
+   707→    },
+   708→  };
+   709→}
+   710→
+   711→export async function GET(req: NextRequest) {
+   712→  try {
+   713→    const { searchParams } = req.nextUrl;
+   714→    const seed = searchParams.get('seed') === 'true';
+   715→    const section = searchParams.get('section') || 'all'; // all, plots, measurements, calculations, curl
+   716→
+   717→    // ─── ถ้าต้องการ seed ข้อมูลลงฐานข้อมูล ───
+   718→    if (seed) {
+   719→      const seededPlots: any[] = [];
+   720→      const seededTerraces: any[] = [];
+   721→      const seededCheckDams: any[] = [];
+   722→      const seededMeasurements: any[] = [];
+   723→
+   724→      for (const plotData of SAMPLE_PLOTS) {
+   725→        // ตรวจสอบว่ามีอยู่แล้วหรือไม่
+   726→        const existing = await db.soilCarbonPlot.findUnique({ where: { plotId: plotData.plotId } });
+   727→        if (existing) {
+   728→          seededPlots.push(existing);
+   729→          continue;
+   730→        }
+   731→
+   732→        // สร้างแปลง (รวมฟิลด์หญ้าแฝกและการใช้ประโยชน์ก่อนหน้า)
+   733→        const plot = await db.soilCarbonPlot.create({ data: plotData });
+   734→        seededPlots.push(plot);
+   735→
+   736→        // ─── สร้างฝายชะลอน้ำก่อน (เพื่อให้ TerraceLayer อ้างอิงได้) ───
+   737→        const damIds: string[] = [];
+   738→        const sampleDams = SAMPLE_CHECK_DAMS[plotData.plotId] || [];
+   739→        for (const damData of sampleDams) {
+   740→          const dam = await db.checkDam.create({
+   741→            data: {
+   742→              plotId: plot.plotId,
+   743→              damId: damData.damId,
+   744→              damName: `Check Dam ${damData.damId}`,
+   745→              damNameTh: damData.damNameTh,
+   746→              damType: damData.damType,
+   747→              heightM: plotData.terraceHeightM * 0.8 || 0.5,
+   748→              widthM: plotData.terraceWidthM * 0.6 || 2,
+   749→              thicknessM: 0.3,
+   750→              upstreamDepthM: damData.sedimentDepthCm / 100 * 0.5,
+   751→              sedimentDepthCm: damData.sedimentDepthCm,
+   752→              sedimentVolumeM3: damData.sedimentVolumeM3,
+   753→              sedimentSOCpct: damData.sedimentSOCpct,
+   754→              sedimentCarbonTc: damData.sedimentCarbonTc,
+   755→              flowRateLMin: damData.flowRateLMin,
+   756→              flowReductionPct: damData.flowReductionPct,
+   757→              trapEfficiencyPct: damData.trapEfficiencyPct,
+   758→              status: damData.status,
+   759→            },
+   760→          });
+   761→          damIds.push(dam.id);
+   762→          seededCheckDams.push(dam);
+   763→        }
+   764→
+   765→        // ─── สร้างชั้นปลูก (TerraceLayer) พร้อมข้อมูลหญ้าแฝก ───
+   766→        const terraceIds: string[] = [];
+   767→        const sampleTerraces = SAMPLE_TERRACES[plotData.plotId] || [];
+   768→        for (const terraceData of sampleTerraces) {
+   769→          const lengthM = plotData.terraceWidthM > 0
+   770→            ? Math.round((plotData.areaHa * 10000 / plotData.terraceCount / plotData.terraceWidthM) * 100) / 100
+   771→            : 0;
+   772→          const areaSqm = Math.round(plotData.terraceWidthM * lengthM * 100) / 100;
+   773→          const plantingAreaSqm = Math.round((plotData.plantingAreaWidthM || 0) * lengthM * 100) / 100;
+   774→
+   775→          const terrace = await db.terraceLayer.create({
+   776→            data: {
+   777→              plotId: plot.plotId,
+   778→              layerNumber: terraceData.layerNumber,
+   779→              layerName: `Terrace Layer ${terraceData.layerNumber}`,
+   780→              layerNameTh: terraceData.layerNameTh,
+   781→              elevationMasl: terraceData.elevationMasl,
+   782→              widthM: plotData.terraceWidthM || 0,
+   783→              plantingAreaWidthM: terraceData.plantingAreaWidthM || plotData.plantingAreaWidthM || 0,
+   784→              heightM: plotData.terraceHeightM || 0,
+   785→              lengthM,
+   786→              areaSqm,
+   787→              plantingAreaSqm,
+   788→              cropType: plotData.cropType || '',
+   789→              soilDepthCm: 30,
+   790→              sedimentDepthCm: terraceData.sedimentDepthCm,
+   791→              waterFlowInLMin: terraceData.waterFlowInLMin,
+   792→              waterFlowOutLMin: terraceData.waterFlowOutLMin,
+   793→              sedimentTrappedKg: terraceData.sedimentTrappedKg,
+   794→              organicCarbonPct: terraceData.organicCarbonPct,
+   795→              socStockTcHa: 0, // จะคำนวณจากข้อมูลการวัด
+   796→              // ข้อมูลหญ้าแฝกบนคันขอบ (Vetiver Grass Ridge)
+   797→              ridgeWidthM: terraceData.ridgeWidthM,
+   798→              vetiverGrassStatus: terraceData.vetiverGrassStatus,
+   799→              vetiverRootDepthCm: terraceData.vetiverRootDepthCm,
+   800→              vetiverPlantDensity: terraceData.vetiverPlantDensity,
+   801→              vetiverErosionPreventionPct: terraceData.vetiverErosionPreventionPct,
+   802→              vetiverSedimentAccumulationKg: terraceData.vetiverSedimentAccumulationKg,
+   803→              vetiverCarbonSequestrationKg: terraceData.vetiverCarbonSequestrationKg,
+   804→              checkDamId: terraceData.layerNumber <= damIds.length ? damIds[terraceData.layerNumber - 1] : null,
+   805→            },
+   806→          });
+   807→          terraceIds.push(terrace.id);
+   808→          seededTerraces.push(terrace);
+   809→        }
+   810→
+   811→        // ─── สร้างข้อมูลการวัดตัวอย่างพร้อมข้อมูลตะกอนดิน ───
+   812→        const measurements = generateSampleMeasurements(plotData.plotId, plotData, terraceIds);
+   813→        for (const m of measurements) {
+   814→          // คำนวณ SOC Stock
+   815→          const socStock = m.bulkDensity * (m.organicCarbonPct / 100) * (m.depthCm / 100);
+   816→          // คำนวณ sedimentLoadKg อัตโนมัติถ้ายังไม่มี
+   817→          const sedimentLoadKg = m.sedimentLoadKg || (m.runoffVolumeL * m.sedimentConcGpL / 1000);
+   818→
+   819→          const measurement = await db.soilCarbonMeasurement.create({
+   820→            data: {
+   821→              ...m,
+   822→              socStock: Math.round(socStock * 1000) / 1000,
+   823→              sedimentLoadKg: Math.round(sedimentLoadKg * 1000) / 1000,
+   824→              integrityHash: 'seeded-sample-terraced',
+   825→            },
+   826→          });
+   827→          seededMeasurements.push(measurement);
+   828→        }
+   829→      }
+   830→
+   831→      return NextResponse.json({
+   832→        success: true,
+   833→        message: `สร้างข้อมูลตัวอย่างสำเร็จ: ${seededPlots.length} แปลง, ${seededTerraces.length} ชั้นปลูก, ${seededCheckDams.length} ฝาย, ${seededMeasurements.length} รายการวัด`,
+   834→        data: {
+   835→          plots: seededPlots,
+   836→          terraces: seededTerraces,
+   837→          checkDams: seededCheckDams,
+   838→          measurements: seededMeasurements,
+   839→        },
+   840→      });
+   841→    }
+   842→
+   843→    // ─── ส่งข้อมูลตัวอย่าง (ไม่บันทึกลงฐานข้อมูล) ───
+   844→    const result: Record<string, any> = {};
+   845→
+   846→    if (section === 'all' || section === 'plots') {
+   847→      result.plots = {
+   848→        description: 'ข้อมูลแปลงตัวอย่าง 8 แปลง (พื้นที่ลาดชัน/ขั้นบันได + หญ้าแฝก จังหวัดต่างๆ ในประเทศไทย)',
+   849→        count: SAMPLE_PLOTS.length,
+   850→        data: SAMPLE_PLOTS,
+   851→        provinces: [...new Set(SAMPLE_PLOTS.map(p => p.province))],
+   852→        cropTypes: [...new Set(SAMPLE_PLOTS.map(p => p.cropType))],
+   853→        practiceTypes: [...new Set(SAMPLE_PLOTS.map(p => p.practiceType))],
+   854→        altitudeRange: `${Math.min(...SAMPLE_PLOTS.map(p => p.altitudeMasl))} - ${Math.max(...SAMPLE_PLOTS.map(p => p.altitudeMasl))} ม.รทก.`,
+   855→        slopeRange: `${Math.min(...SAMPLE_PLOTS.map(p => p.slopeDegree))}° - ${Math.max(...SAMPLE_PLOTS.map(p => p.slopeDegree))}°`,
+   856→        totalTerraceCount: SAMPLE_PLOTS.reduce((s, p) => s + p.terraceCount, 0),
+   857→        totalCheckDamCount: SAMPLE_PLOTS.reduce((s, p) => s + p.checkDamCount, 0),
+   858→        vetiverGrassCoverage: {
+   859→          description: 'ความครอบคลุมหญ้าแฝกบนคันขอบ (% ของพื้นที่คันขอบทั้งแปลง)',
+   860→          range: `${Math.min(...SAMPLE_PLOTS.map(p => p.vetiverGrassCoveragePct))}% - ${Math.max(...SAMPLE_PLOTS.map(p => p.vetiverGrassCoveragePct))}%`,
+   861→          nanProvincePlots: SAMPLE_PLOTS.filter(p => p.province === 'น่าน').length,
+   862→          slashAndBurnConversion: SAMPLE_PLOTS.filter(p => p.previousLandUse === 'slash_and_burn').length,
+   863→        },
+   864→      };
+   865→    }
+   866→
+   867→    if (section === 'all' || section === 'terraces') {
+   868→      result.terraces = {
+   869→        description: 'ข้อมูลชั้นปลูกตัวอย่างสำหรับแต่ละแปลง (พร้อมข้อมูลหญ้าแฝก)',
+   870→        data: SAMPLE_TERRACES,
+   871→      };
+   872→    }
+   873→
+   874→    if (section === 'all' || section === 'checkdams') {
+   875→      result.checkDams = {
+   876→        description: 'ข้อมูลฝายชะลอน้ำตัวอย่างสำหรับแต่ละแปลง',
+   877→        data: SAMPLE_CHECK_DAMS,
+   878→      };
+   879→    }
+   880→
+   881→    if (section === 'all' || section === 'measurements') {
+   882→      const allMeasurements = SAMPLE_PLOTS.map(plot => ({
+   883→        plotId: plot.plotId,
+   884→        name: plot.name,
+   885→        nameTh: plot.nameTh,
+   886→        slopeDegree: plot.slopeDegree,
+   887→        altitudeMasl: plot.altitudeMasl,
+   888→        measurements: generateSampleMeasurements(plot.plotId, plot),
+   889→      }));
+   890→      result.measurements = {
+   891→        description: 'ข้อมูลการวัดตัวอย่างพร้อมข้อมูลตะกอนดิน (3+ รายการต่อแปลง)',
+   892→        totalMeasurements: allMeasurements.reduce((sum, p) => sum + p.measurements.length, 0),
+   893→        data: allMeasurements,
+   894→      };
+   895→    }
+   896→
+   897→    if (section === 'all' || section === 'calculations') {
+   898→      result.calculations = {
+   899→        description: 'ผลการคำนวณเครดิตคาร์บอนตัวอย่าง (T-VER-SOIL-01 Sediment Trap + Vetiver Grass Methodology)',
+   900→        methodology: 'T-VER-SOIL-01',
+   901→        bufferPct: 20,
+   902→        formulas: {
+   903→          step1: 'SOC Stock Change = ΔSOC × 44/12 × areaHa',
+   904→          step2: 'Sediment Trapped = sedimentTrappedKg × organicCarbonPct/100 / 1000 × 44/12 (ต่อชั้นปลูก)',
+   905→          step2_5: 'Vetiver Grass = (vetiverSedimentCarbon + vetiverBiomassCarbon + vetiverErosionCredit) × 44/12 (ต่อชั้นปลูก)',
+   906→          step3: 'Check Dam Carbon = sedimentCarbonTc × 44/12 (ต่อฝาย)',
+   907→          step4: 'Erosion Prevention = (baselineSediment − projectSediment) × avgSOCPct/100 × areaHa × 44/12',
+   908→          step5: 'GHG Reduction = (baselineEmission − projectEmission) × areaHa × monitoringYears',
+   909→          step6: 'Net = Gross × 0.80 (หัก Buffer 20%)',
+   910→        },
+   911→        data: SAMPLE_PLOTS.map(plot => {
+   912→          const deltaSOC = plot.projectSOC - plot.baselineSOC;
+   913→          const step1 = deltaSOC * (44 / 12) * plot.areaHa;
+   914→          // Step 2: คำนวณจากข้อมูลชั้นปลูก
+   915→          const terraces = SAMPLE_TERRACES[plot.plotId] || [];
+   916→          const step2 = terraces.reduce((sum, t) => {
+   917→            const sedimentCarbon = t.sedimentTrappedKg * (t.organicCarbonPct / 100) / 1000;
+   918→            return sum + sedimentCarbon * (44 / 12);
+   919→          }, 0);
+   920→          // Step 2.5: คำนวณจากข้อมูลหญ้าแฝก (Vetiver Grass Carbon Credit)
+   921→          const step2_5 = terraces.reduce((sum, t) => {
+   922→            if (t.vetiverGrassStatus === 'NONE') return sum;
+   923→            // vetiverSedimentCarbon = vetiverSedimentAccumulationKg × organicCarbonPct/100 / 1000 × 44/12
+   924→            const vetiverSedimentCarbon = t.vetiverSedimentAccumulationKg * (t.organicCarbonPct / 100) / 1000 * (44 / 12);
+   925→            // vetiverBiomassCarbon = vetiverCarbonSequestrationKg / 1000 × 44/12
+   926→            const vetiverBiomassCarbon = t.vetiverCarbonSequestrationKg / 1000 * (44 / 12);
+   927→            // vetiverErosionCredit (simplified)
+   928→            const vetiverErosionCredit = (t.vetiverErosionPreventionPct / 100) * t.ridgeWidthM * (plot.areaHa * 10000 / plot.terraceCount / plot.terraceWidthM) * plot.baselineSediment * 0.001 * (44 / 12);
+   929→            return sum + vetiverSedimentCarbon + vetiverBiomassCarbon + vetiverErosionCredit;
+   930→          }, 0);
+   931→          // Step 3: คำนวณจากข้อมูลฝาย
+   932→          const dams = SAMPLE_CHECK_DAMS[plot.plotId] || [];
+   933→          const step3 = dams.reduce((sum, d) => sum + d.sedimentCarbonTc * (44 / 12), 0);
+   934→          // Step 4: Erosion Prevention
+   935→          const step4 = (plot.baselineSediment - plot.projectSediment) * (plot.baselineSOC / 30) / 100 * plot.areaHa * (44 / 12);
+   936→          // Step 5: GHG Reduction
+   937→          const step5 = (plot.baselineEmission - plot.projectEmission) * plot.areaHa * plot.monitoringYear;
+   938→          const gross = step1 + step2 + step2_5 + step3 + step4 + step5;
+   939→          const net = gross * 0.80;
+   940→
+   941→          return {
+   942→            plotId: plot.plotId,
+   943→            nameTh: plot.nameTh,
+   944→            province: plot.province,
+   945→            slopeDegree: plot.slopeDegree,
+   946→            altitudeMasl: plot.altitudeMasl,
+   947→            previousLandUse: plot.previousLandUse,
+   948→            vetiverGrassCoveragePct: plot.vetiverGrassCoveragePct,
+   949→            steps: {
+   950→              step1_socStockChange: Math.round(step1 * 1000) / 1000,
+   951→              step2_sedimentTrapped: Math.round(step2 * 1000) / 1000,
+   952→              step2_5_vetiverGrass: Math.round(step2_5 * 1000) / 1000,
+   953→              step3_checkDamCarbon: Math.round(step3 * 1000) / 1000,
+   954→              step4_erosionPrevention: Math.round(step4 * 1000) / 1000,
+   955→              step5_ghgReduction: Math.round(step5 * 1000) / 1000,
+   956→            },
+   957→            gross: Math.round(gross * 1000) / 1000,
+   958→            buffer: Math.round(gross * 0.2 * 1000) / 1000,
+   959→            net: Math.round(net * 1000) / 1000,
+   960→            unit: 'tCO2e',
+   961→          };
+   962→        }),
+   963→      };
+   964→    }
+   965→
+   966→    if (section === 'all' || section === 'curl') {
+   967→      result.curl = {
+   968→        description: 'คำสั่ง curl สำหรับทดสอบ API ทั้งหมด (พื้นที่ลาดชัน/ขั้นบันได + หญ้าแฝก)',
+   969→        base_url: 'http://localhost:3000',
+   970→        endpoints: generateCurlCommands(),
+   971→      };
+   972→    }
+   973→
+   974→    // ─── ข้อมูลเพิ่มเติม: ช่วงค่าเซ็นเซอร์ ───
+   975→    if (section === 'all') {
+   976→      result.sensorValidationRanges = {
+   977→        description: 'ช่วงค่าที่ยอมรับสำหรับการตรวจสอบข้อมูลเซ็นเซอร์ (รวมเซ็นเซอร์ตะกอนดิน)',
+   978→        ranges: {
+   979→          soil_moisture: { min: 0, max: 80, unit: '%', labelTh: 'ความชื้นในดิน' },
+   980→          soil_temperature: { min: 0, max: 60, unit: '°C', labelTh: 'อุณหภูมิดิน' },
+   981→          soil_ph: { min: 2, max: 12, unit: 'pH', labelTh: 'ค่า pH ของดิน' },
+   982→          bulk_density: { min: 0.3, max: 2.5, unit: 'g/cm³', labelTh: 'ความหนาแน่นรวมของดิน' },
+   983→          organic_carbon_pct: { min: 0, max: 30, unit: '%', labelTh: 'ร้อยละคาร์บอนอินทรีย์' },
+   984→          total_nitrogen: { min: 0, max: 5, unit: '%', labelTh: 'ไนโตรเจนรวม' },
+   985→          cec: { min: 0, max: 50, unit: 'cmol/kg', labelTh: 'ความจุแลกเปลี่ยนประจุ' },
+   986→          above_ground_biomass: { min: 0, max: 50, unit: 't/ha', labelTh: 'มวลชีวภาพเหนือพื้นดิน' },
+   987→          below_ground_biomass: { min: 0, max: 20, unit: 't/ha', labelTh: 'มวลชีวภาพใต้พื้นดิน' },
+   988→          co2_flux: { min: -20, max: 100, unit: 'µmol/m²/s', labelTh: 'ฟลักซ์ CO₂' },
+   989→          ch4_flux: { min: -10, max: 200, unit: 'mg/m²/hr', labelTh: 'ฟลักซ์ CH₄' },
+   990→          n2o_flux: { min: -200, max: 2000, unit: 'µg/m²/hr', labelTh: 'ฟลักซ์ N₂O' },
+   991→          sediment_concentration: { min: 0, max: 50, unit: 'g/L', labelTh: 'ความเข้มข้นตะกอน' },
+   992→          runoff_volume: { min: 0, max: 100000, unit: 'L', labelTh: 'ปริมาณน้ำไหลบ่า' },
+   993→          water_flow_rate: { min: 0, max: 500, unit: 'L/min', labelTh: 'อัตราการไหลของน้ำ' },
+   994→          infiltration_rate: { min: 0, max: 500, unit: 'mm/hr', labelTh: 'อัตราซึมน้ำ' },
+   995→          erosion_rate: { min: 0, max: 100, unit: 't/ha/yr', labelTh: 'อัตราการพังทลายดิน' },
+   996→        },
+   997→      };
+   998→
+   999→      result.methodologyInfo = {
+  1000→        name: 'T-VER-SOIL-01',
+  1001→        descriptionTh: 'วิธีการตรวจสอบและรับรองโครงการกักเก็บคาร์บอนในดิน (พื้นที่ลาดชัน/ขั้นบันได + หญ้าแฝก)',
+  1002→        keyParameters: {
+  1003→          bufferPct: 20,
+  1004→          monitoringPeriodMinYr: 1,
+  1005→          monitoringPeriodMaxYr: 10,
+  1006→          creditValidityYr: 10,
+  1007→          uncertaintyDeductionPct: 20,
+  1008→          socChangeThreshold: '0.05 tC/ha/yr',
+  1009→        },
+  1010→        calculationSteps: {
+  1011→          step1: 'SOC Stock Change = ΔSOC × 44/12 × areaHa',
+  1012→          step2: 'Sediment Trapped = sedimentTrappedKg × organicCarbonPct/100 / 1000 × 44/12',
+  1013→          step2_5: 'Vetiver Grass = (vetiverSedimentCarbon + vetiverBiomassCarbon + vetiverErosionCredit) × 44/12',
+  1014→          step3: 'Check Dam Carbon = sedimentCarbonTc × 44/12',
+  1015→          step4: 'Erosion Prevention = (baselineSediment − projectSediment) × avgSOCPct/100 × areaHa × 44/12',
+  1016→          step5: 'GHG Reduction = (baselineEmission − projectEmission) × areaHa × monitoringYears',
+  1017→          step6: 'Net = Gross × 0.80 (Buffer 20%)',
+  1018→        },
+  1019→        vetiverGrassInfo: {
+  1020→          descriptionTh: 'หญ้าแฝกบนคันขอบขั้นบันได — ประโยชน์ด้านคาร์บอน',
+  1021→          ridgeWidth: '0.7-1.0 เมตร (คันขอบปลูกหญ้าแฝก)',
+  1022→          plantingAreaWidth: '1.5-2.0 เมตร (พื้นที่ปลูกพืชหลัก)',
+  1023→          totalTerraceWidth: '2.0-2.7 เมตร (ความกว้างรวมต่อชั้น)',
+  1024→          rootDepth: '200-300 ซม. (2-3 เมตร)',
+  1025→          plantDensity: '5-10 กอ/ตร.ม.',
+  1026→          erosionPrevention: '60-90%',
+  1027→          carbonPools: [
+  1028→            'ตะกอนดินเพิ่มเติมจากหญ้าแฝก (vetiverSedimentAccumulationKg)',
+  1029→            'คาร์บอนจากมวลชีวภาพหญ้าแฝก (vetiverCarbonSequestrationKg)',
+  1030→            'เครดิตจากการป้องกันการพังทลาย (vetiverErosionPreventionPct)',
+  1031→          ],
+  1032→          slashAndBurnConversion: 'แปลงที่เปลี่ยนจากไร่เลื่อนลอยจะได้เครดิตเพิ่มจากการลดการปล่อยก๊าซเรือนกระจก',
+  1033→        },
+  1034→        gwpFactors: {
+  1035→          CO2: 1,
+  1036→          CH4: 27.9,
+  1037→          N2O: 273,
+  1038→          source: 'IPCC AR6',
+  1039→        },
+  1040→      };
+  1041→
+  1042→      result.seedInstructions = {
+  1043→        description: 'วิธีการสร้างข้อมูลตัวอย่างลงฐานข้อมูล (พื้นที่ลาดชันพร้อมชั้นปลูก ฝาย หญ้าแฝก และข้อมูลตะกอนดิน)',
+  1044→        command: 'curl -s "http://localhost:3000/api/soil-carbon/sample?seed=true" | jq .',
+  1045→        note: 'ข้อมูลจะถูกสร้างเฉพาะที่ยังไม่มีอยู่ (จะไม่เขียนทับ)',
+  1046→        includes: [
+  1047→          '8 แปลงตัวอย่างบนพื้นที่ลาดชัน (5 แปลงเดิม + 3 แปลงจ.น่าน)',
+  1048→          'ชั้นปลูก (TerraceLayer) สำหรับแต่ละแปลง พร้อมข้อมูลตะกอนดินและหญ้าแฝก',
+  1049→          'ฝายชะลอน้ำ (CheckDam) พร้อมข้อมูลตะกอนดินที่กักไว้',
+  1050→          'ข้อมูลการวัด (Measurements) พร้อม runoffVolumeL, sedimentConcGpL',
+  1051→          'ข้อมูลหญ้าแฝกบนคันขอบ (ridgeWidthM, vetiverGrassStatus, vetiverRootDepthCm, vetiverPlantDensity, vetiverErosionPreventionPct, vetiverSedimentAccumulationKg, vetiverCarbonSequestrationKg)',
+  1052→          'แปลงจ.น่าน 3 แปลง — เดิมไร่เลื่อนลอย → เกษตรกักตะกอนดิน (previousLandUse = slash_and_burn)',
+  1053→        ],
+  1054→      };
+  1055→    }
+  1056→
+  1057→    return NextResponse.json({
+  1058→      success: true,
+  1059→      data: result,
+  1060→    });
+  1061→  } catch (error) {
+  1062→    console.error('Soil carbon sample GET error:', error);
+  1063→    return NextResponse.json(
+  1064→      { success: false, error: 'ไม่สามารถดึงข้อมูลตัวอย่างได้', details: String(error) },
+  1065→      { status: 500 }
+  1066→    );
+  1067→  }
+  1068→}
+  1069→

@@ -1,0 +1,524 @@
+  2200→                        <Sprout className="h-4 w-4 text-lime-400" />
+  2201→                      </div>
+  2202→                      <span className="text-[10px] text-lime-400 font-medium">คาร์บอนจากหญ้าแฝก</span>
+  2203→                    </div>
+  2204→                    <p className="text-lg font-bold text-white">{fmt(
+  2205→                      terraces.filter(t => t.plotId === calcPlotId).reduce((s, t) => s + (t.vetiverCarbonSequestrationKg || 0), 0) / 1000
+  2206→                      || generateMockTerraces(calcPlotId).reduce((s, t) => s + (t.vetiverCarbonSequestrationKg || 0), 0) / 1000
+  2207→                    , 4)}</p>
+  2208→                    <p className="text-[10px] text-slate-400">tCO₂e</p>
+  2209→                    <p className="text-[9px] text-slate-500 mt-1">Σ(กักคาร์บอนหญ้าแฝก) / 1000</p>
+  2210→                  </CardContent>
+  2211→                </Card>
+  2212→
+  2213→                {/* 5. Erosion Prevention */}
+  2214→                <Card className="bg-slate-800/50 border-red-500/20 border">
+  2215→                  <CardContent className="p-3">
+  2216→                    <div className="flex items-center gap-2 mb-2">
+  2217→                      <div className="p-1.5 rounded bg-red-500/10">
+  2218→                        <Shield className="h-4 w-4 text-red-400" />
+  2219→                      </div>
+  2220→                      <span className="text-[10px] text-red-400 font-medium">Erosion Prevention</span>
+  2221→                    </div>
+  2222→                    <p className="text-lg font-bold text-white">{fmt(calcDetail.erosionPrevention?.result || 0, 3)}</p>
+  2223→                    <p className="text-[10px] text-slate-400">tCO₂e</p>
+  2224→                    <p className="text-[9px] text-slate-500 mt-1">(baseline - project) × SOC% × 44/12</p>
+  2225→                  </CardContent>
+  2226→                </Card>
+  2227→
+  2228→                {/* 6. GHG Reduction */}
+  2229→                <Card className="bg-slate-800/50 border-purple-500/20 border">
+  2230→                  <CardContent className="p-3">
+  2231→                    <div className="flex items-center gap-2 mb-2">
+  2232→                      <div className="p-1.5 rounded bg-purple-500/10">
+  2233→                        <TrendingDown className="h-4 w-4 text-purple-400" />
+  2234→                      </div>
+  2235→                      <span className="text-[10px] text-purple-400 font-medium">GHG Reduction</span>
+  2236→                    </div>
+  2237→                    <p className="text-lg font-bold text-white">{fmt(calcDetail.ghgReduction?.result || 0, 3)}</p>
+  2238→                    <p className="text-[10px] text-slate-400">tCO₂e</p>
+  2239→                    <p className="text-[9px] text-slate-500 mt-1">(baseline - project) × areaHa</p>
+  2240→                  </CardContent>
+  2241→                </Card>
+  2242→              </div>
+  2243→
+  2244→              {/* Summary Row */}
+  2245→              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+  2246→                <Card className="bg-slate-800/50 border-slate-600/30">
+  2247→                  <CardContent className="p-4 text-center">
+  2248→                    <p className="text-xs text-slate-400 mb-1">Gross Total</p>
+  2249→                    <p className="text-2xl font-bold text-white">{fmt(calcDetail.creditSummary?.grossCredits || 0, 3)}</p>
+  2250→                    <p className="text-xs text-slate-500">tCO₂e</p>
+  2251→                  </CardContent>
+  2252→                </Card>
+  2253→                <Card className="bg-slate-800/50 border-slate-600/30">
+  2254→                  <CardContent className="p-4 text-center">
+  2255→                    <p className="text-xs text-slate-400 mb-1">หัก Buffer (20% T-VER-SOIL-01)</p>
+  2256→                    <p className="text-2xl font-bold text-amber-400">-{fmt(calcDetail.creditSummary?.bufferDeduction || 0, 3)}</p>
+  2257→                    <p className="text-xs text-slate-500">tCO₂e</p>
+  2258→                  </CardContent>
+  2259→                </Card>
+  2260→                <Card className="bg-emerald-500/10 border-emerald-500/30">
+  2261→                  <CardContent className="p-4 text-center">
+  2262→                    <p className="text-xs text-emerald-400 mb-1">Net Carbon Credits</p>
+  2263→                    <p className="text-2xl font-bold text-emerald-400">{fmt(calcDetail.creditSummary?.netCredits || 0, 3)}</p>
+  2264→                    <p className="text-xs text-emerald-500/70">tCO₂e</p>
+  2265→                  </CardContent>
+  2266→                </Card>
+  2267→              </div>
+  2268→
+  2269→              {/* Visualization Row */}
+  2270→              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+  2271→                {/* Stacked Horizontal Bar */}
+  2272→                <Card className="bg-slate-800/50 border-slate-700/50">
+  2273→                  <CardHeader className="pb-2">
+  2274→                    <CardTitle className="text-sm font-medium text-slate-200 flex items-center gap-2">
+  2275→                      <BarChart3 className="h-4 w-4 text-emerald-400" /> สัดส่วนแหล่งที่มาเครดิตคาร์บอน
+  2276→                    </CardTitle>
+  2277→                  </CardHeader>
+  2278→                  <CardContent className="pt-0">
+  2279→                    <ResponsiveContainer width="100%" height={260}>
+  2280→                      <BarChart
+  2281→                        data={[{
+  2282→                          name: 'เครดิตคาร์บอน',
+  2283→                          'SOC Change': calcDetail.socStockChange?.result || 0,
+  2284→                          'Sediment Trapped': calcDetail.sedimentTrapped?.result || 0,
+  2285→                          'Check Dam': calcDetail.checkDamCarbon?.result || 0,
+  2286→                          'Vetiver Grass': (terraces.filter(t => t.plotId === calcPlotId).reduce((s, t) => s + (t.vetiverCarbonSequestrationKg || 0), 0) / 1000) || (generateMockTerraces(calcPlotId).reduce((s, t) => s + (t.vetiverCarbonSequestrationKg || 0), 0) / 1000),
+  2287→                          'Erosion Prevention': calcDetail.erosionPrevention?.result || 0,
+  2288→                          'GHG Reduction': calcDetail.ghgReduction?.result || 0,
+  2289→                        }]}
+  2290→                        layout="vertical"
+  2291→                      >
+  2292→                        <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+  2293→                        <XAxis type="number" tick={{ fill: '#94a3b8', fontSize: 11 }} />
+  2294→                        <YAxis dataKey="name" type="category" tick={{ fill: '#94a3b8', fontSize: 11 }} width={80} />
+  2295→                        <Tooltip
+  2296→                          contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #475569', borderRadius: 8 }}
+  2297→                          labelStyle={{ color: '#e2e8f0' }}
+  2298→                        />
+  2299→                        <Legend wrapperStyle={{ fontSize: 10 }} />
+  2300→                        <Bar dataKey="SOC Change" stackId="a" fill="#10b981" />
+  2301→                        <Bar dataKey="Sediment Trapped" stackId="a" fill="#f59e0b" />
+  2302→                        <Bar dataKey="Check Dam" stackId="a" fill="#3b82f6" />
+  2303→                        <Bar dataKey="Vetiver Grass" stackId="a" fill="#84cc16" />
+  2304→                        <Bar dataKey="Erosion Prevention" stackId="a" fill="#ef4444" />
+  2305→                        <Bar dataKey="GHG Reduction" stackId="a" fill="#8b5cf6" radius={[0, 4, 4, 0]} />
+  2306→                      </BarChart>
+  2307→                    </ResponsiveContainer>
+  2308→                  </CardContent>
+  2309→                </Card>
+  2310→
+  2311→                {/* Cross-Section SVG with Water Flow */}
+  2312→                <Card className="bg-slate-800/50 border-slate-700/50">
+  2313→                  <CardHeader className="pb-2">
+  2314→                    <CardTitle className="text-sm font-medium text-slate-200 flex items-center gap-2">
+  2315→                      <Layers className="h-4 w-4 text-emerald-400" /> ภาพตัดขวาง — การไหลของน้ำและตะกอน
+  2316→                    </CardTitle>
+  2317→                  </CardHeader>
+  2318→                  <CardContent className="pt-0">
+  2319→                    <TerraceCrossSection
+  2320→                      layers={terraces.filter(t => t.plotId === calcPlotId).length > 0
+  2321→                        ? terraces.filter(t => t.plotId === calcPlotId)
+  2322→                        : generateMockTerraces(calcPlotId)}
+  2323→                      checkDams={checkDams.filter(d => d.plotId === calcPlotId).length > 0
+  2324→                        ? checkDams.filter(d => d.plotId === calcPlotId)
+  2325→                        : generateMockCheckDams(calcPlotId)}
+  2326→                    />
+  2327→                  </CardContent>
+  2328→                </Card>
+  2329→              </div>
+  2330→
+  2331→              {/* Co-benefits */}
+  2332→              {calcDetail.coBenefits && (
+  2333→                <Card className="bg-slate-800/50 border-slate-700/50">
+  2334→                  <CardHeader className="pb-2">
+  2335→                    <CardTitle className="text-sm font-medium text-slate-200 flex items-center gap-2">
+  2336→                      <Droplets className="h-4 w-4 text-blue-400" /> ประโยชน์ร่วม (ไม่นับเป็นเครดิต)
+  2337→                    </CardTitle>
+  2338→                  </CardHeader>
+  2339→                  <CardContent className="pt-0">
+  2340→                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+  2341→                      <div className="flex items-center gap-3 p-3 rounded-lg bg-blue-500/5 border border-blue-500/20">
+  2342→                        <Droplets className="h-5 w-5 text-blue-400 flex-shrink-0" />
+  2343→                        <div>
+  2344→                          <p className="text-xs text-blue-300">การลดอัตราการไหลของน้ำ</p>
+  2345→                          <p className="text-lg font-bold text-blue-400">{fmt(calcDetail.coBenefits.flowReductionPct, 1)}%</p>
+  2346→                        </div>
+  2347→                      </div>
+  2348→                      <div className="flex items-center gap-3 p-3 rounded-lg bg-cyan-500/5 border border-cyan-500/20">
+  2349→                        <Waves className="h-5 w-5 text-cyan-400 flex-shrink-0" />
+  2350→                        <div>
+  2351→                          <p className="text-xs text-cyan-300">ปริมาณน้ำไหลบ่าลดลง</p>
+  2352→                          <p className="text-lg font-bold text-cyan-400">{fmt(calcDetail.coBenefits.runoffReductionLpm, 1)} ลิตร/นาที</p>
+  2353→                        </div>
+  2354→                      </div>
+  2355→                    </div>
+  2356→                  </CardContent>
+  2357→                </Card>
+  2358→              )}
+  2359→
+  2360→              {/* Detailed Calculation Info */}
+  2361→              {calcDetail.monitoringPeriod && (
+  2362→                <Card className="bg-slate-800/50 border-slate-700/50">
+  2363→                  <CardContent className="p-4">
+  2364→                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
+  2365→                      <div>
+  2366→                        <p className="text-slate-400">ช่วงเวลาติดตาม</p>
+  2367→                        <p className="text-white">{calcDetail.monitoringPeriod.start} — {calcDetail.monitoringPeriod.end}</p>
+  2368→                      </div>
+  2369→                      <div>
+  2370→                        <p className="text-slate-400">ระยะเวลา</p>
+  2371→                        <p className="text-white">{fmt(calcDetail.monitoringPeriod.years, 2)} ปี</p>
+  2372→                      </div>
+  2373→                      <div>
+  2374→                        <p className="text-slate-400">จำนวนการวัด</p>
+  2375→                        <p className="text-white">{calcDetail.monitoringPeriod.measurementCount} รายการ</p>
+  2376→                      </div>
+  2377→                      <div>
+  2378→                        <p className="text-slate-400">การวัดที่ผ่านการตรวจสอบ</p>
+  2379→                        <p className="text-emerald-400">{calcDetail.monitoringPeriod.validMeasurementCount} รายการ</p>
+  2380→                      </div>
+  2381→                    </div>
+  2382→                  </CardContent>
+  2383→                </Card>
+  2384→              )}
+  2385→
+  2386→              {/* Sediment by Layer Detail */}
+  2387→              {calcDetail.sedimentTrapped?.byLayer && calcDetail.sedimentTrapped.byLayer.length > 0 && (
+  2388→                <Card className="bg-slate-800/50 border-slate-700/50">
+  2389→                  <CardHeader className="pb-2">
+  2390→                    <CardTitle className="text-sm font-medium text-slate-200 flex items-center gap-2">
+  2391→                      <Layers className="h-4 w-4 text-amber-400" /> เครดิตคาร์บอนจากตะกอนแต่ละชั้น
+  2392→                    </CardTitle>
+  2393→                  </CardHeader>
+  2394→                  <CardContent className="pt-0">
+  2395→                    <div className="max-h-48 overflow-y-auto custom-scrollbar">
+  2396→                      <Table>
+  2397→                        <TableHeader>
+  2398→                          <TableRow className="border-slate-700/50 hover:bg-transparent">
+  2399→                            <TableHead className="text-[10px] text-slate-400 py-1">ชั้น</TableHead>
+  2400→                            <TableHead className="text-[10px] text-slate-400 py-1 text-right">ตะกอน (กก.)</TableHead>
+  2401→                            <TableHead className="text-[10px] text-slate-400 py-1 text-right">SOC%</TableHead>
+  2402→                            <TableHead className="text-[10px] text-slate-400 py-1 text-right">เครดิต (tCO₂e)</TableHead>
+  2403→                          </TableRow>
+  2404→                        </TableHeader>
+  2405→                        <TableBody>
+  2406→                          {calcDetail.sedimentTrapped.byLayer.map((layer, i) => (
+  2407→                            <TableRow key={i} className="border-slate-700/30 hover:bg-slate-700/30">
+  2408→                              <TableCell className="text-xs text-white py-1">ชั้น {layer.layer}</TableCell>
+  2409→                              <TableCell className="text-xs text-amber-400 py-1 text-right">{fmt(layer.sedimentKg, 1)}</TableCell>
+  2410→                              <TableCell className="text-xs text-slate-300 py-1 text-right">{fmt(layer.socPct, 2)}%</TableCell>
+  2411→                              <TableCell className="text-xs text-emerald-400 py-1 text-right font-medium">{fmt(layer.credit, 4)}</TableCell>
+  2412→                            </TableRow>
+  2413→                          ))}
+  2414→                        </TableBody>
+  2415→                      </Table>
+  2416→                    </div>
+  2417→                  </CardContent>
+  2418→                </Card>
+  2419→              )}
+  2420→            </div>
+  2421→          )}
+  2422→        </TabsContent>
+  2423→
+  2424→        {/* ═══════════════════════════════════════════════════════════
+  2425→            TAB 5: รับรอง (Certification)
+  2426→        ═══════════════════════════════════════════════════════════ */}
+  2427→        <TabsContent value="certification" className="space-y-4">
+  2428→          {/* Eligible Plots */}
+  2429→          <Card className="bg-slate-800/50 border-slate-700/50">
+  2430→            <CardHeader className="pb-2">
+  2431→              <CardTitle className="text-sm font-medium text-slate-200 flex items-center gap-2">
+  2432→                <Award className="h-4 w-4 text-emerald-400" /> แปลงที่มีสิทธิ์ขอรับรอง
+  2433→              </CardTitle>
+  2434→              <CardDescription className="text-xs text-slate-500">
+  2435→                แสดงเฉพาะแปลงที่มีสถานะ &quot;กำลังติดตาม&quot; หรือ &quot;ตรวจสอบแล้ว&quot;
+  2436→              </CardDescription>
+  2437→            </CardHeader>
+  2438→            <CardContent className="pt-0">
+  2439→              {eligiblePlots.length === 0 ? (
+  2440→                <div className="text-center py-8">
+  2441→                  <FileCheck className="h-10 w-10 text-slate-600 mx-auto mb-2" />
+  2442→                  <p className="text-sm text-slate-500">ไม่มีแปลงที่มีสิทธิ์ขอรับรองในขณะนี้</p>
+  2443→                  <p className="text-xs text-slate-600">แปลงต้องมีสถานะ MONITORING หรือ VERIFIED จึงจะสามารถขอรับรองได้</p>
+  2444→                </div>
+  2445→              ) : (
+  2446→                <div className="max-h-96 overflow-y-auto custom-scrollbar space-y-3">
+  2447→                  {eligiblePlots.map(plot => {
+  2448→                    const step = certStep[plot.plotId] || 0;
+  2449→                    const checks = certChecklist[plot.plotId] || {};
+  2450→                    const allChecked = certChecklistItems.every(item => checks[item.key]);
+  2451→                    return (
+  2452→                      <div key={plot.id} className="bg-slate-900/50 rounded-lg border border-slate-700/50 p-4">
+  2453→                        <div className="flex items-center justify-between mb-3">
+  2454→                          <div className="flex items-center gap-3">
+  2455→                            <div className="p-2 rounded-lg bg-emerald-500/10">
+  2456→                              <Mountain className="h-5 w-5 text-emerald-400" />
+  2457→                            </div>
+  2458→                            <div>
+  2459→                              <p className="text-sm font-medium text-white">{plot.nameTh || plot.name}</p>
+  2460→                              <p className="text-xs text-slate-400">{plot.plotId} · {plot.province} · {fmt(plot.areaRai, 1)} ไร่ · {plot.terraceCount || 5} ชั้นปลูก</p>
+  2461→                            </div>
+  2462→                          </div>
+  2463→                          <Badge variant="outline" className={`text-[10px] px-2 py-0 ${STATUS_COLORS[plot.status] || ''}`}>
+  2464→                            {STATUS_LABELS[plot.status] || plot.status}
+  2465→                          </Badge>
+  2466→                        </div>
+  2467→
+  2468→                        {/* Certification Workflow Steps */}
+  2469→                        <div className="flex items-center gap-2 mb-3">
+  2470→                          {['เลือกแปลง', 'ตรวจสอบข้อมูล', 'รับรอง'].map((label, i) => (
+  2471→                            <React.Fragment key={i}>
+  2472→                              <div className="flex items-center gap-1.5">
+  2473→                                <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold ${
+  2474→                                  step >= i ? 'bg-emerald-500 text-white' : 'bg-slate-700 text-slate-400'
+  2475→                                }`}>
+  2476→                                  {step > i ? <CheckCircle2 className="h-3 w-3" /> : i + 1}
+  2477→                                </div>
+  2478→                                <span className={`text-[10px] ${step >= i ? 'text-emerald-400' : 'text-slate-500'}`}>{label}</span>
+  2479→                              </div>
+  2480→                              {i < 2 && <div className={`flex-1 h-0.5 ${step > i ? 'bg-emerald-500' : 'bg-slate-700'}`} />}
+  2481→                            </React.Fragment>
+  2482→                          ))}
+  2483→                        </div>
+  2484→
+  2485→                        {/* Step Content */}
+  2486→                        {step === 0 && (
+  2487→                          <Button
+  2488→                            size="sm"
+  2489→                            className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs"
+  2490→                            onClick={() => setCertStep(prev => ({ ...prev, [plot.plotId]: 1 }))}
+  2491→                          >
+  2492→                            <Eye className="h-3 w-3 mr-1" /> เริ่มตรวจสอบ
+  2493→                          </Button>
+  2494→                        )}
+  2495→
+  2496→                        {step === 1 && (
+  2497→                          <div className="space-y-3">
+  2498→                            <p className="text-xs text-slate-300 font-medium">ตรวจสอบรายการดังต่อไปนี้:</p>
+  2499→                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+  2500→                              {certChecklistItems.map(item => (
+  2501→                                <button
+  2502→                                  key={item.key}
+  2503→                                  onClick={() => toggleCertCheck(plot.plotId, item.key)}
+  2504→                                  className={`flex items-start gap-2 p-2 rounded text-left text-xs transition-colors ${
+  2505→                                    checks[item.key]
+  2506→                                      ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-300'
+  2507→                                      : 'bg-slate-800/50 border border-slate-700/30 text-slate-400 hover:bg-slate-700/50'
+  2508→                                  }`}
+  2509→                                >
+  2510→                                  {checks[item.key] ? (
+  2511→                                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 flex-shrink-0 mt-0.5" />
+  2512→                                  ) : (
+  2513→                                    <div className="h-3.5 w-3.5 rounded-full border border-slate-600 flex-shrink-0 mt-0.5" />
+  2514→                                  )}
+  2515→                                  {item.label}
+  2516→                                </button>
+  2517→                              ))}
+  2518→                            </div>
+  2519→                            <div className="flex items-center gap-2">
+  2520→                              <Button
+  2521→                                size="sm"
+  2522→                                className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs"
+  2523→                                disabled={!allChecked}
+  2524→                                onClick={() => setCertStep(prev => ({ ...prev, [plot.plotId]: 2 }))}
+  2525→                              >
+  2526→                                <FileCheck className="h-3 w-3 mr-1" /> ยืนยันการตรวจสอบ
+  2527→                              </Button>
+  2528→                              <Button
+  2529→                                variant="outline"
+  2530→                                size="sm"
+  2531→                                className="border-slate-600 text-slate-400 text-xs"
+  2532→                                onClick={() => setCertStep(prev => ({ ...prev, [plot.plotId]: 0 }))}
+  2533→                              >
+  2534→                                ย้อนกลับ
+  2535→                              </Button>
+  2536→                            </div>
+  2537→                          </div>
+  2538→                        )}
+  2539→
+  2540→                        {step === 2 && (
+  2541→                          <div className="space-y-3">
+  2542→                            <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+  2543→                              <p className="text-xs text-emerald-300 mb-1">พร้อมรับรองเครดิตคาร์บอน</p>
+  2544→                              <p className="text-[10px] text-slate-400">
+  2545→                                แปลง {plot.nameTh || plot.name} ผ่านการตรวจสอบทุกข้อ สามารถดำเนินการรับรองได้
+  2546→                              </p>
+  2547→                            </div>
+  2548→                            <div className="flex items-center gap-2">
+  2549→                              <Button
+  2550→                                size="sm"
+  2551→                                className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs"
+  2552→                                onClick={() => handleCertifyPlot(plot.plotId)}
+  2553→                              >
+  2554→                                <Award className="h-3 w-3 mr-1" /> รับรองเครดิตคาร์บอน
+  2555→                              </Button>
+  2556→                              <Button
+  2557→                                variant="outline"
+  2558→                                size="sm"
+  2559→                                className="border-slate-600 text-slate-400 text-xs"
+  2560→                                onClick={() => setCertStep(prev => ({ ...prev, [plot.plotId]: 1 }))}
+  2561→                              >
+  2562→                                ย้อนกลับ
+  2563→                              </Button>
+  2564→                            </div>
+  2565→                          </div>
+  2566→                        )}
+  2567→
+  2568→                        {step === 3 && (
+  2569→                          <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+  2570→                            <div className="flex items-center gap-2 mb-1">
+  2571→                              <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+  2572→                              <p className="text-xs text-emerald-300 font-medium">รับรองเครดิตคาร์บอนสำเร็จ</p>
+  2573→                            </div>
+  2574→                            <p className="text-[10px] text-slate-400">
+  2575→                              Certificate ID: {certHistory.find(c => c.plotId === plot.plotId)?.certificateId || `T-VER-${plot.plotId}`}
+  2576→                            </p>
+  2577→                          </div>
+  2578→                        )}
+  2579→                      </div>
+  2580→                    );
+  2581→                  })}
+  2582→                </div>
+  2583→              )}
+  2584→            </CardContent>
+  2585→          </Card>
+  2586→
+  2587→          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+  2588→            {/* Certification Requirements (Updated) */}
+  2589→            <Card className="bg-slate-800/50 border-slate-700/50">
+  2590→              <CardHeader className="pb-2">
+  2591→                <CardTitle className="text-sm font-medium text-slate-200 flex items-center gap-2">
+  2592→                  <FileText className="h-4 w-4 text-yellow-400" /> ข้อกำหนดการรับรอง T-VER-SOIL-01 (ขั้นบันได/ฝาย)
+  2593→                </CardTitle>
+  2594→              </CardHeader>
+  2595→              <CardContent>
+  2596→                <div className="space-y-2 text-xs max-h-80 overflow-y-auto custom-scrollbar">
+  2597→                  <div className="flex items-start gap-2 p-2 rounded bg-slate-900/50">
+  2598→                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 flex-shrink-0 mt-0.5" />
+  2599→                    <div>
+  2600→                      <p className="text-slate-200">ข้อมูลชั้นปลูกครบถ้วน</p>
+  2601→                      <p className="text-slate-500">ระบุจำนวน ความกว้าง ความสูงของแต่ละชั้นปลูก พร้อมข้อมูลพืชและตะกอน</p>
+  2602→                    </div>
+  2603→                  </div>
+  2604→                  <div className="flex items-start gap-2 p-2 rounded bg-slate-900/50">
+  2605→                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 flex-shrink-0 mt-0.5" />
+  2606→                    <div>
+  2607→                      <p className="text-slate-200">ข้อมูลฝายชะลอน้ำครบถ้วน</p>
+  2608→                      <p className="text-slate-500">ระบุประเภท ขนาด ประสิทธิภาพของฝายในแต่ละชั้น</p>
+  2609→                    </div>
+  2610→                  </div>
+  2611→                  <div className="flex items-start gap-2 p-2 rounded bg-slate-900/50">
+  2612→                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 flex-shrink-0 mt-0.5" />
+  2613→                    <div>
+  2614→                      <p className="text-slate-200">ตะกอนดินที่กักได้มีการวัด</p>
+  2615→                      <p className="text-slate-500">ต้องมีข้อมูลการวัดปริมาณตะกอนดินที่กักได้ในแต่ละชั้นปลูกและหลังฝาย</p>
+  2616→                    </div>
+  2617→                  </div>
+  2618→                  <div className="flex items-start gap-2 p-2 rounded bg-slate-900/50">
+  2619→                    <CheckCircle2 className="h-3.5 w-3.5 text-amber-400 flex-shrink-0 mt-0.5" />
+  2620→                    <div>
+  2621→                      <p className="text-slate-200">ประสิทธิภาพฝายชะลอน้ำ ≥ 60%</p>
+  2622→                      <p className="text-slate-500">ฝายชะลอน้ำทุกแห่งต้องมีประสิทธิภาพในการกักตะกอนอย่างน้อย 60%</p>
+  2623→                    </div>
+  2624→                  </div>
+  2625→                  <div className="flex items-start gap-2 p-2 rounded bg-slate-900/50">
+  2626→                    <CheckCircle2 className="h-3.5 w-3.5 text-amber-400 flex-shrink-0 mt-0.5" />
+  2627→                    <div>
+  2628→                      <p className="text-slate-200">อัตราการพังทลายลดลง ≥ 50%</p>
+  2629→                      <p className="text-slate-500">อัตราการพังทลายของดินหลังโครงการต้องลดลงอย่างน้อย 50% จาก Baseline</p>
+  2630→                    </div>
+  2631→                  </div>
+  2632→                  <div className="flex items-start gap-2 p-2 rounded bg-slate-900/50">
+  2633→                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 flex-shrink-0 mt-0.5" />
+  2634→                    <div>
+  2635→                      <p className="text-slate-200">ขอบเขตโครงการชัดเจน</p>
+  2636→                      <p className="text-slate-500">ระบุพิกัด GPS และพื้นที่แปลงที่สอดคล้องกับหลักฐานสิทธิ์การใช้ที่ดิน</p>
+  2637→                    </div>
+  2638→                  </div>
+  2639→                  <div className="flex items-start gap-2 p-2 rounded bg-slate-900/50">
+  2640→                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 flex-shrink-0 mt-0.5" />
+  2641→                    <div>
+  2642→                      <p className="text-slate-200">Baseline SOC สมบูรณ์</p>
+  2643→                      <p className="text-slate-500">ต้องมีข้อมูล Baseline SOC จากการวัดภาคสนามหรือห้องปฏิบัติการ</p>
+  2644→                    </div>
+  2645→                  </div>
+  2646→                  <div className="flex items-start gap-2 p-2 rounded bg-slate-900/50">
+  2647→                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 flex-shrink-0 mt-0.5" />
+  2648→                    <div>
+  2649→                      <p className="text-slate-200">หักค่าความไม่แน่นอน (Buffer) 20%</p>
+  2650→                      <p className="text-slate-500">ตาม T-VER-SOIL-01 ต้องหัก Buffer Pool 20% จาก Gross Credits</p>
+  2651→                    </div>
+  2652→                  </div>
+  2653→                  <div className="flex items-start gap-2 p-2 rounded bg-slate-900/50">
+  2654→                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 flex-shrink-0 mt-0.5" />
+  2655→                    <div>
+  2656→                      <p className="text-slate-200">Additionality & Permanence</p>
+  2657→                      <p className="text-slate-500">พิสูจน์การเพิ่มขึ้นของการกักคาร์บอนได้ และมีแผนรักษาความคงตัวอย่างน้อย 10 ปี</p>
+  2658→                    </div>
+  2659→                  </div>
+  2660→                </div>
+  2661→              </CardContent>
+  2662→            </Card>
+  2663→
+  2664→            {/* Certification History */}
+  2665→            <Card className="bg-slate-800/50 border-slate-700/50">
+  2666→              <CardHeader className="pb-2">
+  2667→                <CardTitle className="text-sm font-medium text-slate-200 flex items-center gap-2">
+  2668→                  <Clock className="h-4 w-4 text-blue-400" /> ประวัติการรับรอง
+  2669→                </CardTitle>
+  2670→              </CardHeader>
+  2671→              <CardContent className="pt-0">
+  2672→                {certHistory.length === 0 ? (
+  2673→                  <div className="text-center py-6">
+  2674→                    <Award className="h-8 w-8 text-slate-700 mx-auto mb-2" />
+  2675→                    <p className="text-xs text-slate-500">ยังไม่มีประวัติการรับรอง</p>
+  2676→                  </div>
+  2677→                ) : (
+  2678→                  <div className="max-h-80 overflow-y-auto custom-scrollbar space-y-2">
+  2679→                    {certHistory.map((cert, i) => (
+  2680→                      <div key={i} className="flex items-center justify-between p-2 rounded bg-slate-900/50 border border-slate-700/30">
+  2681→                        <div className="flex items-center gap-2">
+  2682→                          <CheckCircle2 className="h-4 w-4 text-emerald-400 flex-shrink-0" />
+  2683→                          <div>
+  2684→                            <p className="text-xs text-white font-medium">{cert.plotNameTh || cert.plotName}</p>
+  2685→                            <p className="text-[10px] text-slate-400">{cert.plotId} · {cert.province}</p>
+  2686→                          </div>
+  2687→                        </div>
+  2688→                        <div className="text-right">
+  2689→                          <p className="text-xs text-emerald-400 font-medium">{fmt(cert.netCredits, 2)} tCO₂e</p>
+  2690→                          <p className="text-[10px] text-slate-500">{fmtDateTime(cert.certifiedAt || '')}</p>
+  2691→                          <p className="text-[9px] text-slate-600 font-mono">{cert.certificateId}</p>
+  2692→                        </div>
+  2693→                      </div>
+  2694→                    ))}
+  2695→                  </div>
+  2696→                )}
+  2697→              </CardContent>
+  2698→            </Card>
+  2699→          </div>
+  2700→        </TabsContent>
+  2701→      </Tabs>
+  2702→
+  2703→      {/* Custom Scrollbar Styles */}
+  2704→      <style jsx global>{`
+  2705→        .custom-scrollbar::-webkit-scrollbar {
+  2706→          width: 6px;
+  2707→          height: 6px;
+  2708→        }
+  2709→        .custom-scrollbar::-webkit-scrollbar-track {
+  2710→          background: transparent;
+  2711→        }
+  2712→        .custom-scrollbar::-webkit-scrollbar-thumb {
+  2713→          background: #475569;
+  2714→          border-radius: 3px;
+  2715→        }
+  2716→        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  2717→          background: #64748b;
+  2718→        }
+  2719→      `}</style>
+  2720→    </div>
+  2721→  );
+  2722→}
+  2723→

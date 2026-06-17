@@ -1,0 +1,736 @@
+     1→'use client';
+     2→
+     3→import React, { useState, useEffect, useCallback } from 'react';
+     4→import {
+     5→  LayoutDashboard,
+     6→  Workflow,
+     7→  Upload,
+     8→  Shield,
+     9→  Leaf,
+    10→  FileCheck,
+    11→  CheckCircle,
+    12→  Activity,
+    13→  FileText,
+    14→  ShoppingCart,
+    15→  Truck,
+    16→  Scale,
+    17→  ClipboardList,
+    18→  Search,
+    19→  Footprints,
+    20→  FlaskConical,
+    21→  Map as MapIcon,
+    22→  Menu,
+    23→  Bell,
+    24→  CircleDot,
+    25→  ChevronLeft,
+    26→  AlertTriangle,
+    27→  XCircle,
+    28→  Info,
+    29→  RefreshCw,
+    30→  ShieldCheck,
+    31→  Flag,
+    32→  Radio,
+    33→  Database,
+    34→  Server,
+    35→  Landmark,
+    36→  BookOpen,
+    37→  Terminal,
+    38→  Layers,
+    39→  Flame,
+    40→  Sprout,
+    41→  Radar,
+    42→  Microscope,
+    43→  Atom,
+    44→  Recycle,
+    45→  Calculator,
+    46→  Bot,
+    47→  Droplets,
+    48→  Bug,
+    49→} from 'lucide-react';
+    50→import { Button } from '@/components/ui/button';
+    51→import { Sheet, SheetContent, SheetTrigger, SheetTitle } from '@/components/ui/sheet';
+    52→import { ScrollArea } from '@/components/ui/scroll-area';
+    53→import { Badge } from '@/components/ui/badge';
+    54→import { Separator } from '@/components/ui/separator';
+    55→import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+    56→import dynamic from 'next/dynamic';
+    57→// Dynamic imports with ssr:false to reduce initial compilation overhead
+    58→const DashboardView = dynamic(() => import('./DashboardView'), { ssr: false });
+    59→const MapDashboardView = dynamic(() => import('./MapDashboardView'), { ssr: false });
+    60→const OrchestratorView = dynamic(() => import('./OrchestratorView'), { ssr: false });
+    61→const IngestionView = dynamic(() => import('./IngestionView'), { ssr: false });
+    62→const AuthView = dynamic(() => import('./AuthView'), { ssr: false });
+    63→const CarbonView = dynamic(() => import('./CarbonView'), { ssr: false });
+    64→const CertificationView = dynamic(() => import('./CertificationView'), { ssr: false });
+    65→const VerificationView = dynamic(() => import('./VerificationView'), { ssr: false });
+    66→const MonitoringView = dynamic(() => import('./MonitoringView'), { ssr: false });
+    67→const ReportingView = dynamic(() => import('./ReportingView'), { ssr: false });
+    68→const MarketplaceView = dynamic(() => import('./MarketplaceView'), { ssr: false });
+    69→const LogisticsView = dynamic(() => import('./LogisticsView'), { ssr: false });
+    70→const GovernanceView = dynamic(() => import('./GovernanceView'), { ssr: false });
+    71→const SubmissionView = dynamic(() => import('./SubmissionView'), { ssr: false });
+    72→const AuditView = dynamic(() => import('./AuditView'), { ssr: false });
+    73→const FootprintView = dynamic(() => import('./FootprintView'), { ssr: false });
+    74→const SimulationView = dynamic(() => import('./SimulationView'), { ssr: false });
+    75→const VVBWorkspaceView = dynamic(() => import('./VVBWorkspaceView'), { ssr: false });
+    76→const ConflictResolverView = dynamic(() => import('./ConflictResolverView'), { ssr: false });
+    77→const PublicRegistryView = dynamic(() => import('./PublicRegistryView'), { ssr: false });
+    78→const DeviceManagementView = dynamic(() => import('./DeviceManagementView'), { ssr: false });
+    79→const BufferPoolView = dynamic(() => import('./BufferPoolView'), { ssr: false });
+    80→const ForwardContractsView = dynamic(() => import('./ForwardContractsView'), { ssr: false });
+    81→const DevApiPortalView = dynamic(() => import('./DevApiPortalView'), { ssr: false });
+    82→const MethodologyStudioView = dynamic(() => import('./MethodologyStudioView'), { ssr: false });
+    83→const CrossChainBridgeView = dynamic(() => import('./CrossChainBridgeView'), { ssr: false });
+    84→const PyrolysisSimulatorView = dynamic(() => import('./PyrolysisSimulatorView'), { ssr: false });
+    85→const AWDSimulatorView = dynamic(() => import('./AWDSimulatorView'), { ssr: false });
+    86→const LidarSimulatorView = dynamic(() => import('./LidarSimulatorView'), { ssr: false });
+    87→const BioCarbonView = dynamic(() => import('./BioCarbonView'), { ssr: false });
+    88→const BioMethanotrophsView = dynamic(() => import('./bio/BioMethanotrophsView'), { ssr: false });
+    89→const BioSynMECView = dynamic(() => import('./bio/BioSynMECView'), { ssr: false });
+    90→const BioCCUView = dynamic(() => import('./bio/BioCCUView'), { ssr: false });
+    91→const BioWasteValueView = dynamic(() => import('./bio/BioWasteValueView'), { ssr: false });
+    92→const BioBioremediationView = dynamic(() => import('./bio/BioBioremediationView'), { ssr: false });
+    93→const BioCalculatorView = dynamic(() => import('./bio/BioCalculatorView'), { ssr: false });
+    94→const BioAILabView = dynamic(() => import('./bio/BioAILabView'), { ssr: false });
+    95→const BioSimulatorView = dynamic(() => import('./BioSimulatorView'), { ssr: false });
+    96→const IoTIngestionView = dynamic(() => import('./IoTIngestionView'), { ssr: false });
+    97→import { ErrorBoundary } from './ErrorBoundary';
+    98→
+    99→type ModuleKey =
+   100→  | 'dashboard'
+   101→  | 'map'
+   102→  | 'orchestrator'
+   103→  | 'ingestion'
+   104→  | 'auth'
+   105→  | 'carbon'
+   106→  | 'certification'
+   107→  | 'verification'
+   108→  | 'monitoring'
+   109→  | 'reporting'
+   110→  | 'marketplace'
+   111→  | 'logistics'
+   112→  | 'governance'
+   113→  | 'submission'
+   114→  | 'audit'
+   115→  | 'footprint'
+   116→  | 'simulation'
+   117→  | 'vvb'
+   118→  | 'conflict'
+   119→  | 'registry'
+   120→  | 'devices'
+   121→  | 'buffer'
+   122→  | 'forward'
+   123→  | 'devportal'
+   124→  | 'methodology'
+   125→  | 'bridge'
+   126→  | 'pyrolysis'
+   127→  | 'awd'
+   128→  | 'lidar'
+   129→  | 'biocarbon'
+   130→  | 'bio-methanotrophs'
+   131→  | 'bio-synmec'
+   132→  | 'bio-ccu'
+   133→  | 'bio-waste'
+   134→  | 'bio-bioremediation'
+   135→  | 'bio-calculator'
+   136→  | 'bio-ailab'
+   137→  | 'bio-simulator'
+   138→  | 'iot-ingestion';
+   139→
+   140→interface MenuItem {
+   141→  key: ModuleKey;
+   142→  label: string;
+   143→  icon: React.ElementType;
+   144→  badge?: string;
+   145→  badgeColor?: string;
+   146→  section?: string; // Section header for grouping
+   147→}
+   148→
+   149→interface Notification {
+   150→  id: string;
+   151→  severity: string;
+   152→  message: string;
+   153→  timestamp: string;
+   154→  resolved: boolean;
+   155→}
+   156→
+   157→interface SystemStatus {
+   158→  status: string;
+   159→  projects: { total: number; active: number };
+   160→  credits: { total: number; available: number };
+   161→  alerts: { total: number; unresolved: number; critical: number; warning: number };
+   162→}
+   163→
+   164→const menuItems: MenuItem[] = [
+   165→  // Core Operations
+   166→  { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, section: 'CORE' },
+   167→  { key: 'map', label: 'Map Dashboard', icon: MapIcon },
+   168→  { key: 'orchestrator', label: 'Orchestrator', icon: Workflow },
+   169→  { key: 'ingestion', label: 'Ingestion', icon: Upload },
+   170→  { key: 'auth', label: 'Auth & RBAC', icon: Shield },
+   171→
+   172→  // Carbon Management
+   173→  { key: 'carbon', label: 'Carbon', icon: Leaf, section: 'CARBON' },
+   174→  { key: 'certification', label: 'Certification', icon: FileCheck },
+   175→  { key: 'verification', label: 'Verification', icon: CheckCircle },
+   176→  { key: 'monitoring', label: 'Monitoring', icon: Activity },
+   177→  { key: 'reporting', label: 'Reporting', icon: FileText },
+   178→
+   179→  // Market & Operations
+   180→  { key: 'marketplace', label: 'Marketplace', icon: ShoppingCart, section: 'OPERATIONS' },
+   181→  { key: 'logistics', label: 'Logistics', icon: Truck },
+   182→  { key: 'governance', label: 'Governance', icon: Scale },
+   183→  { key: 'submission', label: 'Submission', icon: ClipboardList },
+   184→  { key: 'audit', label: 'Audit', icon: Search },
+   185→
+   186→  // Analysis
+   187→  { key: 'footprint', label: 'Footprint', icon: Footprints, section: 'ANALYSIS' },
+   188→  { key: 'simulation', label: 'Simulation', icon: FlaskConical },
+   189→
+   190→  // Enterprise: Verification & Validation
+   191→  { key: 'vvb', label: 'VVB Workspace', icon: ShieldCheck, section: 'ENTERPRISE' },
+   192→  { key: 'conflict', label: 'Conflict Resolver', icon: Flag },
+   193→
+   194→  // Enterprise: Trust & Transparency
+   195→  { key: 'registry', label: 'Public Registry', icon: Database },
+   196→  { key: 'devices', label: 'Device & Oracle', icon: Radio },
+   197→
+   198→  // Enterprise: Finance & Risk
+   199→  { key: 'buffer', label: 'Buffer Pool', icon: Landmark },
+   200→  { key: 'forward', label: 'Forward Contracts', icon: Server },
+   201→
+   202→  // Enterprise: AI & Intelligence
+   203→  { key: 'methodology', label: 'AI Methodology Studio', icon: BookOpen, section: 'AI & INTELLIGENCE' },
+   204→
+   205→  // Simulation
+   206→  { key: 'pyrolysis', label: 'Pyrolysis Simulator', icon: Flame, section: 'SIMULATION' },
+   207→  { key: 'awd', label: 'AWD Rice Simulator', icon: Sprout },
+   208→  { key: 'lidar', label: 'LIDAR Verification', icon: Radar },
+   209→  { key: 'biocarbon', label: 'BioCarbon Lab', icon: Microscope },
+   210→  { key: 'bio-simulator', label: 'Bio Simulator', icon: Activity },
+   211→  { key: 'bio-methanotrophs', label: '🔬 Methanotrophs', icon: Bug },
+   212→  { key: 'bio-synmec', label: '⚛️ SynMEC', icon: Atom },
+   213→  { key: 'bio-ccu', label: '🌿 CO₂ Capture', icon: Leaf },
+   214→  { key: 'bio-waste', label: '♻️ Waste→Value', icon: Recycle },
+   215→  { key: 'bio-bioremediation', label: '💧 Bioremediation', icon: Droplets },
+   216→  { key: 'bio-calculator', label: '🧮 Bio Calculator', icon: Calculator },
+   217→  { key: 'bio-ailab', label: '🤖 Bio AI Lab', icon: Bot },
+   218→  { key: 'iot-ingestion', label: '📡 IoT Ingestion', icon: Database },
+   219→
+   220→  // Enterprise: Integration & Bridge
+   221→  { key: 'bridge', label: 'Cross-Chain Bridge', icon: Layers, section: 'INTEGRATION' },
+   222→  { key: 'devportal', label: 'Developer API', icon: Terminal },
+   223→];
+   224→
+   225→const moduleComponents: Record<ModuleKey, React.ComponentType> = {
+   226→  dashboard: DashboardView,
+   227→  map: MapDashboardView,
+   228→  orchestrator: OrchestratorView,
+   229→  ingestion: IngestionView,
+   230→  auth: AuthView,
+   231→  carbon: CarbonView,
+   232→  certification: CertificationView,
+   233→  verification: VerificationView,
+   234→  monitoring: MonitoringView,
+   235→  reporting: ReportingView,
+   236→  marketplace: MarketplaceView,
+   237→  logistics: LogisticsView,
+   238→  governance: GovernanceView,
+   239→  submission: SubmissionView,
+   240→  audit: AuditView,
+   241→  footprint: FootprintView,
+   242→  simulation: SimulationView,
+   243→  vvb: VVBWorkspaceView,
+   244→  conflict: ConflictResolverView,
+   245→  registry: PublicRegistryView,
+   246→  devices: DeviceManagementView,
+   247→  buffer: BufferPoolView,
+   248→  forward: ForwardContractsView,
+   249→  devportal: DevApiPortalView,
+   250→  methodology: MethodologyStudioView,
+   251→  pyrolysis: PyrolysisSimulatorView,
+   252→  awd: AWDSimulatorView,
+   253→  lidar: LidarSimulatorView,
+   254→  biocarbon: BioCarbonView,
+   255→  'bio-methanotrophs': BioMethanotrophsView,
+   256→  'bio-synmec': BioSynMECView,
+   257→  'bio-ccu': BioCCUView,
+   258→  'bio-waste': BioWasteValueView,
+   259→  'bio-bioremediation': BioBioremediationView,
+   260→  'bio-calculator': BioCalculatorView,
+   261→  'bio-ailab': BioAILabView,
+   262→  'bio-simulator': BioSimulatorView,
+   263→  'iot-ingestion': IoTIngestionView,
+   264→  bridge: CrossChainBridgeView,
+   265→};
+   266→
+   267→interface SidebarContentProps {
+   268→  collapsed?: boolean;
+   269→  activeModule: ModuleKey;
+   270→  onModuleChange: (key: ModuleKey) => void;
+   271→  menuItemsWithBadges?: MenuItem[];
+   272→}
+   273→
+   274→function SidebarContent({ collapsed = false, activeModule, onModuleChange, menuItemsWithBadges }: SidebarContentProps) {
+   275→  const items = menuItemsWithBadges || menuItems;
+   276→  const scrollRef = React.useRef<HTMLDivElement>(null);
+   277→  const [canScrollDown, setCanScrollDown] = useState(false);
+   278→  const [canScrollUp, setCanScrollUp] = useState(false);
+   279→
+   280→  // Pre-compute which items should show section headers
+   281→  const itemsWithSections = items.map((item, idx) => {
+   282→    const prevItem = idx > 0 ? items[idx - 1] : null;
+   283→    const showSection = item.section && (!prevItem || prevItem.section !== item.section);
+   284→    return { ...item, showSection };
+   285→  });
+   286→
+   287→  const checkScroll = React.useCallback(() => {
+   288→    const el = scrollRef.current;
+   289→    if (el) {
+   290→      setCanScrollUp(el.scrollTop > 4);
+   291→      setCanScrollDown(el.scrollTop + el.clientHeight < el.scrollHeight - 4);
+   292→    }
+   293→  }, []);
+   294→
+   295→  useEffect(() => {
+   296→    checkScroll();
+   297→    window.addEventListener('resize', checkScroll);
+   298→    return () => window.removeEventListener('resize', checkScroll);
+   299→  }, [checkScroll, collapsed]);
+   300→
+   301→  // Auto-scroll to active item when it changes
+   302→  useEffect(() => {
+   303→    const timer = setTimeout(() => {
+   304→      const el = scrollRef.current;
+   305→      if (!el) return;
+   306→      const activeBtn = el.querySelector('[data-active="true"]');
+   307→      if (activeBtn) {
+   308→        activeBtn.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+   309→      }
+   310→      checkScroll();
+   311→    }, 100);
+   312→    return () => clearTimeout(timer);
+   313→  }, [activeModule, checkScroll]);
+   314→
+   315→  return (
+   316→    <div className="flex h-full flex-col bg-slate-900 text-white">
+   317→      {/* Logo Area */}
+   318→      <div className="flex items-center gap-3 px-4 py-5 border-b border-slate-700/50">
+   319→        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-600 text-white font-bold text-sm">
+   320→          dM
+   321→        </div>
+   322→        {!collapsed && (
+   323→          <div className="flex flex-col overflow-hidden">
+   324→            <span className="text-sm font-bold tracking-tight">dMRV Platform</span>
+   325→            <span className="text-[11px] text-slate-400">Enterprise v4.0</span>
+   326→          </div>
+   327→        )}
+   328→      </div>
+   329→
+   330→      {/* Scroll indicator top */}
+   331→      {canScrollUp && (
+   332→        <div className="relative h-0 z-10">
+   333→          <div className="absolute inset-x-0 top-0 h-6 bg-gradient-to-b from-slate-900 to-transparent pointer-events-none" />
+   334→        </div>
+   335→      )}
+   336→
+   337→      {/* Navigation */}
+   338→      <div
+   339→        ref={scrollRef}
+   340→        onScroll={checkScroll}
+   341→        className="flex-1 px-2 py-3 overflow-y-auto sidebar-scroll"
+   342→      >
+   343→        <nav className="flex flex-col gap-0.5">
+   344→          {itemsWithSections.map((item) => {
+   345→            const isActive = activeModule === item.key;
+   346→            const Icon = item.icon;
+   347→
+   348→            return (
+   349→              <React.Fragment key={item.key}>
+   350→                {item.showSection && !collapsed && (
+   351→                  <div className="pt-3 pb-1 px-3">
+   352→                    <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">{item.section}</span>
+   353→                  </div>
+   354→                )}
+   355→                {item.showSection && collapsed && (
+   356→                  <div className="pt-2 pb-1 mx-2">
+   357→                    <div className="border-t border-slate-700/50" />
+   358→                  </div>
+   359→                )}
+   360→                <button
+   361→                  data-active={isActive}
+   362→                  onClick={() => onModuleChange(item.key)}
+   363→                  className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150 ${
+   364→                    isActive
+   365→                      ? 'bg-emerald-600/20 text-emerald-400 shadow-sm'
+   366→                      : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+   367→                  } ${collapsed ? 'justify-center' : ''}`}
+   368→                  title={collapsed ? item.label : undefined}
+   369→                >
+   370→                  <Icon className={`h-4 w-4 shrink-0 ${isActive ? 'text-emerald-400' : ''}`} />
+   371→                  {!collapsed && (
+   372→                    <>
+   373→                      <span className="truncate">{item.label}</span>
+   374→                      {item.badge && (
+   375→                        <Badge className={`ml-auto h-5 min-w-[20px] justify-center text-[10px] text-white ${item.badgeColor || 'bg-emerald-600 hover:bg-emerald-600'}`}>
+   376→                          {item.badge}
+   377→                        </Badge>
+   378→                      )}
+   379→                    </>
+   380→                  )}
+   381→                  {isActive && !collapsed && !item.badge && (
+   382→                    <div className="ml-auto h-1.5 w-1.5 rounded-full bg-emerald-400" />
+   383→                  )}
+   384→                </button>
+   385→              </React.Fragment>
+   386→            );
+   387→          })}
+   388→        </nav>
+   389→      </div>
+   390→
+   391→      {/* Scroll indicator bottom */}
+   392→      {canScrollDown && !collapsed && (
+   393→        <div className="relative h-0 z-10 -mt-6">
+   394→          <div className="absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-slate-900 via-slate-900/90 to-transparent pointer-events-none flex items-end justify-center pb-1">
+   395→            <span className="text-[9px] text-slate-500 flex items-center gap-1">
+   396→              <ChevronLeft className="h-3 w-3 rotate-90" />
+   397→              Scroll for more
+   398→              <ChevronLeft className="h-3 w-3 -rotate-90" />
+   399→            </span>
+   400→          </div>
+   401→        </div>
+   402→      )}
+   403→
+   404→      {/* Footer */}
+   405→      {!collapsed && (
+   406→        <div className="border-t border-slate-700/50 px-4 py-3">
+   407→          <div className="flex items-center gap-2 text-xs text-slate-500">
+   408→            <CircleDot className="h-3 w-3 text-emerald-500" />
+   409→            <span>System Online</span>
+   410→            <span className="ml-auto">v4.0.0</span>
+   411→          </div>
+   412→        </div>
+   413→      )}
+   414→    </div>
+   415→  );
+   416→}
+   417→
+   418→const severityIcons: Record<string, React.ElementType> = {
+   419→  CRITICAL: XCircle,
+   420→  WARNING: AlertTriangle,
+   421→  INFO: Info,
+   422→};
+   423→
+   424→const severityColors: Record<string, string> = {
+   425→  CRITICAL: 'text-red-500',
+   426→  WARNING: 'text-amber-500',
+   427→  INFO: 'text-slate-400',
+   428→};
+   429→
+   430→export default function DmrvApp() {
+   431→  const [activeModule, setActiveModule] = useState<ModuleKey>('dashboard');
+   432→  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+   433→  const [mobileOpen, setMobileOpen] = useState(false);
+   434→  const [notifications, setNotifications] = useState<Notification[]>([]);
+   435→  const [systemStatus, setSystemStatus] = useState<SystemStatus | null>(null);
+   436→  const [itemsWithBadges, setItemsWithBadges] = useState<MenuItem[]>(menuItems);
+   437→
+   438→  const ActiveComponent = moduleComponents[activeModule];
+   439→
+   440→  const activeItem = menuItems.find((item) => item.key === activeModule);
+   441→  const unresolvedCount = notifications.filter((n) => !n.resolved).length;
+   442→
+   443→  const fetchSystemData = useCallback(async () => {
+   444→    try {
+   445→      const [monitoringRes, submissionRes, certificationRes, conflictRes] = await Promise.all([
+   446→        fetch('/api/dmrv/monitoring'),
+   447→        fetch('/api/dmrv/submission'),
+   448→        fetch('/api/dmrv/certification'),
+   449→        fetch('/api/dmrv/conflict'),
+   450→      ]);
+   451→
+   452→      if (monitoringRes.ok) {
+   453→        const monitoringData = await monitoringRes.json();
+   454→        const health = monitoringData.health as SystemStatus;
+   455→        setSystemStatus(health);
+   456→        setNotifications(
+   457→          (monitoringData.alerts || []).map((a: { id: string; severity: string; message: string; timestamp: string; resolved: boolean }) => ({
+   458→            id: a.id,
+   459→            severity: a.severity,
+   460→            message: a.message,
+   461→            timestamp: a.timestamp,
+   462→            resolved: a.resolved,
+   463→          }))
+   464→        );
+   465→
+   466→        const badges: Partial<Record<ModuleKey, { badge: string; badgeColor: string }>> = {};
+   467→
+   468→        if (health?.alerts?.unresolved > 0) {
+   469→          badges.monitoring = { badge: String(health.alerts.unresolved), badgeColor: health.alerts.critical > 0 ? 'bg-red-600 hover:bg-red-600' : 'bg-amber-600 hover:bg-amber-600' };
+   470→        }
+   471→
+   472→        setItemsWithBadges(
+   473→          menuItems.map((item) => ({
+   474→            ...item,
+   475→            badge: badges[item.key]?.badge,
+   476→            badgeColor: badges[item.key]?.badgeColor,
+   477→          }))
+   478→        );
+   479→      }
+   480→
+   481→      if (submissionRes.ok) {
+   482→        const subData = await submissionRes.json();
+   483→        const pendingSubs = subData.summary?.readyForVerification || 0;
+   484→        if (pendingSubs > 0) {
+   485→          setItemsWithBadges((prev) =>
+   486→            prev.map((item) =>
+   487→              item.key === 'submission'
+   488→                ? { ...item, badge: String(pendingSubs), badgeColor: 'bg-amber-600 hover:bg-amber-600' }
+   489→                : item
+   490→            )
+   491→          );
+   492→        }
+   493→      }
+   494→
+   495→      if (certificationRes.ok) {
+   496→        const certData = await certificationRes.json();
+   497→        const pendingCerts = certData.summary?.submitted || 0;
+   498→        if (pendingCerts > 0) {
+   499→          setItemsWithBadges((prev) =>
+   500→            prev.map((item) =>
+   501→              item.key === 'certification'
+   502→                ? { ...item, badge: String(pendingCerts), badgeColor: 'bg-teal-600 hover:bg-teal-600' }
+   503→                : item
+   504→            )
+   505→          );
+   506→        }
+   507→      }
+   508→
+   509→      if (conflictRes.ok) {
+   510→        const conflictData = await conflictRes.json();
+   511→        const flaggedCases = conflictData.summary?.byStatus?.FLAGGED || 0;
+   512→        const criticalCases = conflictData.summary?.bySeverity?.CRITICAL || 0;
+   513→        const totalOpen = flaggedCases + (conflictData.summary?.byStatus?.IN_REVIEW || 0);
+   514→        if (totalOpen > 0) {
+   515→          setItemsWithBadges((prev) =>
+   516→            prev.map((item) =>
+   517→              item.key === 'conflict'
+   518→                ? { ...item, badge: String(totalOpen), badgeColor: criticalCases > 0 ? 'bg-red-600 hover:bg-red-600' : 'bg-amber-600 hover:bg-amber-600' }
+   519→                : item
+   520→            )
+   521→          );
+   522→        }
+   523→      }
+   524→    } catch {
+   525→      // Silently fail - the shell should still work
+   526→    }
+   527→  }, []);
+   528→
+   529→  useEffect(() => {
+   530→    let cancelled = false;
+   531→    const load = async () => {
+   532→      if (!cancelled) await fetchSystemData();
+   533→    };
+   534→    load();
+   535→    const interval = setInterval(() => {
+   536→      if (!cancelled) fetchSystemData();
+   537→    }, 60000);
+   538→    return () => { cancelled = true; clearInterval(interval); };
+   539→  }, [fetchSystemData]);
+   540→
+   541→  const handleModuleChange = (key: ModuleKey) => {
+   542→    setActiveModule(key);
+   543→    setMobileOpen(false);
+   544→  };
+   545→
+   546→  const systemStatusLabel = systemStatus?.status === 'HEALTHY'
+   547→    ? 'System Healthy'
+   548→    : systemStatus?.status === 'WARNING'
+   549→    ? 'Warnings Active'
+   550→    : systemStatus?.status === 'CRITICAL'
+   551→    ? 'Critical Alert'
+   552→    : 'Loading...';
+   553→
+   554→  const statusDotColor = systemStatus?.status === 'HEALTHY'
+   555→    ? 'bg-emerald-500'
+   556→    : systemStatus?.status === 'WARNING'
+   557→    ? 'bg-amber-500'
+   558→    : systemStatus?.status === 'CRITICAL'
+   559→    ? 'bg-red-500'
+   560→    : 'bg-slate-400';
+   561→
+   562→  return (
+   563→    <div className="min-h-screen flex flex-col bg-gray-50">
+   564→      {/* Header */}
+   565→      <header className="sticky top-0 z-40 flex h-14 items-center gap-4 border-b bg-white px-4 shadow-sm lg:px-6">
+   566→        {/* Mobile menu trigger */}
+   567→        <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+   568→          <SheetTrigger asChild>
+   569→            <Button variant="ghost" size="icon" className="lg:hidden">
+   570→              <Menu className="h-5 w-5" />
+   571→              <span className="sr-only">Toggle navigation menu</span>
+   572→            </Button>
+   573→          </SheetTrigger>
+   574→          <SheetContent side="left" className="w-72 p-0">
+   575→            <SheetTitle className="sr-only">Navigation Menu</SheetTitle>
+   576→            <SidebarContent activeModule={activeModule} onModuleChange={handleModuleChange} menuItemsWithBadges={itemsWithBadges} />
+   577→          </SheetContent>
+   578→        </Sheet>
+   579→
+   580→        {/* Breadcrumb / Title */}
+   581→        <div className="flex items-center gap-2">
+   582→          {activeItem && (
+   583→            <>
+   584→              <activeItem.icon className="h-5 w-5 text-emerald-600" />
+   585→              <h1 className="text-base font-semibold text-gray-900">{activeItem.label}</h1>
+   586→              {activeItem.section === 'ENTERPRISE' && (
+   587→                <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 text-[9px] h-4 ml-1">ENT</Badge>
+   588→              )}
+   589→            </>
+   590→          )}
+   591→        </div>
+   592→
+   593→        <div className="ml-auto flex items-center gap-3">
+   594→          {/* Status Indicators */}
+   595→          <div className="hidden sm:flex items-center gap-2 text-xs text-muted-foreground">
+   596→            <div className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 ${
+   597→              systemStatus?.status === 'HEALTHY' ? 'bg-emerald-50 text-emerald-700' :
+   598→              systemStatus?.status === 'WARNING' ? 'bg-amber-50 text-amber-700' :
+   599→              systemStatus?.status === 'CRITICAL' ? 'bg-red-50 text-red-700' :
+   600→              'bg-slate-50 text-slate-500'
+   601→            }`}>
+   602→              <div className={`h-1.5 w-1.5 rounded-full ${statusDotColor} animate-pulse`} />
+   603→              <span>{systemStatusLabel}</span>
+   604→              {systemStatus && (
+   605→                <span className="text-[10px] opacity-70">
+   606→                  ({systemStatus.projects.active} proj)
+   607→                </span>
+   608→              )}
+   609→            </div>
+   610→          </div>
+   611→          <Separator orientation="vertical" className="h-6 hidden sm:block" />
+   612→
+   613→          {/* Notification Bell */}
+   614→          <Popover>
+   615→            <PopoverTrigger asChild>
+   616→              <Button variant="ghost" size="icon" className="relative">
+   617→                <Bell className="h-4 w-4" />
+   618→                {unresolvedCount > 0 && (
+   619→                  <span className={`absolute -top-0.5 -right-0.5 h-3.5 w-3.5 rounded-full text-[9px] text-white flex items-center justify-center font-bold ${
+   620→                    notifications.some((n) => n.severity === 'CRITICAL' && !n.resolved) ? 'bg-red-500' : 'bg-amber-500'
+   621→                  }`}>
+   622→                    {unresolvedCount > 9 ? '9+' : unresolvedCount}
+   623→                  </span>
+   624→                )}
+   625→              </Button>
+   626→            </PopoverTrigger>
+   627→            <PopoverContent className="w-80 p-0" align="end">
+   628→              <div className="flex items-center justify-between px-4 py-3 border-b">
+   629→                <h4 className="text-sm font-semibold">Notifications</h4>
+   630→                <Button variant="ghost" size="sm" onClick={fetchSystemData} className="h-7 gap-1 text-xs">
+   631→                  <RefreshCw className="h-3 w-3" />
+   632→                  Refresh
+   633→                </Button>
+   634→              </div>
+   635→              <ScrollArea className="max-h-80">
+   636→                {notifications.length === 0 ? (
+   637→                  <div className="py-8 text-center text-sm text-muted-foreground">
+   638→                    No notifications
+   639→                  </div>
+   640→                ) : (
+   641→                  <div className="px-4">
+   642→                    {notifications.slice(0, 10).map((notif, idx) => {
+   643→                      const Icon = severityIcons[notif.severity] || Info;
+   644→                      return (
+   645→                        <React.Fragment key={notif.id}>
+   646→                          <div className={`flex items-start gap-3 py-3 ${notif.resolved ? 'opacity-50' : ''}`}>
+   647→                            <Icon className={`mt-0.5 h-4 w-4 shrink-0 ${severityColors[notif.severity] || 'text-slate-400'}`} />
+   648→                            <div className="flex-1 min-w-0">
+   649→                              <p className="text-xs leading-relaxed">{notif.message}</p>
+   650→                              <div className="flex items-center gap-2 mt-1">
+   651→                                <Badge variant="secondary" className={`text-[9px] h-4 ${
+   652→                                  notif.severity === 'CRITICAL' ? 'bg-red-100 text-red-700 hover:bg-red-100' :
+   653→                                  notif.severity === 'WARNING' ? 'bg-amber-100 text-amber-700 hover:bg-amber-100' :
+   654→                                  'bg-slate-100 text-slate-600 hover:bg-slate-100'
+   655→                                }`}>
+   656→                                  {notif.severity}
+   657→                                </Badge>
+   658→                                {notif.resolved && (
+   659→                                  <Badge variant="secondary" className="text-[9px] h-4 bg-emerald-50 text-emerald-600 hover:bg-emerald-50">
+   660→                                    RESOLVED
+   661→                                  </Badge>
+   662→                                )}
+   663→                              </div>
+   664→                            </div>
+   665→                          </div>
+   666→                          {idx < Math.min(notifications.length, 10) - 1 && <Separator />}
+   667→                        </React.Fragment>
+   668→                      );
+   669→                    })}
+   670→                  </div>
+   671→                )}
+   672→              </ScrollArea>
+   673→              {unresolvedCount > 0 && (
+   674→                <div className="border-t px-4 py-2">
+   675→                  <Button
+   676→                    variant="ghost"
+   677→                    size="sm"
+   678→                    className="w-full text-xs gap-1"
+   679→                    onClick={() => handleModuleChange('monitoring')}
+   680→                  >
+   681→                    <Activity className="h-3 w-3" />
+   682→                    View All Alerts in Monitoring
+   683→                  </Button>
+   684→                </div>
+   685→              )}
+   686→            </PopoverContent>
+   687→          </Popover>
+   688→
+   689→          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 text-xs font-bold">
+   690→            AD
+   691→          </div>
+   692→        </div>
+   693→      </header>
+   694→
+   695→      <div className="flex flex-1 overflow-hidden">
+   696→        {/* Desktop Sidebar */}
+   697→        <aside
+   698→          className={`hidden lg:flex flex-col border-r border-slate-200 transition-all duration-200 ${
+   699→            sidebarCollapsed ? 'w-16' : 'w-60'
+   700→          }`}
+   701→        >
+   702→          <SidebarContent collapsed={sidebarCollapsed} activeModule={activeModule} onModuleChange={handleModuleChange} menuItemsWithBadges={itemsWithBadges} />
+   703→          {/* Collapse Toggle */}
+   704→          <button
+   705→            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+   706→            className="flex items-center justify-center py-2 text-slate-400 hover:text-white bg-slate-900 border-t border-slate-700/50 transition-colors"
+   707→            aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+   708→          >
+   709→            <ChevronLeft
+   710→              className={`h-4 w-4 transition-transform ${sidebarCollapsed ? 'rotate-180' : ''}`}
+   711→            />
+   712→          </button>
+   713→        </aside>
+   714→
+   715→        {/* Main Content */}
+   716→        <main className={`flex-1 ${activeModule === 'map' ? 'overflow-hidden' : 'overflow-y-auto'}`}>
+   717→          <div className={`${activeModule === 'map' ? 'h-full p-0' : 'p-4 lg:p-6 max-w-7xl mx-auto'}`}>
+   718→            <ErrorBoundary key={activeModule}>
+   719→              <React.Suspense fallback={
+   720→                <div className="flex items-center justify-center h-64">
+   721→                  <div className="flex flex-col items-center gap-3">
+   722→                    <RefreshCw className="h-8 w-8 text-emerald-600 animate-spin" />
+   723→                    <span className="text-sm text-muted-foreground">Loading module...</span>
+   724→                  </div>
+   725→                </div>
+   726→              }>
+   727→                <ActiveComponent />
+   728→              </React.Suspense>
+   729→            </ErrorBoundary>
+   730→          </div>
+   731→        </main>
+   732→      </div>
+   733→    </div>
+   734→  );
+   735→}
+   736→

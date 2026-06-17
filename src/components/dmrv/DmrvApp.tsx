@@ -46,6 +46,7 @@ import {
   Bot,
   Droplets,
   Bug,
+  Building2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from '@/components/ui/sheet';
@@ -94,6 +95,8 @@ const BioCalculatorView = dynamic(() => import('./bio/BioCalculatorView'), { ssr
 const BioAILabView = dynamic(() => import('./bio/BioAILabView'), { ssr: false });
 const BioSimulatorView = dynamic(() => import('./BioSimulatorView'), { ssr: false });
 const IoTIngestionView = dynamic(() => import('./IoTIngestionView'), { ssr: false });
+const LowCarbonBuildingAgentView = dynamic(() => import('./LowCarbonBuildingAgentView'), { ssr: false });
+const SoilCarbonAgentView = dynamic(() => import('./SoilCarbonAgentView'), { ssr: false });
 import { ErrorBoundary } from './ErrorBoundary';
 
 type ModuleKey =
@@ -135,7 +138,9 @@ type ModuleKey =
   | 'bio-calculator'
   | 'bio-ailab'
   | 'bio-simulator'
-  | 'iot-ingestion';
+  | 'iot-ingestion'
+  | 'soil-carbon'
+  | 'low-carbon-building';
 
 interface MenuItem {
   key: ModuleKey;
@@ -216,6 +221,8 @@ const menuItems: MenuItem[] = [
   { key: 'bio-calculator', label: '🧮 Bio Calculator', icon: Calculator },
   { key: 'bio-ailab', label: '🤖 Bio AI Lab', icon: Bot },
   { key: 'iot-ingestion', label: '📡 IoT Ingestion', icon: Database },
+  { key: 'soil-carbon', label: '🌱 Soil Carbon', icon: Sprout, section: 'BUILDING' },
+  { key: 'low-carbon-building', label: '🏗️ Low-Carbon Building', icon: Building2 },
 
   // Enterprise: Integration & Bridge
   { key: 'bridge', label: 'Cross-Chain Bridge', icon: Layers, section: 'INTEGRATION' },
@@ -261,6 +268,8 @@ const moduleComponents: Record<ModuleKey, React.ComponentType> = {
   'bio-ailab': BioAILabView,
   'bio-simulator': BioSimulatorView,
   'iot-ingestion': IoTIngestionView,
+  'soil-carbon': SoilCarbonAgentView,
+  'low-carbon-building': LowCarbonBuildingAgentView,
   bridge: CrossChainBridgeView,
 };
 

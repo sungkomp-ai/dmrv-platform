@@ -1,0 +1,746 @@
+     1→/**
+     2→ * POST /api/soil-carbon/calculate
+     3→ * ──────────────────────────────────────────────
+     4→ * คำนวณเครดิตคาร์บอนสำหรับแปลงขั้นบันได/กักตะกอนดินบนพื้นที่ลาดชัน
+     5→ * อ้างอิงวิธีการ T-VER-SOIL-01 สำหรับพื้นที่ลาดชัน (Sediment Trap Methodology)
+     6→ *
+     7→ * ขั้นตอนการคำนวณ:
+     8→ *   Step 1: SOC Stock Change — ΔSOC × 44/12 × areaHa
+     9→ *   Step 2: Sediment Trapped Carbon — sedimentTrappedKg × organicCarbonPct/100 / 1000 × 44/12 ต่อชั้นปลูก
+    10→ *   Step 2.5: Vetiver Grass Carbon — (vetiverSedimentCarbon + vetiverBiomassCarbon + vetiverErosionCredit) × 44/12 ต่อชั้นปลูกที่มีหญ้าแฝก
+    11→ *   Step 3: Check Dam Carbon — sedimentCarbonTc × 44/12 ต่อฝายชะลอน้ำ
+    12→ *   Step 4: Erosion Prevention — (baselineSediment − projectSediment) × avgSOCPct/100 × areaHa × 44/12
+    13→ *   Step 5: GHG Emission Reduction — (baselineEmission − projectEmission) × areaHa × monitoringYears
+    14→ *   Step 6: Gross = Step1+2+2.5+3+4+5, Buffer 20% (T-VER-SOIL-01), Net = Gross × 0.80
+    15→ *   Step 7: Co-benefits — การลดการไหลของน้ำ, การลดปริมาณน้ำไหลบ่า
+    16→ */
+    17→import { NextRequest, NextResponse } from 'next/server';
+    18→import { db } from '@/lib/db';
+    19→
+    20→// ─── อัตราส่วน Global Warming Potential (GWP100) ตาม IPCC AR6 ───
+    21→const GWP = {
+    22→  CO2: 1,
+    23→  CH4: 27.9,   // ก๊าซมีเทน
+    24→  N2O: 273,    // ก๊าซไนตรัสออกไซด์
+    25→};
+    26→
+    27→// ─── อัตราส่วนโมเลกุล ───
+    28→const MOLECULAR_RATIO = {
+    29→  CO2_TO_C: 44 / 12,   // ≈ 3.667 (แปลงคาร์บอนเป็น CO2)
+    30→  CH4_TO_C: 16 / 12,   // ≈ 1.333
+    31→  N2O_TO_N: 44 / 28,   // ≈ 1.571
+    32→};
+    33→
+    34→// ─── T-VER-SOIL-01 Methodology Constants ───
+    35→const T_VER_SOIL = {
+    36→  BUFFER_PCT: 20,
+    37→  MONITORING_PERIOD_MIN_YR: 1,
+    38→  MONITORING_PERIOD_MAX_YR: 10,
+    39→  CREDIT_VALIDITY_YR: 10,
+    40→  UNCERTAINTY_DEDUCTION_PCT: 20,
+    41→  SOC_STOCK_CHANGE_THRESHOLD: 0.05,
+    42→  DEFAULT_BULK_DENSITY: 1.3, // g/cm³ ความหนาแน่นรวมของดินเฉลี่ย
+    43→};
+    44→
+    45→// ─── ปัดเศษทศนิยม ───
+    46→function round(val: number, decimals: number = 3): number {
+    47→  const factor = Math.pow(10, decimals);
+    48→  return Math.round(val * factor) / factor;
+    49→}
+    50→
+    51→export async function POST(req: NextRequest) {
+    52→  try {
+    53→    const body = await req.json();
+    54→    const { plotId, monitoringPeriodStart, monitoringPeriodEnd, includeDetailReport } = body;
+    55→
+    56→    // ─── ตรวจสอบข้อมูลที่จำเป็น ───
+    57→    if (!plotId) {
+    58→      return NextResponse.json(
+    59→        { success: false, error: 'ต้องระบุ plotId' },
+    60→        { status: 400 }
+    61→      );
+    62→    }
+    63→
+    64→    // ─── ดึงข้อมูลแปลงพร้อมชั้นปลูก ฝาย และการวัด ───
+    65→    const plot = await db.soilCarbonPlot.findUnique({
+    66→      where: { plotId },
+    67→      include: {
+    68→        measurements: {
+    69→          orderBy: { measurementDate: 'desc' },
+    70→        },
+    71→        terraces: {
+    72→          orderBy: { layerNumber: 'asc' },
+    73→          include: {
+    74→            checkDam: true,
+    75→            measurements: {
+    76→              orderBy: { measurementDate: 'desc' },
+    77→            },
+    78→          },
+    79→        },
+    80→        checkDams: {
+    81→          orderBy: { damId: 'asc' },
+    82→        },
+    83→      },
+    84→    });
+    85→
+    86→    if (!plot) {
+    87→      return NextResponse.json(
+    88→        { success: false, error: `ไม่พบแปลงที่มี plotId: ${plotId}` },
+    89→        { status: 404 }
+    90→      );
+    91→    }
+    92→
+    93→    // ─── กำหนดช่วงเวลาติดตาม ───
+    94→    const startDate = monitoringPeriodStart ? new Date(monitoringPeriodStart) : new Date(plot.createdAt);
+    95→    const endDate = monitoringPeriodEnd ? new Date(monitoringPeriodEnd) : new Date();
+    96→    const monitoringYears = Math.max(
+    97→      T_VER_SOIL.MONITORING_PERIOD_MIN_YR,
+    98→      (endDate.getTime() - startDate.getTime()) / (365.25 * 24 * 60 * 60 * 1000)
+    99→    );
+   100→
+   101→    if (monitoringYears > T_VER_SOIL.MONITORING_PERIOD_MAX_YR) {
+   102→      return NextResponse.json(
+   103→        { success: false, error: `รอบติดตามเกิน ${T_VER_SOIL.MONITORING_PERIOD_MAX_YR} ปี ไม่เป็นไปตาม T-VER-SOIL-01` },
+   104→        { status: 400 }
+   105→      );
+   106→    }
+   107→
+   108→    // ─── กรองข้อมูลการวัดตามช่วงเวลา ───
+   109→    const periodMeasurements = plot.measurements.filter((m: any) => {
+   110→      const mDate = new Date(m.measurementDate);
+   111→      return mDate >= startDate && mDate <= endDate;
+   112→    });
+   113→
+   114→    // ═══════════════════════════════════════════════════════════════════════
+   115→    // Step 1: SOC Stock Change (การเปลี่ยนแปลง SOC)
+   116→    // ΔSOC = projectSOC − baselineSOC (tC/ha)
+   117→    // SOC Credits = ΔSOC × 44/12 × areaHa (tCO2e)
+   118→    // ═══════════════════════════════════════════════════════════════════════
+   119→    const deltaSOC = plot.projectSOC - plot.baselineSOC;
+   120→    const socCreditsCO2e = deltaSOC * MOLECULAR_RATIO.CO2_TO_C * plot.areaHa;
+   121→
+   122→    // ═══════════════════════════════════════════════════════════════════════
+   123→    // Step 2: Sediment Trapped Carbon (คาร์บอนในตะกอนที่ถูกกักในชั้นปลูก)
+   124→    // สำหรับแต่ละชั้นปลูก:
+   125→    //   sedimentCarbon = sedimentTrappedKg × organicCarbonPct/100 / 1000 (tC)
+   126→    //   sedimentCO2e = sedimentCarbon × 44/12
+   127→    // ═══════════════════════════════════════════════════════════════════════
+   128→    const terraceSedimentDetails: any[] = [];
+   129→    let totalTerraceSedimentCarbonTc = 0;
+   130→    let totalTerraceSedimentCO2e = 0;
+   131→
+   132→    for (const terrace of plot.terraces) {
+   133→      // ใช้ sedimentTrappedKg และ organicCarbonPct จากชั้นปลูกโดยตรง
+   134→      const sedimentTrappedKg = terrace.sedimentTrappedKg || 0;
+   135→      const organicCarbonPct = terrace.organicCarbonPct || 0;
+   136→
+   137→      // สูตร: sedimentCarbon = sedimentTrappedKg × organicCarbonPct/100 / 1000 (tC)
+   138→      const sedimentCarbon = sedimentTrappedKg * (organicCarbonPct / 100) / 1000;
+   139→
+   140→      // แปลงเป็น CO2e
+   141→      const sedimentCO2e = sedimentCarbon * MOLECULAR_RATIO.CO2_TO_C;
+   142→
+   143→      totalTerraceSedimentCarbonTc += sedimentCarbon;
+   144→      totalTerraceSedimentCO2e += sedimentCO2e;
+   145→
+   146→      terraceSedimentDetails.push({
+   147→        layerNumber: terrace.layerNumber,
+   148→        layerNameTh: terrace.layerNameTh,
+   149→        elevationMasl: terrace.elevationMasl,
+   150→        dimensions: {
+   151→          lengthM: terrace.lengthM,
+   152→          widthM: terrace.widthM,
+   153→          plantingAreaWidthM: terrace.plantingAreaWidthM,
+   154→          ridgeWidthM: terrace.ridgeWidthM,
+   155→          sedimentDepthCm: terrace.sedimentDepthCm,
+   156→        },
+   157→        calculations: {
+   158→          sedimentTrappedKg: round(sedimentTrappedKg),
+   159→          organicCarbonPct: round(organicCarbonPct, 2),
+   160→          sedimentCarbonTc: round(sedimentCarbon),
+   161→          sedimentCO2e: round(sedimentCO2e),
+   162→        },
+   163→        // ข้อมูลหญ้าแฝกบนคันขอบ (Vetiver Grass) — จะเพิ่มค่า CO2e ใน Step 2.5
+   164→        vetiverData: terrace.vetiverGrassStatus !== 'NONE' ? {
+   165→          ridgeWidthM: terrace.ridgeWidthM,
+   166→          plantingAreaWidthM: terrace.plantingAreaWidthM,
+   167→          vetiverGrassStatus: terrace.vetiverGrassStatus,
+   168→          vetiverRootDepthCm: terrace.vetiverRootDepthCm,
+   169→          vetiverErosionPreventionPct: terrace.vetiverErosionPreventionPct,
+   170→          vetiverSedimentAccumulationKg: terrace.vetiverSedimentAccumulationKg,
+   171→          vetiverCarbonSequestrationKg: terrace.vetiverCarbonSequestrationKg,
+   172→          vetiverCO2e: 0, // จะคำนวณใน Step 2.5
+   173→        } : null,
+   174→      });
+   175→    }
+   176→
+   177→    // ═══════════════════════════════════════════════════════════════════════
+   178→    // Step 2.5: Vetiver Grass Carbon Sequestration (เครดิตคาร์บอนจากหญ้าแฝกบนคันขอบ)
+   179→    // สำหรับแต่ละชั้นปลูกที่มีหญ้าแฝก (vetiverGrassStatus != 'NONE'):
+   180→    //   vetiverSedimentCarbon = vetiverSedimentAccumulationKg × organicCarbonPct/100 / 1000 × 44/12
+   181→    //   vetiverBiomassCarbon = vetiverCarbonSequestrationKg / 1000 × 44/12
+   182→    //   vetiverErosionCredit = (vetiverErosionPreventionPct/100) × ridgeWidthM × lengthM × baselineSediment × 0.001 × 44/12
+   183→    //   Total vetiver credit per terrace = sum of above
+   184→    // ═══════════════════════════════════════════════════════════════════════
+   185→    let totalVetiverCO2e = 0;
+   186→    const vetiverDetails: any[] = [];
+   187→
+   188→    for (const terrace of plot.terraces) {
+   189→      if ((terrace.vetiverGrassStatus || 'NONE') === 'NONE') continue;
+   190→
+   191→      const organicCarbonPct = terrace.organicCarbonPct || 0;
+   192→      const ridgeWidthM = terrace.ridgeWidthM || 0;
+   193→      const lengthM = terrace.lengthM || 0;
+   194→
+   195→      // ─── ตะกอนดินเพิ่มเติมจากหญ้าแฝก (Vetiver Sediment Carbon) ───
+   196→      // สูตร: vetiverSedimentAccumulationKg × organicCarbonPct/100 / 1000 × 44/12 (tCO2e)
+   197→      const vetiverSedimentCarbon = (terrace.vetiverSedimentAccumulationKg || 0) * (organicCarbonPct / 100) / 1000;
+   198→      const vetiverSedimentCO2e = vetiverSedimentCarbon * MOLECULAR_RATIO.CO2_TO_C;
+   199→
+   200→      // ─── คาร์บอนจากมวลชีวภาพหญ้าแฝก (Vetiver Biomass Carbon) ───
+   201→      // สูตร: vetiverCarbonSequestrationKg / 1000 × 44/12 (tCO2e)
+   202→      const vetiverBiomassCarbon = (terrace.vetiverCarbonSequestrationKg || 0) / 1000;
+   203→      const vetiverBiomassCO2e = vetiverBiomassCarbon * MOLECULAR_RATIO.CO2_TO_C;
+   204→
+   205→      // ─── เครดิตจากการป้องกันการพังทลายดินโดยหญ้าแฝก (Vetiver Erosion Prevention Credit) ───
+   206→      // สูตร: (vetiverErosionPreventionPct/100) × ridgeWidthM × lengthM × baselineSediment × 0.001 × 44/12 (tCO2e)
+   207→      // คิดจากพื้นที่คันขอบ × อัตราการพังทลายพื้นฐาน × % ที่หญ้าแฝกป้องกัน
+   208→      const vetiverErosionCreditTc = (terrace.vetiverErosionPreventionPct || 0) / 100 * ridgeWidthM * lengthM * plot.baselineSediment * 0.001;
+   209→      const vetiverErosionCO2e = vetiverErosionCreditTc * MOLECULAR_RATIO.CO2_TO_C;
+   210→
+   211→      // รวมเครดิตหญ้าแฝกของชั้นนี้
+   212→      const vetiverCO2e = vetiverSedimentCO2e + vetiverBiomassCO2e + vetiverErosionCO2e;
+   213→      totalVetiverCO2e += vetiverCO2e;
+   214→
+   215→      // อัปเดต vetiverCO2e ใน terraceSedimentDetails
+   216→      const detailItem = terraceSedimentDetails.find(d => d.layerNumber === terrace.layerNumber);
+   217→      if (detailItem && detailItem.vetiverData) {
+   218→        detailItem.vetiverData.vetiverCO2e = round(vetiverCO2e);
+   219→      }
+   220→
+   221→      vetiverDetails.push({
+   222→        layerNumber: terrace.layerNumber,
+   223→        layerNameTh: terrace.layerNameTh,
+   224→        vetiverGrassStatus: terrace.vetiverGrassStatus,
+   225→        vetiverRootDepthCm: terrace.vetiverRootDepthCm,
+   226→        vetiverPlantDensity: terrace.vetiverPlantDensity,
+   227→        calculations: {
+   228→          vetiverSedimentCarbon: round(vetiverSedimentCarbon),
+   229→          vetiverSedimentCO2e: round(vetiverSedimentCO2e),
+   230→          vetiverBiomassCarbon: round(vetiverBiomassCarbon),
+   231→          vetiverBiomassCO2e: round(vetiverBiomassCO2e),
+   232→          vetiverErosionCreditTc: round(vetiverErosionCreditTc),
+   233→          vetiverErosionCO2e: round(vetiverErosionCO2e),
+   234→          totalVetiverCO2e: round(vetiverCO2e),
+   235→        },
+   236→      });
+   237→    }
+   238→
+   239→    // ═══════════════════════════════════════════════════════════════════════
+   240→    // Step 3: Check Dam Carbon (คาร์บอนในตะกอนหลังฝายชะลอน้ำ)
+   241→    // sedimentCarbonTc (ที่เก็บไว้แล้ว) × 44/12 = tCO2e
+   242→    // ═══════════════════════════════════════════════════════════════════════
+   243→    const checkDamDetails: any[] = [];
+   244→    let totalCheckDamCarbonTc = 0;
+   245→    let totalCheckDamCO2e = 0;
+   246→
+   247→    for (const dam of plot.checkDams) {
+   248→      // ใช้ค่า sedimentCarbonTc ที่เก็บไว้แล้วโดยตรง
+   249→      const sedimentCarbonTc = dam.sedimentCarbonTc || 0;
+   250→      const damCO2e = sedimentCarbonTc * MOLECULAR_RATIO.CO2_TO_C;
+   251→
+   252→      totalCheckDamCarbonTc += sedimentCarbonTc;
+   253→      totalCheckDamCO2e += damCO2e;
+   254→
+   255→      checkDamDetails.push({
+   256→        damId: dam.damId,
+   257→        damNameTh: dam.damNameTh,
+   258→        damType: dam.damType,
+   259→        status: dam.status,
+   260→        dimensions: {
+   261→          heightM: dam.heightM,
+   262→          widthM: dam.widthM,
+   263→          thicknessM: dam.thicknessM,
+   264→        },
+   265→        sedimentData: {
+   266→          sedimentVolumeM3: round(dam.sedimentVolumeM3),
+   267→          sedimentDepthCm: round(dam.sedimentDepthCm),
+   268→          sedimentSOCpct: round(dam.sedimentSOCpct, 2),
+   269→          sedimentCarbonTc: round(sedimentCarbonTc),
+   270→        },
+   271→        flowData: {
+   272→          flowRateLMin: round(dam.flowRateLMin),
+   273→          flowReductionPct: round(dam.flowReductionPct, 1),
+   274→          trapEfficiencyPct: round(dam.trapEfficiencyPct, 1),
+   275→        },
+   276→        calculations: {
+   277→          sedimentCarbonTc: round(sedimentCarbonTc),
+   278→          co2e: round(damCO2e),
+   279→        },
+   280→      });
+   281→    }
+   282→
+   283→    // ═══════════════════════════════════════════════════════════════════════
+   284→    // Step 4: Erosion Prevention (เครดิตจากการป้องกันการพังทลายดิน)
+   285→    // Erosion Prevention = (baselineSediment − projectSediment) × avgSOCPct/100 × areaHa × 44/12
+   286→    // ═══════════════════════════════════════════════════════════════════════
+   287→    const erosionReduction = plot.baselineSediment - plot.projectSediment; // t/ha/yr
+   288→
+   289→    // คำนวณ avgSOCPct จากข้อมูลการวัด (เฉลี่ย organicCarbonPct ของการวัดที่ผ่านการตรวจสอบ)
+   290→    let avgSOCPct = 0;
+   291→    let socPctCount = 0;
+   292→    for (const m of periodMeasurements) {
+   293→      if ((m.qualityFlag === 'VALIDATED' || m.qualityFlag === 'CERTIFIED') && m.organicCarbonPct > 0) {
+   294→        avgSOCPct += m.organicCarbonPct;
+   295→        socPctCount++;
+   296→      }
+   297→    }
+   298→    if (socPctCount > 0) avgSOCPct = avgSOCPct / socPctCount;
+   299→    // ถ้าไม่มีข้อมูลการวัด ใช้ค่าประมาณจาก baselineSOC
+   300→    if (avgSOCPct === 0 && plot.baselineSOC > 0) {
+   301→      avgSOCPct = (plot.baselineSOC / 30) * 100 / 100; // ประมาณ SOC% จาก tC/ha (30cm depth)
+   302→    }
+   303→
+   304→    const erosionPreventionCO2e = erosionReduction * (avgSOCPct / 100) * plot.areaHa * MOLECULAR_RATIO.CO2_TO_C;
+   305→
+   306→    // ═══════════════════════════════════════════════════════════════════════
+   307→    // Step 5: GHG Emission Reduction (การลดการปล่อยก๊าซเรือนกระจก)
+   308→    // (baselineEmission − projectEmission) × areaHa × monitoringYears
+   309→    // ═══════════════════════════════════════════════════════════════════════
+   310→    const emissionReductionPerHa = plot.baselineEmission - plot.projectEmission; // tCO2e/ha/yr
+   311→    const ghgReductionCO2e = emissionReductionPerHa * plot.areaHa * monitoringYears;
+   312→
+   313→    // ประเมิน GHG จาก flux ข้อมูลการวัด
+   314→    let totalCO2Flux = 0;
+   315→    let totalCH4Flux = 0;
+   316→    let totalN2OFlux = 0;
+   317→    let validMeasurementCount = 0;
+   318→
+   319→    for (const m of periodMeasurements) {
+   320→      if (m.qualityFlag === 'VALIDATED' || m.qualityFlag === 'CERTIFIED') {
+   321→        totalCO2Flux += m.co2Flux || 0;
+   322→        totalCH4Flux += m.ch4Flux || 0;
+   323→        totalN2OFlux += m.n2oFlux || 0;
+   324→        validMeasurementCount++;
+   325→      }
+   326→    }
+   327→
+   328→    const avgCO2Flux = validMeasurementCount > 0 ? totalCO2Flux / validMeasurementCount : 0;
+   329→    const avgCH4Flux = validMeasurementCount > 0 ? totalCH4Flux / validMeasurementCount : 0;
+   330→    const avgN2OFlux = validMeasurementCount > 0 ? totalN2OFlux / validMeasurementCount : 0;
+   331→
+   332→    const ghgFromMeasurements = {
+   333→      co2: avgCO2Flux * 0.139 * plot.areaHa * monitoringYears,
+   334→      ch4: avgCH4Flux * 0.0876 * GWP.CH4 * plot.areaHa * monitoringYears,
+   335→      n2o: avgN2OFlux * 0.00000876 * GWP.N2O * plot.areaHa * monitoringYears,
+   336→    };
+   337→
+   338→    // ═══════════════════════════════════════════════════════════════════════
+   339→    // Step 6: Total & Buffer (รวมและหัก Buffer 20%)
+   340→    // Gross = SOC Credits + Sediment Trapped + Check Dam + Erosion Prevention + GHG Reduction
+   341→    // Buffer deduction: 20% (T-VER-SOIL-01)
+   342→    // Net = Gross × 0.80
+   343→    // ═══════════════════════════════════════════════════════════════════════
+   344→    const grossCredits = socCreditsCO2e + totalTerraceSedimentCO2e + totalVetiverCO2e + totalCheckDamCO2e + erosionPreventionCO2e + ghgReductionCO2e;
+   345→    const bufferDeduction = grossCredits * (T_VER_SOIL.BUFFER_PCT / 100);
+   346→    const netCredits = grossCredits * 0.80;
+   347→
+   348→    // ═══════════════════════════════════════════════════════════════════════
+   349→    // Step 7: Co-benefits (ประโยชน์ร่วม — ไม่นับเครดิต)
+   350→    // - การลดการไหลของน้ำ (Water Flow Reduction)
+   351→    // - การลดปริมาณน้ำไหลบ่า (Runoff Volume Reduction)
+   352→    // ═══════════════════════════════════════════════════════════════════════
+   353→    let totalFlowIn = 0;
+   354→    let totalFlowOut = 0;
+   355→    for (const terrace of plot.terraces) {
+   356→      totalFlowIn += terrace.waterFlowInLMin;
+   357→      totalFlowOut += terrace.waterFlowOutLMin;
+   358→    }
+   359→    const avgFlowReductionPct = totalFlowIn > 0 ? ((totalFlowIn - totalFlowOut) / totalFlowIn) * 100 : 0;
+   360→
+   361→    // คำนวณการลดปริมาณน้ำไหลบ่าจากข้อมูลการวัด
+   362→    let totalRunoffBaseline = 0;
+   363→    let totalRunoffProject = 0;
+   364→    let runoffCount = 0;
+   365→    for (const m of periodMeasurements) {
+   366→      if (m.qualityFlag === 'VALIDATED' || m.qualityFlag === 'CERTIFIED') {
+   367→        totalRunoffProject += m.runoffVolumeL || 0;
+   368→        runoffCount++;
+   369→      }
+   370→    }
+   371→    // ประมาณ baseline runoff จาก slopeDegree และพื้นที่
+   372→    if (runoffCount > 0) {
+   373→      totalRunoffBaseline = plot.areaHa * 10000 * plot.slopeDegree * 0.5; // ประมาณจากพื้นที่และความลาดชัน
+   374→    }
+   375→    const runoffReductionPct = totalRunoffBaseline > 0
+   376→      ? ((totalRunoffBaseline - totalRunoffProject) / totalRunoffBaseline) * 100
+   377→      : 0;
+   378→
+   379→    // สถิติฝายชะลอน้ำ
+   380→    let totalDamFlowReduction = 0;
+   381→    let totalDamTrapEfficiency = 0;
+   382→    let activeDamCount = 0;
+   383→    for (const dam of plot.checkDams) {
+   384→      if (dam.status === 'ACTIVE') {
+   385→        totalDamFlowReduction += dam.flowReductionPct;
+   386→        totalDamTrapEfficiency += dam.trapEfficiencyPct;
+   387→        activeDamCount++;
+   388→      }
+   389→    }
+   390→
+   391→    const coBenefits = {
+   392→      waterFlowReduction: {
+   393→        descriptionTh: 'การลดการไหลของน้ำ',
+   394→        terraceFlowReduction: {
+   395→          totalFlowInLMin: round(totalFlowIn),
+   396→          totalFlowOutLMin: round(totalFlowOut),
+   397→          flowReductionPct: round(avgFlowReductionPct, 1),
+   398→          descriptionTh: 'อัตราการลดการไหลของน้ำจากชั้นปลูก',
+   399→        },
+   400→        checkDamEffectiveness: {
+   401→          activeDams: activeDamCount,
+   402→          avgFlowReductionPct: activeDamCount > 0 ? round(totalDamFlowReduction / activeDamCount, 1) : 0,
+   403→          avgTrapEfficiencyPct: activeDamCount > 0 ? round(totalDamTrapEfficiency / activeDamCount, 1) : 0,
+   404→          descriptionTh: 'ประสิทธิภาพฝายชะลอน้ำ',
+   405→        },
+   406→        estimatedWaterRetainedM3: round(
+   407→          totalFlowIn > 0
+   408→            ? (totalFlowIn - totalFlowOut) * 60 * 24 * 365 / 1000 * monitoringYears
+   409→            : 0
+   410→        ),
+   411→      },
+   412→      runoffVolumeReduction: {
+   413→        descriptionTh: 'การลดปริมาณน้ำไหลบ่า',
+   414→        estimatedBaselineRunoffL: round(totalRunoffBaseline),
+   415→        measuredProjectRunoffL: round(totalRunoffProject),
+   416→        runoffReductionPct: round(runoffReductionPct, 1),
+   417→        descriptionThDetail: 'ประมาณการลดปริมาณน้ำไหลบ่าจากข้อมูลการวัด',
+   418→      },
+   419→      noteTh: 'ประโยชน์ร่วมด้านการจัดการน้ำ (ไม่นับเป็นเครดิตคาร์บอน)',
+   420→    };
+   421→
+   422→    // ─── ตรวจสอบเกณฑ์ขั้นต่ำ ───
+   423→    const annualDeltaSOC = deltaSOC / monitoringYears;
+   424→    const passesThreshold = annualDeltaSOC >= T_VER_SOIL.SOC_STOCK_CHANGE_THRESHOLD;
+   425→
+   426→    // ─── สร้างรายงานผลการคำนวณ ───
+   427→    const calculationReport = {
+   428→      // ข้อมูลแปลง
+   429→      plotInfo: {
+   430→        plotId: plot.plotId,
+   431→        name: plot.name,
+   432→        nameTh: plot.nameTh,
+   433→        province: plot.province,
+   434→        areaHa: plot.areaHa,
+   435→        areaRai: plot.areaRai,
+   436→        cropType: plot.cropType,
+   437→        practiceType: plot.practiceType,
+   438→        landUseType: plot.landUseType,
+   439→        methodology: plot.methodology,
+   440→        previousLandUse: plot.previousLandUse,
+   441→        vetiverGrassCoveragePct: plot.vetiverGrassCoveragePct,
+   442→        // ข้อมูลพื้นที่ลาดชัน
+   443→        terrainInfo: {
+   444→          altitudeMasl: plot.altitudeMasl,
+   445→          slopeDegree: plot.slopeDegree,
+   446→          slopeAspect: plot.slopeAspect,
+   447→          terraceCount: plot.terraceCount,
+   448→          checkDamCount: plot.checkDamCount,
+   449→          checkDamType: plot.checkDamType,
+   450→          plantingAreaWidthM: plot.plantingAreaWidthM,
+   451→          ridgeWidthMPlot: plot.ridgeWidthMPlot,
+   452→        },
+   453→      },
+   454→
+   455→      // ช่วงเวลาติดตาม
+   456→      monitoringPeriod: {
+   457→        start: startDate.toISOString().split('T')[0],
+   458→        end: endDate.toISOString().split('T')[0],
+   459→        years: round(monitoringYears),
+   460→        measurementCount: periodMeasurements.length,
+   461→        validMeasurementCount,
+   462→      },
+   463→
+   464→      // Step 1: SOC Stock Change
+   465→      step1_socStockChange: {
+   466→        nameTh: 'การเปลี่ยนแปลง SOC',
+   467→        formula: 'ΔSOC × 44/12 × areaHa',
+   468→        baselineSOC: plot.baselineSOC,
+   469→        projectSOC: plot.projectSOC,
+   470→        deltaSOC: round(deltaSOC),
+   471→        deltaSOCUnit: 'tC/ha',
+   472→        molecularRatio: round(MOLECULAR_RATIO.CO2_TO_C),
+   473→        areaHa: plot.areaHa,
+   474→        result: round(socCreditsCO2e),
+   475→        unit: 'tCO2e',
+   476→      },
+   477→
+   478→      // Step 2: Sediment Trapped Carbon
+   479→      step2_sedimentTrapped: {
+   480→        nameTh: 'คาร์บอนในตะกอนดินที่ถูกกัก (ชั้นปลูก)',
+   481→        formula: 'sedimentTrappedKg × organicCarbonPct/100 / 1000 × 44/12',
+   482→        terraceCount: plot.terraces.length,
+   483→        details: terraceSedimentDetails,
+   484→        totalSedimentCarbonTc: round(totalTerraceSedimentCarbonTc),
+   485→        totalCO2e: round(totalTerraceSedimentCO2e),
+   486→        unit: 'tCO2e',
+   487→      },
+   488→
+   489→      // Step 2.5: Vetiver Grass Carbon Sequestration
+   490→      step2_5_vetiverGrass: {
+   491→        nameTh: 'เครดิตคาร์บอนจากหญ้าแฝกบนคันขอบ',
+   492→        formulaTh: 'ตะกอนดินเพิ่มเติม + มวลชีวภาพ + การป้องกันการพังทลาย',
+   493→        formula: '(vetiverSedimentCarbon + vetiverBiomassCarbon + vetiverErosionCredit) × 44/12',
+   494→        vetiverTerraceCount: vetiverDetails.length,
+   495→        details: vetiverDetails,
+   496→        totalCO2e: round(totalVetiverCO2e),
+   497→        unit: 'tCO2e',
+   498→        noteTh: 'คำนวณเฉพาะชั้นปลูกที่มีหญ้าแฝก (vetiverGrassStatus != NONE)',
+   499→      },
+   500→
+   501→      // Step 3: Check Dam Carbon
+   502→      step3_checkDamCarbon: {
+   503→        nameTh: 'คาร์บอนในตะกอนดินหลังฝายชะลอน้ำ',
+   504→        formula: 'sedimentCarbonTc × 44/12',
+   505→        checkDamCount: plot.checkDams.length,
+   506→        details: checkDamDetails,
+   507→        totalSedimentCarbonTc: round(totalCheckDamCarbonTc),
+   508→        totalCO2e: round(totalCheckDamCO2e),
+   509→        unit: 'tCO2e',
+   510→      },
+   511→
+   512→      // Step 4: Erosion Prevention
+   513→      step4_erosionPrevention: {
+   514→        nameTh: 'เครดิตจากการป้องกันการพังทลายดิน',
+   515→        formula: '(baselineSediment − projectSediment) × avgSOCPct/100 × areaHa × 44/12',
+   516→        baselineSediment: round(plot.baselineSediment),
+   517→        baselineSedimentUnit: 't/ha/yr',
+   518→        projectSediment: round(plot.projectSediment),
+   519→        projectSedimentUnit: 't/ha/yr',
+   520→        erosionReduction: round(erosionReduction),
+   521→        erosionReductionUnit: 't/ha/yr',
+   522→        sedimentTrapRate: round(plot.sedimentTrapRate, 1),
+   523→        sedimentTrapRateUnit: '%',
+   524→        avgSOCPct: round(avgSOCPct, 2),
+   525→        areaHa: plot.areaHa,
+   526→        molecularRatio: round(MOLECULAR_RATIO.CO2_TO_C),
+   527→        result: round(erosionPreventionCO2e),
+   528→        unit: 'tCO2e',
+   529→      },
+   530→
+   531→      // Step 5: GHG Emission Reduction
+   532→      step5_ghgReduction: {
+   533→        nameTh: 'การลดการปล่อยก๊าซเรือนกระจก',
+   534→        formula: '(baselineEmission − projectEmission) × areaHa × monitoringYears',
+   535→        baselineEmission: plot.baselineEmission,
+   536→        projectEmission: plot.projectEmission,
+   537→        emissionReductionPerHa: round(emissionReductionPerHa),
+   538→        emissionReductionPerHaUnit: 'tCO2e/ha/yr',
+   539→        areaHa: plot.areaHa,
+   540→        monitoringYears: round(monitoringYears),
+   541→        result: round(ghgReductionCO2e),
+   542→        unit: 'tCO2e',
+   543→      },
+   544→
+   545→      // GHG จากข้อมูลการวัด (ถ้ามี)
+   546→      ghgFromMeasurements: validMeasurementCount > 0 ? {
+   547→        co2: {
+   548→          avgFlux: round(avgCO2Flux),
+   549→          fluxUnit: 'µmol/m²/s',
+   550→          co2Equivalent: round(ghgFromMeasurements.co2),
+   551→        },
+   552→        ch4: {
+   553→          avgFlux: round(avgCH4Flux),
+   554→          fluxUnit: 'mg/m²/hr',
+   555→          co2Equivalent: round(ghgFromMeasurements.ch4),
+   556→          gwp: GWP.CH4,
+   557→        },
+   558→        n2o: {
+   559→          avgFlux: round(avgN2OFlux),
+   560→          fluxUnit: 'µg/m²/hr',
+   561→          co2Equivalent: round(ghgFromMeasurements.n2o),
+   562→          gwp: GWP.N2O,
+   563→        },
+   564→      } : null,
+   565→
+   566→      // Step 6: Total & Buffer
+   567→      step6_totalAndBuffer: {
+   568→        nameTh: 'รวมและหัก Buffer',
+   569→        breakdown: {
+   570→          socStockChange: round(socCreditsCO2e),
+   571→          sedimentTrapped: round(totalTerraceSedimentCO2e),
+   572→          vetiverGrass: round(totalVetiverCO2e),
+   573→          checkDamCarbon: round(totalCheckDamCO2e),
+   574→          erosionPrevention: round(erosionPreventionCO2e),
+   575→          ghgReduction: round(ghgReductionCO2e),
+   576→        },
+   577→        grossCredits: round(grossCredits),
+   578→        grossCreditsUnit: 'tCO2e',
+   579→        bufferPct: T_VER_SOIL.BUFFER_PCT,
+   580→        bufferDeduction: round(bufferDeduction),
+   581→        netCredits: round(netCredits),
+   582→        netCreditsUnit: 'tCO2e',
+   583→        annualNetCredits: round(netCredits / monitoringYears),
+   584→        annualNetCreditsUnit: 'tCO2e/yr',
+   585→      },
+   586→
+   587→      // Step 7: Co-benefits (ประโยชน์ร่วม)
+   588→      step7_coBenefits: coBenefits,
+   589→
+   590→      // สถานะและคำแนะนำ
+   591→      assessment: {
+   592→        eligible: passesThreshold && netCredits > 0,
+   593→        methodology: plot.methodology,
+   594→        slopeSpecific: plot.slopeDegree > 5,
+   595→        uncertaintyDeduction: `${T_VER_SOIL.UNCERTAINTY_DEDUCTION_PCT}%`,
+   596→        recommendations: generateSlopeRecommendations(
+   597→          plot,
+   598→          deltaSOC,
+   599→          netCredits,
+   600→          validMeasurementCount,
+   601→          passesThreshold,
+   602→          totalTerraceSedimentCO2e,
+   603→          totalCheckDamCO2e,
+   604→          erosionReduction
+   605→        ),
+   606→      },
+   607→    };
+   608→
+   609→    // ─── อัปเดตข้อมูลแปลง ───
+   610→    await db.soilCarbonPlot.update({
+   611→      where: { plotId },
+   612→      data: {
+   613→        emissionReduction: round(emissionReductionPerHa),
+   614→        monitoringYear: Math.ceil(monitoringYears),
+   615→        status: netCredits > 0 ? 'MONITORING' : plot.status,
+   616→      },
+   617→    });
+   618→
+   619→    return NextResponse.json({
+   620→      success: true,
+   621→      data: includeDetailReport ? calculationReport : {
+   622→        ...calculationReport.step6_totalAndBuffer,
+   623→        breakdown: calculationReport.step6_totalAndBuffer.breakdown,
+   624→        coBenefits: calculationReport.step7_coBenefits,
+   625→      },
+   626→      detailAvailable: true,
+   627→      message: netCredits > 0
+   628→        ? `คำนวณเครดิตคาร์บอนสำเร็จ: ${round(netCredits)} tCO2e (หัก buffer ${T_VER_SOIL.BUFFER_PCT}%) — รวมตะกอนดิน ${round(totalTerraceSedimentCO2e + totalCheckDamCO2e)} tCO2e, หญ้าแฝก ${round(totalVetiverCO2e)} tCO2e`
+   629→        : 'แปลงนี้ยังไม่มีสิทธิ์รับเครดิตคาร์บอน กรุณาตรวจสอบข้อมูล',
+   630→    });
+   631→  } catch (error) {
+   632→    console.error('Soil carbon calculate error:', error);
+   633→    return NextResponse.json(
+   634→      { success: false, error: 'ไม่สามารถคำนวณเครดิตคาร์บอนได้', details: String(error) },
+   635→      { status: 500 }
+   636→    );
+   637→  }
+   638→}
+   639→
+   640→// ─── ฟังก์ชันสร้างคำแนะนำสำหรับพื้นที่ลาดชัน ───
+   641→function generateSlopeRecommendations(
+   642→  plot: any,
+   643→  deltaSOC: number,
+   644→  netCredits: number,
+   645→  validMeasurementCount: number,
+   646→  passesThreshold: boolean,
+   647→  terraceSedimentCO2e: number,
+   648→  checkDamCO2e: number,
+   649→  erosionReduction: number
+   650→): string[] {
+   651→  const recommendations: string[] = [];
+   652→
+   653→  if (!passesThreshold) {
+   654→    recommendations.push(
+   655→      `การเปลี่ยนแปลง SOC (${deltaSOC.toFixed(3)} tC/ha/yr) ต่ำกว่าเกณฑ์ขั้นต่ำ (0.05 tC/ha/yr) กรุณาพิจารณาปรับปรุงแนวทางปฏิบัติ`
+   656→    );
+   657→  }
+   658→
+   659→  if (validMeasurementCount < 3) {
+   660→    recommendations.push(
+   661→      `จำนวนข้อมูลการวัดที่ผ่านการตรวจสอบน้อย (${validMeasurementCount} รายการ) แนะนำเพิ่มความถี่การวัด`
+   662→    );
+   663→  }
+   664→
+   665→  // คำแนะนำเฉพาะพื้นที่ลาดชัน
+   666→  if (plot.slopeDegree > 30) {
+   667→    recommendations.push(
+   668→      `ความลาดชันสูงมาก (${plot.slopeDegree}°) แนะนำเพิ่มจำนวนชั้นปลูกและฝายชะลอน้ำเพื่อลดการพังทลายดิน`
+   669→    );
+   670→  }
+   671→
+   672→  if (plot.terraceCount === 0 && plot.slopeDegree > 10) {
+   673→    recommendations.push(
+   674→      `พื้นที่มีความลาดชัน (${plot.slopeDegree}°) แต่ยังไม่มีชั้นปลูก แนะนำสร้างขั้นบันไดเพื่อกักตะกอนดิน`
+   675→    );
+   676→  }
+   677→
+   678→  if (plot.checkDamCount === 0 && plot.slopeDegree > 15) {
+   679→    recommendations.push(
+   680→      `พื้นที่มีความลาดชัน (${plot.slopeDegree}°) แต่ยังไม่มีฝายชะลอน้ำ แนะนำสร้างฝายเพื่อกักตะกอนดินและลดการไหลบ่า`
+   681→    );
+   682→  }
+   683→
+   684→  if (terraceSedimentCO2e === 0 && plot.terraceCount > 0) {
+   685→    recommendations.push(
+   686→      'มีชั้นปลูกแต่ยังไม่มีข้อมูลตะกอนดินที่ถูกกัก กรุณาบันทึกข้อมูล sedimentTrappedKg และ organicCarbonPct ของแต่ละชั้น'
+   687→    );
+   688→  }
+   689→
+   690→  if (checkDamCO2e === 0 && plot.checkDamCount > 0) {
+   691→    recommendations.push(
+   692→      'มีฝายชะลอน้ำแต่ยังไม่มีข้อมูลตะกอนดินหลังฝาย กรุณาบันทึกข้อมูล sedimentCarbonTc'
+   693→    );
+   694→  }
+   695→
+   696→  if (erosionReduction <= 0 && plot.slopeDegree > 5) {
+   697→    recommendations.push(
+   698→      'อัตราการลดการพังทลายดินเป็นศูนย์หรือติดลบ กรุณาตรวจสอบค่า baselineSediment และ projectSediment'
+   699→    );
+   700→  }
+   701→
+   702→  if (plot.practiceType === 'conventional') {
+   703→    recommendations.push(
+   704→      'แนะนำเปลี่ยนจากการเกษตรแบบดั้งเดิมเป็นแนวทางปฏิบัติบนพื้นที่ลาดชัน (เช่น sediment_trap, terraced, contour_planting)'
+   705→    );
+   706→  }
+   707→
+   708→  // ─── คำแนะนำเกี่ยวกับหญ้าแฝก (Vetiver Grass Recommendations) ───
+   709→  // ถ้าพื้นที่มีความลาดชันมาก (> 20°) แต่ยังไม่มีหญ้าแฝก ควรแนะนำปลูกหญ้าแฝก
+   710→  const hasVetiverGrass = plot.terraces?.some(
+   711→    (t: any) => t.vetiverGrassStatus && t.vetiverGrassStatus !== 'NONE'
+   712→  );
+   713→  if (plot.slopeDegree > 20 && !hasVetiverGrass) {
+   714→    recommendations.push(
+   715→      `พื้นที่มีความลาดชันสูง (${plot.slopeDegree}°) แต่ยังไม่มีหญ้าแฝกบนคันขอบ แนะนำปลูกหญ้าแฝกเพื่อเพิ่มเครดิตคาร์บอนและลดการพังทลายดิน (คาดการณ์เพิ่ม 0.5-2.0 tCO2e/ชั้น)`
+   716→    );
+   717→  }
+   718→
+   719→  // ถ้าเปลี่ยนจากไร่เลื่อนลอย ให้ระบุถึงประโยชน์ของการเปลี่ยนผ่าน
+   720→  if (plot.previousLandUse === 'slash_and_burn') {
+   721→    recommendations.push(
+   722→      'แปลงนี้เปลี่ยนจากไร่เลื่อนลอย (Slash-and-Burn) เป็นเกษตรกักตะกอนดิน มีศักยภาพสูงในการกักคาร์บอนจากการลดการปล่อยก๊าซเรือนกระจกและเพิ่ม SOC'
+   723→    );
+   724→  }
+   725→
+   726→  if (deltaSOC < 0) {
+   727→    recommendations.push(
+   728→      'พบว่า SOC ลดลง อาจเกิดจากการพังทลายดินบนพื้นที่ลาดชัน กรุณาตรวจสอบแนวทางการจัดการดิน'
+   729→    );
+   730→  }
+   731→
+   732→  if (netCredits <= 0) {
+   733→    recommendations.push(
+   734→      'เครดิตคาร์บอนสุทธิเป็นศูนย์หรือติดลบ กรุณาปรับปรุงแนวทางปฏิบัติ เพิ่มชั้นปลูก/ฝาย หรือเพิ่มพื้นที่โครงการ'
+   735→    );
+   736→  }
+   737→
+   738→  if (recommendations.length === 0) {
+   739→    recommendations.push(
+   740→      'แปลงนี้มีศักยภาพในการกักคาร์บอนดี (รวมเครดิตจากตะกอนดิน) สามารถดำเนินการขอรับรองเครดิตคาร์บอนได้'
+   741→    );
+   742→  }
+   743→
+   744→  return recommendations;
+   745→}
+   746→

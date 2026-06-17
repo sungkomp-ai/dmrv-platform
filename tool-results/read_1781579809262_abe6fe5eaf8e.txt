@@ -1,0 +1,1748 @@
+     1→'use client';
+     2→
+     3→import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+     4→import {
+     5→  Sprout, BarChart3, Activity, Calculator, FileCheck, Plus, Upload,
+     6→  RefreshCw, ChevronDown, ChevronUp, MapPin, Leaf, Thermometer,
+     7→  Droplets, Gauge, FlaskConical, Shield, CheckCircle2, XCircle,
+     8→  AlertTriangle, FileText, Clock, Eye, Download, Send, Search,
+     9→  TrendingUp, TrendingDown, Layers, Database, Cpu, Beaker,
+    10→  Award, ClipboardCheck, CircleDot,
+    11→} from 'lucide-react';
+    12→import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+    13→import { Button } from '@/components/ui/button';
+    14→import { Badge } from '@/components/ui/badge';
+    15→import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+    16→import { Input } from '@/components/ui/input';
+    17→import { Label } from '@/components/ui/label';
+    18→import { Textarea } from '@/components/ui/textarea';
+    19→import { Separator } from '@/components/ui/separator';
+    20→import { Progress } from '@/components/ui/progress';
+    21→import { ScrollArea } from '@/components/ui/scroll-area';
+    22→import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger } from '@/components/ui/dialog';
+    23→import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+    24→import {
+    25→  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+    26→} from '@/components/ui/table';
+    27→import {
+    28→  LineChart, Line, BarChart, Bar, AreaChart, Area, PieChart, Pie, Cell,
+    29→  ComposedChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
+    30→  ResponsiveContainer,
+    31→} from 'recharts';
+    32→
+    33→// ─── Color Palette ───────────────────────────────────────────────
+    34→const COLORS = ['#10b981', '#f59e0b', '#3b82f6', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16', '#f97316', '#6366f1'];
+    35→
+    36→const STATUS_COLORS: Record<string, string> = {
+    37→  REGISTERED: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
+    38→  MONITORING: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
+    39→  VERIFIED: 'bg-green-500/20 text-green-400 border-green-500/30',
+    40→  CERTIFIED: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
+    41→  SUSPENDED: 'bg-red-500/20 text-red-400 border-red-500/30',
+    42→};
+    43→
+    44→const QUALITY_COLORS: Record<string, string> = {
+    45→  RAW: 'bg-gray-500/20 text-gray-400 border-gray-500/30',
+    46→  VALIDATED: 'bg-green-500/20 text-green-400 border-green-500/30',
+    47→  CERTIFIED: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
+    48→  REJECTED: 'bg-red-500/20 text-red-400 border-red-500/30',
+    49→  ANOMALY: 'bg-orange-500/20 text-orange-400 border-orange-500/30',
+    50→};
+    51→
+    52→// ─── Types ───────────────────────────────────────────────────────
+    53→interface SoilCarbonPlot {
+    54→  id: string;
+    55→  plotId: string;
+    56→  name: string;
+    57→  nameTh: string;
+    58→  province: string;
+    59→  lat: number;
+    60→  lng: number;
+    61→  areaRai: number;
+    62→  areaHa: number;
+    63→  landUseType: string;
+    64→  soilType: string;
+    65→  cropType: string;
+    66→  practiceType: string;
+    67→  baselineSOC: number;
+    68→  projectSOC: number;
+    69→  baselineEmission: number;
+    70→  projectEmission: number;
+    71→  emissionReduction: number;
+    72→  monitoringYear: number;
+    73→  status: string;
+    74→  methodology: string;
+    75→  createdAt: string;
+    76→  updatedAt: string;
+    77→  latestMeasurement?: SoilCarbonMeasurement | null;
+    78→  edgeNode?: { id: string; nodeId: string; name: string; nameTh: string; status: string } | null;
+    79→}
+    80→
+    81→interface SoilCarbonMeasurement {
+    82→  id: string;
+    83→  plotId: string;
+    84→  measurementDate: string;
+    85→  measurementType: string;
+    86→  depthCm: number;
+    87→  soilMoisture: number;
+    88→  soilTemperature: number;
+    89→  soilPH: number;
+    90→  bulkDensity: number;
+    91→  organicCarbonPct: number;
+    92→  totalNitrogen: number;
+    93→  cec: number;
+    94→  aboveGroundBiomass: number;
+    95→  belowGroundBiomass: number;
+    96→  socStock: number;
+    97→  co2Flux: number;
+    98→  ch4Flux: number;
+    99→  n2oFlux: number;
+   100→  ingestionMode: string;
+   101→  qualityFlag: string;
+   102→  integrityHash: string;
+   103→  sourceDevice: string;
+   104→  notes: string;
+   105→  createdAt: string;
+   106→  plot?: { plotId: string; name: string; nameTh: string; province: string; cropType: string; practiceType: string; areaHa: number };
+   107→}
+   108→
+   109→interface CalculationResult {
+   110→  grossCredits?: number;
+   111→  grossCreditsUnit?: string;
+   112→  bufferDeductionPct?: number;
+   113→  bufferDeduction?: number;
+   114→  netCredits?: number;
+   115→  netCreditsUnit?: string;
+   116→  annualNetCredits?: number;
+   117→  annualNetCreditsUnit?: string;
+   118→  creditValidityYears?: number;
+   119→}
+   120→
+   121→interface DetailCalculationResult extends CalculationResult {
+   122→  plotInfo?: { plotId: string; name: string; nameTh: string; province: string; areaHa: number; areaRai: number; cropType: string; practiceType: string; methodology: string };
+   123→  monitoringPeriod?: { start: string; end: string; years: number; measurementCount: number; validMeasurementCount: number };
+   124→  socCalculation?: { formula: string; baselineSOC: number; projectSOC: number; deltaSOC: number; deltaSOCUnit: string; annualDeltaSOC: number; annualDeltaSOCUnit: string; passesThreshold: boolean; threshold: number };
+   125→  emissionCalculation?: { formula: string; baselineEmission: number; baselineEmissionUnit: string; projectEmission: number; projectEmissionUnit: string; emissionReductionPerHa: number; emissionReductionPerHaUnit: string; totalEmissionReduction: number; totalEmissionReductionUnit: string };
+   126→  socStockCredits?: { formula: string; deltaSOC: number; molecularRatio: number; areaHa: number; monitoringYears: number; result: number; unit: string };
+   127→  creditSummary?: CalculationResult;
+   128→  assessment?: { eligible: boolean; methodology: string; uncertaintyDeduction: string; recommendations: string[] };
+   129→}
+   130→
+   131→interface CertificationRecord {
+   132→  plotId: string;
+   133→  plotName: string;
+   134→  plotNameTh: string;
+   135→  province: string;
+   136→  areaHa: number;
+   137→  status: string;
+   138→  methodology: string;
+   139→  monitoringYear: number;
+   140→  netCredits: number;
+   141→  certifiedAt?: string;
+   142→  certificateId?: string;
+   143→}
+   144→
+   145→// ─── Helper Functions ────────────────────────────────────────────
+   146→const fmt = (n: number, decimals = 2) => {
+   147→  if (n === undefined || n === null || isNaN(n)) return '—';
+   148→  return n.toLocaleString('th-TH', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+   149→};
+   150→
+   151→const fmtDate = (d: string) => {
+   152→  if (!d) return '—';
+   153→  return new Date(d).toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric' });
+   154→};
+   155→
+   156→const fmtDateTime = (d: string) => {
+   157→  if (!d) return '—';
+   158→  return new Date(d).toLocaleString('th-TH', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+   159→};
+   160→
+   161→const LAND_USE_LABELS: Record<string, string> = {
+   162→  paddy: 'นาข้าว',
+   163→  upland: 'ไร่พืชไร่',
+   164→  agroforestry: 'วนเกษตร',
+   165→  orchard: 'สวนผลไม้',
+   166→  pasture: 'ทุ่งหญ้าเลี้ยงสัตว์',
+   167→};
+   168→
+   169→const PRACTICE_LABELS: Record<string, string> = {
+   170→  conventional: 'การเกษตรแบบดั้งเดิม',
+   171→  organic: 'อินทรีย์',
+   172→  conservation_tillage: 'การไถน้อย/อนุรักษ์ดิน',
+   173→  cover_crop: 'ปลูกพืชคลุมดิน',
+   174→  biochar: 'ไบโอชาร์',
+   175→  awd: 'ระบบ AWD',
+   176→  agroforestry: 'วนเกษตร',
+   177→  no_till: 'ไม่ไถพรวน',
+   178→  crop_rotation: 'หมุนเวียนพืช',
+   179→  integrated_farming: 'เกษตรผสมผสาน',
+   180→};
+   181→
+   182→const STATUS_LABELS: Record<string, string> = {
+   183→  REGISTERED: 'ลงทะเบียน',
+   184→  MONITORING: 'กำลังติดตาม',
+   185→  VERIFIED: 'ตรวจสอบแล้ว',
+   186→  CERTIFIED: 'รับรองแล้ว',
+   187→  SUSPENDED: 'ระงับ',
+   188→};
+   189→
+   190→const QUALITY_LABELS: Record<string, string> = {
+   191→  RAW: 'ดิบ',
+   192→  VALIDATED: 'ผ่านการตรวจสอบ',
+   193→  CERTIFIED: 'รับรองแล้ว',
+   194→  REJECTED: 'ปฏิเสธ',
+   195→  ANOMALY: 'ค่าผิดปกติ',
+   196→};
+   197→
+   198→// ─── Main Component ──────────────────────────────────────────────
+   199→export default function SoilCarbonAgentView() {
+   200→  // ── State ──
+   201→  const [plots, setPlots] = useState<SoilCarbonPlot[]>([]);
+   202→  const [measurements, setMeasurements] = useState<SoilCarbonMeasurement[]>([]);
+   203→  const [loading, setLoading] = useState(true);
+   204→  const [activeTab, setActiveTab] = useState('overview');
+   205→  const [expandedPlot, setExpandedPlot] = useState<string | null>(null);
+   206→  const [plotMeasurements, setPlotMeasurements] = useState<SoilCarbonMeasurement[]>([]);
+   207→
+   208→  // New plot dialog
+   209→  const [showNewPlotDialog, setShowNewPlotDialog] = useState(false);
+   210→  const [newPlotForm, setNewPlotForm] = useState({
+   211→    plotId: '', name: '', nameTh: '', province: '', areaRai: '',
+   212→    landUseType: 'paddy', soilType: '', cropType: '',
+   213→    practiceType: 'organic', methodology: 'T-VER-SOIL-01',
+   214→  });
+   215→  const [creatingPlot, setCreatingPlot] = useState(false);
+   216→
+   217→  // Ingestion
+   218→  const [batchData, setBatchData] = useState('');
+   219→  const [ingesting, setIngesting] = useState(false);
+   220→  const [ingestResult, setIngestResult] = useState<any>(null);
+   221→  const [autoRefresh, setAutoRefresh] = useState(false);
+   222→
+   223→  // Calculator
+   224→  const [calcPlotId, setCalcPlotId] = useState('');
+   225→  const [calcStartDate, setCalcStartDate] = useState('');
+   226→  const [calcEndDate, setCalcEndDate] = useState('');
+   227→  const [calculating, setCalculating] = useState(false);
+   228→  const [calcResult, setCalcResult] = useState<DetailCalculationResult | null>(null);
+   229→  const [calcDetail, setCalcDetail] = useState<DetailCalculationResult | null>(null);
+   230→
+   231→  // Certification
+   232→  const [certHistory, setCertHistory] = useState<CertificationRecord[]>([]);
+   233→  const [certStep, setCertStep] = useState<Record<string, number>>({});
+   234→  const [certChecklist, setCertChecklist] = useState<Record<string, Record<string, boolean>>>({});
+   235→
+   236→  // ── Data Fetching ──
+   237→  const fetchPlots = useCallback(async () => {
+   238→    try {
+   239→      const res = await fetch('/api/soil-carbon/plots');
+   240→      const json = await res.json();
+   241→      if (json.success) {
+   242→        setPlots(json.data || []);
+   243→        // If no plots, seed sample data
+   244→        if (!json.data || json.data.length === 0) {
+   245→          await fetch('/api/soil-carbon/sample?seed=true');
+   246→          const res2 = await fetch('/api/soil-carbon/plots');
+   247→          const json2 = await res2.json();
+   248→          if (json2.success) setPlots(json2.data || []);
+   249→        }
+   250→      }
+   251→    } catch (err) {
+   252→      console.error('Failed to fetch plots:', err);
+   253→    }
+   254→  }, []);
+   255→
+   256→  const fetchMeasurements = useCallback(async (plotId?: string) => {
+   257→    try {
+   258→      const url = plotId
+   259→        ? `/api/soil-carbon/measurements?plotId=${plotId}&limit=50`
+   260→        : '/api/soil-carbon/measurements?limit=100';
+   261→      const res = await fetch(url);
+   262→      const json = await res.json();
+   263→      if (json.success) {
+   264→        setMeasurements(json.data || []);
+   265→      }
+   266→    } catch (err) {
+   267→      console.error('Failed to fetch measurements:', err);
+   268→    }
+   269→  }, []);
+   270→
+   271→  const fetchPlotMeasurements = useCallback(async (plotId: string) => {
+   272→    try {
+   273→      const res = await fetch(`/api/soil-carbon/measurements?plotId=${plotId}&limit=20`);
+   274→      const json = await res.json();
+   275→      if (json.success) {
+   276→        setPlotMeasurements(json.data || []);
+   277→      }
+   278→    } catch (err) {
+   279→      console.error('Failed to fetch plot measurements:', err);
+   280→    }
+   281→  }, []);
+   282→
+   283→  // Initial data load
+   284→  useEffect(() => {
+   285→    const init = async () => {
+   286→      setLoading(true);
+   287→      await fetchPlots();
+   288→      await fetchMeasurements();
+   289→      setLoading(false);
+   290→    };
+   291→    init();
+   292→  }, [fetchPlots, fetchMeasurements]);
+   293→
+   294→  // Auto refresh for ingestion tab
+   295→  useEffect(() => {
+   296→    if (!autoRefresh || activeTab !== 'ingestion') return;
+   297→    const interval = setInterval(() => {
+   298→      fetchMeasurements();
+   299→    }, 10000);
+   300→    return () => clearInterval(interval);
+   301→  }, [autoRefresh, activeTab, fetchMeasurements]);
+   302→
+   303→  // ── Computed Data ──
+   304→  const summary = useMemo(() => {
+   305→    const totalPlots = plots.length;
+   306→    const monitoringPlots = plots.filter(p => ['MONITORING', 'VERIFIED', 'CERTIFIED'].includes(p.status)).length;
+   307→    const totalEmissionReduction = plots.reduce((s, p) => s + (p.emissionReduction || 0), 0);
+   308→    const totalAreaHa = plots.reduce((s, p) => s + (p.areaHa || 0), 0);
+   309→
+   310→    // Estimated carbon credits (rough: emissionReduction * 1 year * (1-0.2))
+   311→    const estimatedCredits = plots.reduce((s, p) => {
+   312→      const deltaSOC = (p.projectSOC || 0) - (p.baselineSOC || 0);
+   313→      const socCredits = deltaSOC * (44 / 12) * (p.areaHa || 0) * (p.monitoringYear || 1);
+   314→      const emissionRed = (p.emissionReduction || 0) * (p.monitoringYear || 1);
+   315→      const gross = socCredits + emissionRed;
+   316→      const net = gross * 0.8;
+   317→      return s + net;
+   318→    }, 0);
+   319→
+   320→    return { totalPlots, monitoringPlots, totalEmissionReduction, totalAreaHa, estimatedCredits };
+   321→  }, [plots]);
+   322→
+   323→  const socChartData = useMemo(() => {
+   324→    // Build time series from sample data for SOC comparison
+   325→    const months = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+   326→    const avgBaseline = plots.length > 0 ? plots.reduce((s, p) => s + (p.baselineSOC || 0), 0) / plots.length : 25;
+   327→    const avgProject = plots.length > 0 ? plots.reduce((s, p) => s + (p.projectSOC || 0), 0) / plots.length : 32;
+   328→
+   329→    return months.map((month, i) => ({
+   330→      month,
+   331→      baseline: +(avgBaseline + Math.sin(i * 0.5) * 1.5).toFixed(1),
+   332→      project: +(avgProject + Math.sin(i * 0.3) * 2 + i * 0.3).toFixed(1),
+   333→    }));
+   334→  }, [plots]);
+   335→
+   336→  const emissionByProvince = useMemo(() => {
+   337→    const byProvince: Record<string, number> = {};
+   338→    plots.forEach(p => {
+   339→      byProvince[p.province] = (byProvince[p.province] || 0) + (p.emissionReduction || 0);
+   340→    });
+   341→    return Object.entries(byProvince).map(([province, reduction]) => ({
+   342→      province,
+   343→      reduction: +reduction.toFixed(2),
+   344→    }));
+   345→  }, [plots]);
+   346→
+   347→  const landUseDistribution = useMemo(() => {
+   348→    const byType: Record<string, number> = {};
+   349→    plots.forEach(p => {
+   350→      const label = LAND_USE_LABELS[p.landUseType] || p.landUseType;
+   351→      byType[label] = (byType[label] || 0) + 1;
+   352→    });
+   353→    return Object.entries(byType).map(([name, value]) => ({ name, value }));
+   354→  }, [plots]);
+   355→
+   356→  const latestPlots = useMemo(() => {
+   357→    return [...plots].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 5);
+   358→  }, [plots]);
+   359→
+   360→  // ── Handlers ──
+   361→  const handleCreatePlot = async () => {
+   362→    setCreatingPlot(true);
+   363→    try {
+   364→      const areaRai = parseFloat(newPlotForm.areaRai) || 0;
+   365→      const res = await fetch('/api/soil-carbon/plots', {
+   366→        method: 'POST',
+   367→        headers: { 'Content-Type': 'application/json' },
+   368→        body: JSON.stringify({
+   369→          ...newPlotForm,
+   370→          areaRai,
+   371→          areaHa: areaRai * 0.16,
+   372→          baselineSOC: 25,
+   373→          projectSOC: 30,
+   374→          baselineEmission: 5,
+   375→          projectEmission: 2.5,
+   376→        }),
+   377→      });
+   378→      const json = await res.json();
+   379→      if (json.success) {
+   380→        setShowNewPlotDialog(false);
+   381→        setNewPlotForm({
+   382→          plotId: '', name: '', nameTh: '', province: '', areaRai: '',
+   383→          landUseType: 'paddy', soilType: '', cropType: '',
+   384→          practiceType: 'organic', methodology: 'T-VER-SOIL-01',
+   385→        });
+   386→        await fetchPlots();
+   387→      }
+   388→    } catch (err) {
+   389→      console.error('Failed to create plot:', err);
+   390→    } finally {
+   391→      setCreatingPlot(false);
+   392→    }
+   393→  };
+   394→
+   395→  const handleIngest = async () => {
+   396→    setIngesting(true);
+   397→    setIngestResult(null);
+   398→    try {
+   399→      let readings;
+   400→      try {
+   401→        readings = JSON.parse(batchData);
+   402→      } catch {
+   403→        // Try CSV parsing
+   404→        const lines = batchData.trim().split('\n');
+   405→        const headers = lines[0].split(',').map(h => h.trim());
+   406→        readings = lines.slice(1).map(line => {
+   407→          const values = line.split(',').map(v => v.trim());
+   408→          const obj: Record<string, any> = {};
+   409→          headers.forEach((h, i) => {
+   410→            const num = parseFloat(values[i]);
+   411→            obj[h] = isNaN(num) ? values[i] : num;
+   412→          });
+   413→          return obj;
+   414→        });
+   415→      }
+   416→      const res = await fetch('/api/soil-carbon/ingest', {
+   417→        method: 'POST',
+   418→        headers: { 'Content-Type': 'application/json' },
+   419→        body: JSON.stringify({ readings }),
+   420→      });
+   421→      const json = await res.json();
+   422→      setIngestResult(json);
+   423→      if (json.success) {
+   424→        await fetchMeasurements();
+   425→      }
+   426→    } catch (err) {
+   427→      setIngestResult({ success: false, error: 'รูปแบบข้อมูลไม่ถูกต้อง' });
+   428→    } finally {
+   429→      setIngesting(false);
+   430→    }
+   431→  };
+   432→
+   433→  const handleCalculate = async () => {
+   434→    if (!calcPlotId) return;
+   435→    setCalculating(true);
+   436→    setCalcResult(null);
+   437→    setCalcDetail(null);
+   438→    try {
+   439→      const res = await fetch('/api/soil-carbon/calculate', {
+   440→        method: 'POST',
+   441→        headers: { 'Content-Type': 'application/json' },
+   442→        body: JSON.stringify({
+   443→          plotId: calcPlotId,
+   444→          monitoringPeriodStart: calcStartDate || undefined,
+   445→          monitoringPeriodEnd: calcEndDate || undefined,
+   446→          includeDetailReport: true,
+   447→        }),
+   448→      });
+   449→      const json = await res.json();
+   450→      if (json.success) {
+   451→        setCalcDetail(json.data);
+   452→        setCalcResult(json.data);
+   453→      }
+   454→    } catch (err) {
+   455→      console.error('Calculation error:', err);
+   456→    } finally {
+   457→      setCalculating(false);
+   458→    }
+   459→  };
+   460→
+   461→  const handleToggleExpand = async (plotId: string) => {
+   462→    if (expandedPlot === plotId) {
+   463→      setExpandedPlot(null);
+   464→      setPlotMeasurements([]);
+   465→    } else {
+   466→      setExpandedPlot(plotId);
+   467→      await fetchPlotMeasurements(plotId);
+   468→    }
+   469→  };
+   470→
+   471→  const handleCertifyPlot = (plotId: string) => {
+   472→    const plot = plots.find(p => p.plotId === plotId);
+   473→    if (!plot) return;
+   474→    const newRecord: CertificationRecord = {
+   475→      plotId: plot.plotId,
+   476→      plotName: plot.name,
+   477→      plotNameTh: plot.nameTh,
+   478→      province: plot.province,
+   479→      areaHa: plot.areaHa,
+   480→      status: 'CERTIFIED',
+   481→      methodology: plot.methodology,
+   482→      monitoringYear: plot.monitoringYear,
+   483→      netCredits: calcDetail?.creditSummary?.netCredits || 0,
+   484→      certifiedAt: new Date().toISOString(),
+   485→      certificateId: `T-VER-${plot.plotId}-${Date.now()}`,
+   486→    };
+   487→    setCertHistory(prev => [newRecord, ...prev]);
+   488→    setCertStep(prev => ({ ...prev, [plotId]: 3 }));
+   489→  };
+   490→
+   491→  const toggleCertCheck = (plotId: string, key: string) => {
+   492→    setCertChecklist(prev => ({
+   493→      ...prev,
+   494→      [plotId]: {
+   495→        ...(prev[plotId] || {}),
+   496→        [key]: !(prev[plotId]?.[key]),
+   497→      },
+   498→    }));
+   499→  };
+   500→
+   501→  // ── Certification checklist items ──
+   502→  const certChecklistItems = [
+   503→    { key: 'boundary', label: 'ขอบเขตแปลงชัดเจน พร้อมพิกัด GPS' },
+   504→    { key: 'baseline', label: 'ข้อมูล Baseline SOC สมบูรณ์' },
+   505→    { key: 'monitoring', label: 'ข้อมูลการติดตามต่อเนื่อง ≥ 1 ปี' },
+   506→    { key: 'measurements', label: 'จำนวนการวัดเพียงพอ (≥ 3 ครั้ง)' },
+   507→    { key: 'quality', label: 'ข้อมูลผ่านการตรวจสอบคุณภาพ (VALIDATED/CERTIFIED)' },
+   508→    { key: 'methodology', label: 'ปฏิบัติตามวิธีการ T-VER-SOIL-01' },
+   509→    { key: 'additionality', label: 'พิสูจน์การเพิ่มขึ้น (Additionality) ได้' },
+   510→    { key: 'permanence', label: 'แผนรักษาความคงตัว (Permanence) ชัดเจน' },
+   511→  ];
+   512→
+   513→  // ── Eligible plots for certification ──
+   514→  const eligiblePlots = useMemo(() => {
+   515→    return plots.filter(p => ['MONITORING', 'VERIFIED'].includes(p.status));
+   516→  }, [plots]);
+   517→
+   518→  // ── Real-time sensor cards data ──
+   519→  const latestSensorData = useMemo(() => {
+   520→    if (measurements.length === 0) return null;
+   521→    const latest = measurements[0];
+   522→    return {
+   523→      soil_moisture: { value: latest.soilMoisture, unit: '%', label: 'ความชื้นในดิน', icon: Droplets, min: 0, max: 80 },
+   524→      soil_temperature: { value: latest.soilTemperature, unit: '°C', label: 'อุณหภูมิดิน', icon: Thermometer, min: 0, max: 60 },
+   525→      soil_ph: { value: latest.soilPH, unit: 'pH', label: 'ค่า pH ของดิน', icon: Beaker, min: 2, max: 12 },
+   526→      organic_carbon: { value: latest.organicCarbonPct, unit: '%', label: 'ร้อยละคาร์บอนอินทรีย์', icon: Leaf, min: 0, max: 30 },
+   527→      bulk_density: { value: latest.bulkDensity, unit: 'g/cm³', label: 'ความหนาแน่นรวมของดิน', icon: Layers, min: 0.3, max: 2.5 },
+   528→    };
+   529→  }, [measurements]);
+   530→
+   531→  // ── Quality flag summary ──
+   532→  const qualitySummary = useMemo(() => {
+   533→    const counts: Record<string, number> = {};
+   534→    measurements.forEach(m => {
+   535→      counts[m.qualityFlag] = (counts[m.qualityFlag] || 0) + 1;
+   536→    });
+   537→    return counts;
+   538→  }, [measurements]);
+   539→
+   540→  // ── Render ──
+   541→  if (loading) {
+   542→    return (
+   543→      <div className="flex items-center justify-center min-h-[600px]">
+   544→        <div className="text-center space-y-4">
+   545→          <RefreshCw className="h-10 w-10 animate-spin text-emerald-500 mx-auto" />
+   546→          <p className="text-slate-400">กำลังโหลดข้อมูล Soil Carbon Agent...</p>
+   547→        </div>
+   548→      </div>
+   549→    );
+   550→  }
+   551→
+   552→  return (
+   553→    <div className="space-y-4">
+   554→      {/* Header */}
+   555→      <div className="flex items-center justify-between">
+   556→        <div className="flex items-center gap-3">
+   557→          <div className="p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+   558→            <Sprout className="h-6 w-6 text-emerald-500" />
+   559→          </div>
+   560→          <div>
+   561→            <h1 className="text-xl font-bold text-white">Soil Carbon Sequestration Agent</h1>
+   562→            <p className="text-sm text-slate-400">ระบบติดตามและรับรองโครงการกักคาร์บอนในดิน — T-VER-SOIL-01</p>
+   563→          </div>
+   564→        </div>
+   565→        <Button
+   566→          variant="outline"
+   567→          size="sm"
+   568→          className="border-slate-600 text-slate-300 hover:bg-slate-700"
+   569→          onClick={() => { fetchPlots(); fetchMeasurements(); }}
+   570→        >
+   571→          <RefreshCw className="h-4 w-4 mr-1" /> รีเฟรช
+   572→        </Button>
+   573→      </div>
+   574→
+   575→      {/* Tabs */}
+   576→      <Tabs value={activeTab} onValueChange={setActiveTab}>
+   577→        <TabsList className="bg-slate-800/50 border border-slate-700/50">
+   578→          <TabsTrigger value="overview" className="data-[state=active]:bg-emerald-500/20 data-[state=active]:text-emerald-400">
+   579→            <BarChart3 className="h-4 w-4 mr-1" /> ภาพรวม
+   580→          </TabsTrigger>
+   581→          <TabsTrigger value="plots" className="data-[state=active]:bg-emerald-500/20 data-[state=active]:text-emerald-400">
+   582→            <Sprout className="h-4 w-4 mr-1" /> แปลงเกษตร
+   583→          </TabsTrigger>
+   584→          <TabsTrigger value="ingestion" className="data-[state=active]:bg-emerald-500/20 data-[state=active]:text-emerald-400">
+   585→            <Activity className="h-4 w-4 mr-1" /> รับข้อมูล
+   586→          </TabsTrigger>
+   587→          <TabsTrigger value="calculator" className="data-[state=active]:bg-emerald-500/20 data-[state=active]:text-emerald-400">
+   588→            <Calculator className="h-4 w-4 mr-1" /> คำนวณคาร์บอน
+   589→          </TabsTrigger>
+   590→          <TabsTrigger value="certification" className="data-[state=active]:bg-emerald-500/20 data-[state=active]:text-emerald-400">
+   591→            <FileCheck className="h-4 w-4 mr-1" /> รับรอง
+   592→          </TabsTrigger>
+   593→        </TabsList>
+   594→
+   595→        {/* ═══════════════════════════════════════════════════════════
+   596→            TAB 1: ภาพรวม (Overview)
+   597→        ═══════════════════════════════════════════════════════════ */}
+   598→        <TabsContent value="overview" className="space-y-4">
+   599→          {/* KPI Cards */}
+   600→          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+   601→            <Card className="bg-slate-800/50 border-slate-700/50">
+   602→              <CardContent className="p-4">
+   603→                <div className="flex items-center justify-between">
+   604→                  <div>
+   605→                    <p className="text-xs text-slate-400">แปลงทั้งหมด</p>
+   606→                    <p className="text-2xl font-bold text-white">{summary.totalPlots}</p>
+   607→                    <p className="text-xs text-slate-500">พื้นที่ {fmt(summary.totalAreaHa, 1)} เฮกตาร์</p>
+   608→                  </div>
+   609→                  <div className="p-3 rounded-lg bg-blue-500/10">
+   610→                    <MapPin className="h-6 w-6 text-blue-400" />
+   611→                  </div>
+   612→                </div>
+   613→              </CardContent>
+   614→            </Card>
+   615→
+   616→            <Card className="bg-slate-800/50 border-slate-700/50">
+   617→              <CardContent className="p-4">
+   618→                <div className="flex items-center justify-between">
+   619→                  <div>
+   620→                    <p className="text-xs text-slate-400">แปลงที่ติดตาม</p>
+   621→                    <p className="text-2xl font-bold text-yellow-400">{summary.monitoringPlots}</p>
+   622→                    <p className="text-xs text-slate-500">จากทั้งหมด {summary.totalPlots} แปลง</p>
+   623→                  </div>
+   624→                  <div className="p-3 rounded-lg bg-yellow-500/10">
+   625→                    <Eye className="h-6 w-6 text-yellow-400" />
+   626→                  </div>
+   627→                </div>
+   628→              </CardContent>
+   629→            </Card>
+   630→
+   631→            <Card className="bg-slate-800/50 border-slate-700/50">
+   632→              <CardContent className="p-4">
+   633→                <div className="flex items-center justify-between">
+   634→                  <div>
+   635→                    <p className="text-xs text-slate-400">การลดการปล่อยรวม</p>
+   636→                    <p className="text-2xl font-bold text-emerald-400">{fmt(summary.totalEmissionReduction, 1)}</p>
+   637→                    <p className="text-xs text-slate-500">tCO₂e</p>
+   638→                  </div>
+   639→                  <div className="p-3 rounded-lg bg-emerald-500/10">
+   640→                    <TrendingDown className="h-6 w-6 text-emerald-400" />
+   641→                  </div>
+   642→                </div>
+   643→              </CardContent>
+   644→            </Card>
+   645→
+   646→            <Card className="bg-slate-800/50 border-slate-700/50">
+   647→              <CardContent className="p-4">
+   648→                <div className="flex items-center justify-between">
+   649→                  <div>
+   650→                    <p className="text-xs text-slate-400">เครดิตคาร์บอนที่คาดการณ์</p>
+   651→                    <p className="text-2xl font-bold text-emerald-300">{fmt(summary.estimatedCredits, 1)}</p>
+   652→                    <p className="text-xs text-slate-500">tCO₂e (หัก buffer 20%)</p>
+   653→                  </div>
+   654→                  <div className="p-3 rounded-lg bg-emerald-500/10">
+   655→                    <Award className="h-6 w-6 text-emerald-300" />
+   656→                  </div>
+   657→                </div>
+   658→              </CardContent>
+   659→            </Card>
+   660→          </div>
+   661→
+   662→          {/* Charts Row */}
+   663→          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+   664→            {/* SOC Stock Line Chart */}
+   665→            <Card className="bg-slate-800/50 border-slate-700/50">
+   666→              <CardHeader className="pb-2">
+   667→                <CardTitle className="text-sm font-medium text-slate-200">SOC Stock: Baseline vs Project</CardTitle>
+   668→              </CardHeader>
+   669→              <CardContent className="pt-0">
+   670→                <ResponsiveContainer width="100%" height={280}>
+   671→                  <LineChart data={socChartData}>
+   672→                    <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+   673→                    <XAxis dataKey="month" tick={{ fill: '#94a3b8', fontSize: 11 }} />
+   674→                    <YAxis tick={{ fill: '#94a3b8', fontSize: 11 }} />
+   675→                    <Tooltip
+   676→                      contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #475569', borderRadius: 8 }}
+   677→                      labelStyle={{ color: '#e2e8f0' }}
+   678→                    />
+   679→                    <Legend />
+   680→                    <Line type="monotone" dataKey="baseline" stroke="#f59e0b" strokeWidth={2} name="Baseline SOC (tC/ha)" dot={{ r: 3 }} />
+   681→                    <Line type="monotone" dataKey="project" stroke="#10b981" strokeWidth={2} name="Project SOC (tC/ha)" dot={{ r: 3 }} />
+   682→                  </LineChart>
+   683→                </ResponsiveContainer>
+   684→              </CardContent>
+   685→            </Card>
+   686→
+   687→            {/* Emission by Province Bar Chart */}
+   688→            <Card className="bg-slate-800/50 border-slate-700/50">
+   689→              <CardHeader className="pb-2">
+   690→                <CardTitle className="text-sm font-medium text-slate-200">การลดการปล่อยตามจังหวัด (tCO₂e)</CardTitle>
+   691→              </CardHeader>
+   692→              <CardContent className="pt-0">
+   693→                <ResponsiveContainer width="100%" height={280}>
+   694→                  <BarChart data={emissionByProvince}>
+   695→                    <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+   696→                    <XAxis dataKey="province" tick={{ fill: '#94a3b8', fontSize: 11 }} />
+   697→                    <YAxis tick={{ fill: '#94a3b8', fontSize: 11 }} />
+   698→                    <Tooltip
+   699→                      contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #475569', borderRadius: 8 }}
+   700→                      labelStyle={{ color: '#e2e8f0' }}
+   701→                    />
+   702→                    <Bar dataKey="reduction" fill="#10b981" radius={[4, 4, 0, 0]} name="การลดการปล่อย (tCO₂e)" />
+   703→                  </BarChart>
+   704→                </ResponsiveContainer>
+   705→              </CardContent>
+   706→            </Card>
+   707→          </div>
+   708→
+   709→          {/* Pie Chart + Table Row */}
+   710→          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+   711→            {/* Land Use Pie Chart */}
+   712→            <Card className="bg-slate-800/50 border-slate-700/50">
+   713→              <CardHeader className="pb-2">
+   714→                <CardTitle className="text-sm font-medium text-slate-200">สัดส่วนประเภทการใช้ประโยชน์ที่ดิน</CardTitle>
+   715→              </CardHeader>
+   716→              <CardContent className="pt-0">
+   717→                <ResponsiveContainer width="100%" height={240}>
+   718→                  <PieChart>
+   719→                    <Pie
+   720→                      data={landUseDistribution}
+   721→                      cx="50%"
+   722→                      cy="50%"
+   723→                      innerRadius={50}
+   724→                      outerRadius={80}
+   725→                      paddingAngle={3}
+   726→                      dataKey="value"
+   727→                      label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+   728→                    >
+   729→                      {landUseDistribution.map((_, index) => (
+   730→                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+   731→                      ))}
+   732→                    </Pie>
+   733→                    <Tooltip
+   734→                      contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #475569', borderRadius: 8 }}
+   735→                    />
+   736→                  </PieChart>
+   737→                </ResponsiveContainer>
+   738→              </CardContent>
+   739→            </Card>
+   740→
+   741→            {/* Recent Plots Table */}
+   742→            <Card className="bg-slate-800/50 border-slate-700/50 lg:col-span-2">
+   743→              <CardHeader className="pb-2">
+   744→                <CardTitle className="text-sm font-medium text-slate-200">รายการแปลงล่าสุด</CardTitle>
+   745→              </CardHeader>
+   746→              <CardContent className="pt-0">
+   747→                <div className="max-h-64 overflow-y-auto custom-scrollbar">
+   748→                  <Table>
+   749→                    <TableHeader>
+   750→                      <TableRow className="border-slate-700/50 hover:bg-transparent">
+   751→                        <TableHead className="text-slate-400 text-xs">Plot ID</TableHead>
+   752→                        <TableHead className="text-slate-400 text-xs">ชื่อแปลง</TableHead>
+   753→                        <TableHead className="text-slate-400 text-xs">จังหวัด</TableHead>
+   754→                        <TableHead className="text-slate-400 text-xs">พื้นที่ (ไร่)</TableHead>
+   755→                        <TableHead className="text-slate-400 text-xs">สถานะ</TableHead>
+   756→                      </TableRow>
+   757→                    </TableHeader>
+   758→                    <TableBody>
+   759→                      {latestPlots.map(plot => (
+   760→                        <TableRow key={plot.id} className="border-slate-700/30 hover:bg-slate-700/30">
+   761→                          <TableCell className="text-xs font-mono text-emerald-400">{plot.plotId}</TableCell>
+   762→                          <TableCell className="text-xs text-slate-200">{plot.nameTh || plot.name}</TableCell>
+   763→                          <TableCell className="text-xs text-slate-300">{plot.province}</TableCell>
+   764→                          <TableCell className="text-xs text-slate-300">{fmt(plot.areaRai, 1)}</TableCell>
+   765→                          <TableCell>
+   766→                            <Badge variant="outline" className={`text-[10px] px-2 py-0 ${STATUS_COLORS[plot.status] || ''}`}>
+   767→                              {STATUS_LABELS[plot.status] || plot.status}
+   768→                            </Badge>
+   769→                          </TableCell>
+   770→                        </TableRow>
+   771→                      ))}
+   772→                    </TableBody>
+   773→                  </Table>
+   774→                </div>
+   775→              </CardContent>
+   776→            </Card>
+   777→          </div>
+   778→        </TabsContent>
+   779→
+   780→        {/* ═══════════════════════════════════════════════════════════
+   781→            TAB 2: แปลงเกษตร (Plots)
+   782→        ═══════════════════════════════════════════════════════════ */}
+   783→        <TabsContent value="plots" className="space-y-4">
+   784→          {/* Toolbar */}
+   785→          <div className="flex items-center justify-between">
+   786→            <div className="flex items-center gap-2">
+   787→              <Search className="h-4 w-4 text-slate-400" />
+   788→              <span className="text-sm text-slate-400">ทั้งหมด {plots.length} แปลง</span>
+   789→            </div>
+   790→            <Dialog open={showNewPlotDialog} onOpenChange={setShowNewPlotDialog}>
+   791→              <DialogTrigger asChild>
+   792→                <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white">
+   793→                  <Plus className="h-4 w-4 mr-1" /> เพิ่มแปลงใหม่
+   794→                </Button>
+   795→              </DialogTrigger>
+   796→              <DialogContent className="bg-slate-900 border-slate-700 max-w-lg max-h-[90vh] overflow-y-auto">
+   797→                <DialogHeader>
+   798→                  <DialogTitle className="text-white">เพิ่มแปลงเกษตรใหม่</DialogTitle>
+   799→                  <DialogDescription className="text-slate-400">กรอกข้อมูลแปลงสำหรับโครงการกักคาร์บอนในดิน</DialogDescription>
+   800→                </DialogHeader>
+   801→                <div className="grid gap-3 py-4">
+   802→                  <div className="grid grid-cols-2 gap-3">
+   803→                    <div className="space-y-1">
+   804→                      <Label className="text-slate-300 text-xs">Plot ID *</Label>
+   805→                      <Input
+   806→                        className="bg-slate-800 border-slate-600 text-white text-sm"
+   807→                        placeholder="SOIL-XXX-001"
+   808→                        value={newPlotForm.plotId}
+   809→                        onChange={e => setNewPlotForm(f => ({ ...f, plotId: e.target.value }))}
+   810→                      />
+   811→                    </div>
+   812→                    <div className="space-y-1">
+   813→                      <Label className="text-slate-300 text-xs">ชื่อแปลง (EN) *</Label>
+   814→                      <Input
+   815→                        className="bg-slate-800 border-slate-600 text-white text-sm"
+   816→                        placeholder="Plot Name"
+   817→                        value={newPlotForm.name}
+   818→                        onChange={e => setNewPlotForm(f => ({ ...f, name: e.target.value }))}
+   819→                      />
+   820→                    </div>
+   821→                  </div>
+   822→                  <div className="grid grid-cols-2 gap-3">
+   823→                    <div className="space-y-1">
+   824→                      <Label className="text-slate-300 text-xs">ชื่อแปลง (TH)</Label>
+   825→                      <Input
+   826→                        className="bg-slate-800 border-slate-600 text-white text-sm"
+   827→                        placeholder="ชื่อแปลงภาษาไทย"
+   828→                        value={newPlotForm.nameTh}
+   829→                        onChange={e => setNewPlotForm(f => ({ ...f, nameTh: e.target.value }))}
+   830→                      />
+   831→                    </div>
+   832→                    <div className="space-y-1">
+   833→                      <Label className="text-slate-300 text-xs">จังหวัด</Label>
+   834→                      <Input
+   835→                        className="bg-slate-800 border-slate-600 text-white text-sm"
+   836→                        placeholder="จังหวัด"
+   837→                        value={newPlotForm.province}
+   838→                        onChange={e => setNewPlotForm(f => ({ ...f, province: e.target.value }))}
+   839→                      />
+   840→                    </div>
+   841→                  </div>
+   842→                  <div className="grid grid-cols-2 gap-3">
+   843→                    <div className="space-y-1">
+   844→                      <Label className="text-slate-300 text-xs">พื้นที่ (ไร่)</Label>
+   845→                      <Input
+   846→                        type="number"
+   847→                        className="bg-slate-800 border-slate-600 text-white text-sm"
+   848→                        placeholder="0"
+   849→                        value={newPlotForm.areaRai}
+   850→                        onChange={e => setNewPlotForm(f => ({ ...f, areaRai: e.target.value }))}
+   851→                      />
+   852→                    </div>
+   853→                    <div className="space-y-1">
+   854→                      <Label className="text-slate-300 text-xs">ประเภทการใช้ประโยชน์ที่ดิน</Label>
+   855→                      <Select value={newPlotForm.landUseType} onValueChange={v => setNewPlotForm(f => ({ ...f, landUseType: v }))}>
+   856→                        <SelectTrigger className="bg-slate-800 border-slate-600 text-white text-sm">
+   857→                          <SelectValue />
+   858→                        </SelectTrigger>
+   859→                        <SelectContent className="bg-slate-800 border-slate-600">
+   860→                          {Object.entries(LAND_USE_LABELS).map(([k, v]) => (
+   861→                            <SelectItem key={k} value={k} className="text-white">{v}</SelectItem>
+   862→                          ))}
+   863→                        </SelectContent>
+   864→                      </Select>
+   865→                    </div>
+   866→                  </div>
+   867→                  <div className="grid grid-cols-2 gap-3">
+   868→                    <div className="space-y-1">
+   869→                      <Label className="text-slate-300 text-xs">ประเภทดิน</Label>
+   870→                      <Input
+   871→                        className="bg-slate-800 border-slate-600 text-white text-sm"
+   872→                        placeholder="Clay Loam, Sandy Loam, etc."
+   873→                        value={newPlotForm.soilType}
+   874→                        onChange={e => setNewPlotForm(f => ({ ...f, soilType: e.target.value }))}
+   875→                      />
+   876→                    </div>
+   877→                    <div className="space-y-1">
+   878→                      <Label className="text-slate-300 text-xs">ประเภทพืช</Label>
+   879→                      <Input
+   880→                        className="bg-slate-800 border-slate-600 text-white text-sm"
+   881→                        placeholder="Rice, Cassava, Sugarcane, etc."
+   882→                        value={newPlotForm.cropType}
+   883→                        onChange={e => setNewPlotForm(f => ({ ...f, cropType: e.target.value }))}
+   884→                      />
+   885→                    </div>
+   886→                  </div>
+   887→                  <div className="grid grid-cols-2 gap-3">
+   888→                    <div className="space-y-1">
+   889→                      <Label className="text-slate-300 text-xs">แนวปฏิบัติ</Label>
+   890→                      <Select value={newPlotForm.practiceType} onValueChange={v => setNewPlotForm(f => ({ ...f, practiceType: v }))}>
+   891→                        <SelectTrigger className="bg-slate-800 border-slate-600 text-white text-sm">
+   892→                          <SelectValue />
+   893→                        </SelectTrigger>
+   894→                        <SelectContent className="bg-slate-800 border-slate-600">
+   895→                          {Object.entries(PRACTICE_LABELS).map(([k, v]) => (
+   896→                            <SelectItem key={k} value={k} className="text-white">{v}</SelectItem>
+   897→                          ))}
+   898→                        </SelectContent>
+   899→                      </Select>
+   900→                    </div>
+   901→                    <div className="space-y-1">
+   902→                      <Label className="text-slate-300 text-xs">วิธีการ</Label>
+   903→                      <Input
+   904→                        className="bg-slate-800 border-slate-600 text-white text-sm"
+   905→                        value={newPlotForm.methodology}
+   906→                        onChange={e => setNewPlotForm(f => ({ ...f, methodology: e.target.value }))}
+   907→                      />
+   908→                    </div>
+   909→                  </div>
+   910→                </div>
+   911→                <DialogFooter>
+   912→                  <Button variant="outline" onClick={() => setShowNewPlotDialog(false)} className="border-slate-600 text-slate-300">
+   913→                    ยกเลิก
+   914→                  </Button>
+   915→                  <Button
+   916→                    onClick={handleCreatePlot}
+   917→                    disabled={creatingPlot || !newPlotForm.plotId || !newPlotForm.name}
+   918→                    className="bg-emerald-600 hover:bg-emerald-700 text-white"
+   919→                  >
+   920→                    {creatingPlot ? <RefreshCw className="h-4 w-4 mr-1 animate-spin" /> : <Plus className="h-4 w-4 mr-1" />}
+   921→                    สร้างแปลง
+   922→                  </Button>
+   923→                </DialogFooter>
+   924→              </DialogContent>
+   925→            </Dialog>
+   926→          </div>
+   927→
+   928→          {/* Plots Table */}
+   929→          <Card className="bg-slate-800/50 border-slate-700/50">
+   930→            <CardContent className="p-0">
+   931→              <div className="max-h-[600px] overflow-y-auto custom-scrollbar">
+   932→                <Table>
+   933→                  <TableHeader>
+   934→                    <TableRow className="border-slate-700/50 hover:bg-transparent">
+   935→                      <TableHead className="text-slate-400 text-xs w-8"></TableHead>
+   936→                      <TableHead className="text-slate-400 text-xs">Plot ID</TableHead>
+   937→                      <TableHead className="text-slate-400 text-xs">ชื่อ</TableHead>
+   938→                      <TableHead className="text-slate-400 text-xs">จังหวัด</TableHead>
+   939→                      <TableHead className="text-slate-400 text-xs">พื้นที่ (ไร่)</TableHead>
+   940→                      <TableHead className="text-slate-400 text-xs">ประเภทพืช</TableHead>
+   941→                      <TableHead className="text-slate-400 text-xs">แนวปฏิบัติ</TableHead>
+   942→                      <TableHead className="text-slate-400 text-xs">SOC Baseline</TableHead>
+   943→                      <TableHead className="text-slate-400 text-xs">SOC Project</TableHead>
+   944→                      <TableHead className="text-slate-400 text-xs">การลดการปล่อย</TableHead>
+   945→                      <TableHead className="text-slate-400 text-xs">สถานะ</TableHead>
+   946→                    </TableRow>
+   947→                  </TableHeader>
+   948→                  <TableBody>
+   949→                    {plots.map(plot => (
+   950→                      <React.Fragment key={plot.id}>
+   951→                        <TableRow
+   952→                          className="border-slate-700/30 hover:bg-slate-700/30 cursor-pointer"
+   953→                          onClick={() => handleToggleExpand(plot.plotId)}
+   954→                        >
+   955→                          <TableCell className="text-xs">
+   956→                            {expandedPlot === plot.plotId ? (
+   957→                              <ChevronUp className="h-3 w-3 text-slate-400" />
+   958→                            ) : (
+   959→                              <ChevronDown className="h-3 w-3 text-slate-400" />
+   960→                            )}
+   961→                          </TableCell>
+   962→                          <TableCell className="text-xs font-mono text-emerald-400">{plot.plotId}</TableCell>
+   963→                          <TableCell className="text-xs text-slate-200">{plot.nameTh || plot.name}</TableCell>
+   964→                          <TableCell className="text-xs text-slate-300">{plot.province}</TableCell>
+   965→                          <TableCell className="text-xs text-slate-300">{fmt(plot.areaRai, 1)}</TableCell>
+   966→                          <TableCell className="text-xs text-slate-300">{plot.cropType}</TableCell>
+   967→                          <TableCell className="text-xs text-slate-300">{PRACTICE_LABELS[plot.practiceType] || plot.practiceType}</TableCell>
+   968→                          <TableCell className="text-xs text-slate-300">{fmt(plot.baselineSOC, 1)}</TableCell>
+   969→                          <TableCell className="text-xs text-emerald-400 font-medium">{fmt(plot.projectSOC, 1)}</TableCell>
+   970→                          <TableCell className="text-xs text-emerald-400">{fmt(plot.emissionReduction, 2)} tCO₂e</TableCell>
+   971→                          <TableCell>
+   972→                            <Badge variant="outline" className={`text-[10px] px-2 py-0 ${STATUS_COLORS[plot.status] || ''}`}>
+   973→                              {STATUS_LABELS[plot.status] || plot.status}
+   974→                            </Badge>
+   975→                          </TableCell>
+   976→                        </TableRow>
+   977→                        {expandedPlot === plot.plotId && (
+   978→                          <TableRow className="border-slate-700/30 bg-slate-900/50">
+   979→                            <TableCell colSpan={11} className="p-4">
+   980→                              <div className="space-y-3">
+   981→                                <h4 className="text-sm font-medium text-emerald-400 flex items-center gap-1">
+   982→                                  <Database className="h-3 w-3" /> ประวัติการวัด — {plot.nameTh || plot.name}
+   983→                                </h4>
+   984→                                {plotMeasurements.length === 0 ? (
+   985→                                  <p className="text-xs text-slate-500">ไม่มีข้อมูลการวัด</p>
+   986→                                ) : (
+   987→                                  <div className="max-h-48 overflow-y-auto custom-scrollbar">
+   988→                                    <Table>
+   989→                                      <TableHeader>
+   990→                                        <TableRow className="border-slate-700/30 hover:bg-transparent">
+   991→                                          <TableHead className="text-slate-500 text-[10px]">วันที่</TableHead>
+   992→                                          <TableHead className="text-slate-500 text-[10px]">ประเภท</TableHead>
+   993→                                          <TableHead className="text-slate-500 text-[10px]">ความชื้น (%)</TableHead>
+   994→                                          <TableHead className="text-slate-500 text-[10px]">อุณหภูมิ (°C)</TableHead>
+   995→                                          <TableHead className="text-slate-500 text-[10px]">pH</TableHead>
+   996→                                          <TableHead className="text-slate-500 text-[10px]">BD (g/cm³)</TableHead>
+   997→                                          <TableHead className="text-slate-500 text-[10px]">OC (%)</TableHead>
+   998→                                          <TableHead className="text-slate-500 text-[10px]">SOC Stock (tC/ha)</TableHead>
+   999→                                          <TableHead className="text-slate-500 text-[10px]">คุณภาพ</TableHead>
+  1000→                                        </TableRow>
+  1001→                                      </TableHeader>
+  1002→                                      <TableBody>
+  1003→                                        {plotMeasurements.map(m => (
+  1004→                                          <TableRow key={m.id} className="border-slate-700/20 hover:bg-transparent">
+  1005→                                            <TableCell className="text-[10px] text-slate-300">{fmtDate(m.measurementDate)}</TableCell>
+  1006→                                            <TableCell className="text-[10px] text-slate-300">{m.measurementType}</TableCell>
+  1007→                                            <TableCell className="text-[10px] text-slate-300">{fmt(m.soilMoisture, 1)}</TableCell>
+  1008→                                            <TableCell className="text-[10px] text-slate-300">{fmt(m.soilTemperature, 1)}</TableCell>
+  1009→                                            <TableCell className="text-[10px] text-slate-300">{fmt(m.soilPH, 1)}</TableCell>
+  1010→                                            <TableCell className="text-[10px] text-slate-300">{fmt(m.bulkDensity, 2)}</TableCell>
+  1011→                                            <TableCell className="text-[10px] text-slate-300">{fmt(m.organicCarbonPct, 2)}</TableCell>
+  1012→                                            <TableCell className="text-[10px] text-emerald-400 font-medium">{fmt(m.socStock, 3)}</TableCell>
+  1013→                                            <TableCell>
+  1014→                                              <Badge variant="outline" className={`text-[9px] px-1.5 py-0 ${QUALITY_COLORS[m.qualityFlag] || ''}`}>
+  1015→                                                {QUALITY_LABELS[m.qualityFlag] || m.qualityFlag}
+  1016→                                              </Badge>
+  1017→                                            </TableCell>
+  1018→                                          </TableRow>
+  1019→                                        ))}
+  1020→                                      </TableBody>
+  1021→                                    </Table>
+  1022→                                  </div>
+  1023→                                )}
+  1024→                              </div>
+  1025→                            </TableCell>
+  1026→                          </TableRow>
+  1027→                        )}
+  1028→                      </React.Fragment>
+  1029→                    ))}
+  1030→                  </TableBody>
+  1031→                </Table>
+  1032→              </div>
+  1033→            </CardContent>
+  1034→          </Card>
+  1035→        </TabsContent>
+  1036→
+  1037→        {/* ═══════════════════════════════════════════════════════════
+  1038→            TAB 3: รับข้อมูล (Ingestion)
+  1039→        ═══════════════════════════════════════════════════════════ */}
+  1040→        <TabsContent value="ingestion" className="space-y-4">
+  1041→          {/* Real-time Sensor Cards */}
+  1042→          <Card className="bg-slate-800/50 border-slate-700/50">
+  1043→            <CardHeader className="pb-2">
+  1044→              <div className="flex items-center justify-between">
+  1045→                <CardTitle className="text-sm font-medium text-slate-200 flex items-center gap-2">
+  1046→                  <Cpu className="h-4 w-4 text-emerald-400" /> ข้อมูลเซ็นเซอร์ล่าสุด
+  1047→                </CardTitle>
+  1048→                <div className="flex items-center gap-2">
+  1049→                  <span className="text-[10px] text-slate-500">รีเฟรชอัตโนมัติ</span>
+  1050→                  <Button
+  1051→                    variant={autoRefresh ? 'default' : 'outline'}
+  1052→                    size="sm"
+  1053→                    className={autoRefresh ? 'bg-emerald-600 text-white h-6 text-xs' : 'border-slate-600 text-slate-400 h-6 text-xs'}
+  1054→                    onClick={() => setAutoRefresh(!autoRefresh)}
+  1055→                  >
+  1056→                    {autoRefresh ? 'เปิด' : 'ปิด'}
+  1057→                  </Button>
+  1058→                </div>
+  1059→              </div>
+  1060→            </CardHeader>
+  1061→            <CardContent className="pt-2">
+  1062→              {latestSensorData ? (
+  1063→                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+  1064→                  {Object.entries(latestSensorData).map(([key, sensor]) => {
+  1065→                    const Icon = sensor.icon;
+  1066→                    const inRange = sensor.value >= sensor.min && sensor.value <= sensor.max;
+  1067→                    return (
+  1068→                      <div key={key} className="bg-slate-900/50 rounded-lg p-3 border border-slate-700/50">
+  1069→                        <div className="flex items-center gap-2 mb-1">
+  1070→                          <Icon className={`h-4 w-4 ${inRange ? 'text-emerald-400' : 'text-orange-400'}`} />
+  1071→                          <span className="text-[10px] text-slate-400">{sensor.label}</span>
+  1072→                        </div>
+  1073→                        <div className="flex items-baseline gap-1">
+  1074→                          <span className={`text-lg font-bold ${inRange ? 'text-white' : 'text-orange-400'}`}>
+  1075→                            {fmt(sensor.value, key === 'bulk_density' ? 2 : 1)}
+  1076→                          </span>
+  1077→                          <span className="text-[10px] text-slate-500">{sensor.unit}</span>
+  1078→                        </div>
+  1079→                        <Progress
+  1080→                          value={Math.min(100, Math.max(0, ((sensor.value - sensor.min) / (sensor.max - sensor.min)) * 100))}
+  1081→                          className="h-1 mt-1"
+  1082→                        />
+  1083→                      </div>
+  1084→                    );
+  1085→                  })}
+  1086→                </div>
+  1087→              ) : (
+  1088→                <p className="text-xs text-slate-500 text-center py-4">ยังไม่มีข้อมูลเซ็นเซอร์</p>
+  1089→              )}
+  1090→            </CardContent>
+  1091→          </Card>
+  1092→
+  1093→          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+  1094→            {/* Batch Upload Section */}
+  1095→            <Card className="bg-slate-800/50 border-slate-700/50">
+  1096→              <CardHeader className="pb-2">
+  1097→                <CardTitle className="text-sm font-medium text-slate-200 flex items-center gap-2">
+  1098→                  <Upload className="h-4 w-4 text-blue-400" /> นำเข้าข้อมูลแบบกลุ่ม (Batch Upload)
+  1099→                </CardTitle>
+  1100→                <CardDescription className="text-xs text-slate-500">
+  1101→                  รองรับรูปแบบ JSON หรือ CSV (คอลัมน์ต้องตรงกับฟิลด์ข้อมูล)
+  1102→                </CardDescription>
+  1103→              </CardHeader>
+  1104→              <CardContent className="space-y-3">
+  1105→                <Textarea
+  1106→                  className="bg-slate-900 border-slate-600 text-white text-xs font-mono min-h-[200px]"
+  1107→                  placeholder={`ตัวอย่าง JSON:\n[\n  {\n    "plotId": "SOIL-CMD-001",\n    "measurementDate": "2024-08-01T09:00:00Z",\n    "bulkDensity": 1.3,\n    "organicCarbonPct": 2.5,\n    "soilMoisture": 35.0,\n    "soilTemperature": 28.0,\n    "soilPH": 6.8\n  }\n]\n\nหรือ CSV:\nplotId,measurementDate,bulkDensity,organicCarbonPct,soilMoisture,soilTemperature,soilPH\nSOIL-CMD-001,2024-08-01T09:00:00Z,1.3,2.5,35.0,28.0,6.8`}
+  1108→                  value={batchData}
+  1109→                  onChange={e => setBatchData(e.target.value)}
+  1110→                />
+  1111→                <div className="flex items-center gap-2">
+  1112→                  <Button
+  1113→                    onClick={handleIngest}
+  1114→                    disabled={ingesting || !batchData.trim()}
+  1115→                    className="bg-blue-600 hover:bg-blue-700 text-white text-sm"
+  1116→                  >
+  1117→                    {ingesting ? <RefreshCw className="h-4 w-4 mr-1 animate-spin" /> : <Send className="h-4 w-4 mr-1" />}
+  1118→                    นำเข้าข้อมูล
+  1119→                  </Button>
+  1120→                  <Button
+  1121→                    variant="outline"
+  1122→                    size="sm"
+  1123→                    className="border-slate-600 text-slate-400"
+  1124→                    onClick={() => setBatchData('')}
+  1125→                  >
+  1126→                    ล้าง
+  1127→                  </Button>
+  1128→                </div>
+  1129→                {ingestResult && (
+  1130→                  <div className={`p-3 rounded-lg text-xs ${ingestResult.success ? 'bg-emerald-500/10 border border-emerald-500/20' : 'bg-red-500/10 border border-red-500/20'}`}>
+  1131→                    <p className={ingestResult.success ? 'text-emerald-400' : 'text-red-400'}>{ingestResult.message || ingestResult.error}</p>
+  1132→                    {ingestResult.success && ingestResult.data?.summary && (
+  1133→                      <div className="mt-2 grid grid-cols-4 gap-2 text-slate-300">
+  1134→                        <div>ทั้งหมด: <span className="text-white font-medium">{ingestResult.data.summary.total}</span></div>
+  1135→                        <div>ผ่าน: <span className="text-emerald-400 font-medium">{ingestResult.data.summary.valid}</span></div>
+  1136→                        <div>ผิดปกติ: <span className="text-orange-400 font-medium">{ingestResult.data.summary.anomaly}</span></div>
+  1137→                        <div>ปฏิเสธ: <span className="text-red-400 font-medium">{ingestResult.data.summary.rejected}</span></div>
+  1138→                      </div>
+  1139→                    )}
+  1140→                  </div>
+  1141→                )}
+  1142→              </CardContent>
+  1143→            </Card>
+  1144→
+  1145→            {/* Data Quality Flags */}
+  1146→            <Card className="bg-slate-800/50 border-slate-700/50">
+  1147→              <CardHeader className="pb-2">
+  1148→                <CardTitle className="text-sm font-medium text-slate-200 flex items-center gap-2">
+  1149→                  <Shield className="h-4 w-4 text-yellow-400" /> สถานะคุณภาพข้อมูล
+  1150→                </CardTitle>
+  1151→              </CardHeader>
+  1152→              <CardContent>
+  1153→                <div className="space-y-2">
+  1154→                  {Object.entries(QUALITY_LABELS).map(([key, label]) => (
+  1155→                    <div key={key} className="flex items-center justify-between">
+  1156→                      <div className="flex items-center gap-2">
+  1157→                        <Badge variant="outline" className={`text-[10px] px-2 py-0 ${QUALITY_COLORS[key] || ''}`}>
+  1158→                          {label}
+  1159→                        </Badge>
+  1160→                      </div>
+  1161→                      <span className="text-sm text-white font-medium">{qualitySummary[key] || 0}</span>
+  1162→                    </div>
+  1163→                  ))}
+  1164→                </div>
+  1165→                <Separator className="my-3 bg-slate-700/50" />
+  1166→                <div className="flex items-center justify-between text-xs">
+  1167→                  <span className="text-slate-400">รวมทั้งหมด</span>
+  1168→                  <span className="text-white font-medium">{measurements.length}</span>
+  1169→                </div>
+  1170→                {/* Quality distribution mini bar */}
+  1171→                <div className="mt-3 flex rounded-full overflow-hidden h-2">
+  1172→                  {Object.entries(qualitySummary).map(([key, count]) => {
+  1173→                    const colorMap: Record<string, string> = {
+  1174→                      VALIDATED: '#10b981', ANOMALY: '#f97316', RAW: '#6b7280', CERTIFIED: '#059669', REJECTED: '#ef4444',
+  1175→                    };
+  1176→                    return (
+  1177→                      <div
+  1178→                        key={key}
+  1179→                        style={{ width: `${(count / Math.max(measurements.length, 1)) * 100}%`, backgroundColor: colorMap[key] || '#6b7280' }}
+  1180→                      />
+  1181→                    );
+  1182→                  })}
+  1183→                </div>
+  1184→              </CardContent>
+  1185→            </Card>
+  1186→          </div>
+  1187→
+  1188→          {/* Recent Measurements Table */}
+  1189→          <Card className="bg-slate-800/50 border-slate-700/50">
+  1190→            <CardHeader className="pb-2">
+  1191→              <div className="flex items-center justify-between">
+  1192→                <CardTitle className="text-sm font-medium text-slate-200">การวัดล่าสุด</CardTitle>
+  1193→                <Button variant="ghost" size="sm" className="text-slate-400 h-6 text-xs" onClick={() => fetchMeasurements()}>
+  1194→                  <RefreshCw className="h-3 w-3 mr-1" /> รีเฟรช
+  1195→                </Button>
+  1196→              </div>
+  1197→            </CardHeader>
+  1198→            <CardContent className="pt-0">
+  1199→              <div className="max-h-96 overflow-y-auto custom-scrollbar">
+  1200→                <Table>
+  1201→                  <TableHeader>
+  1202→                    <TableRow className="border-slate-700/50 hover:bg-transparent">
+  1203→                      <TableHead className="text-slate-400 text-xs">Plot ID</TableHead>
+  1204→                      <TableHead className="text-slate-400 text-xs">วันที่วัด</TableHead>
+  1205→                      <TableHead className="text-slate-400 text-xs">ประเภท</TableHead>
+  1206→                      <TableHead className="text-slate-400 text-xs">SOC Stock (tC/ha)</TableHead>
+  1207→                      <TableHead className="text-slate-400 text-xs">ความชื้น (%)</TableHead>
+  1208→                      <TableHead className="text-slate-400 text-xs">อุณหภูมิ (°C)</TableHead>
+  1209→                      <TableHead className="text-slate-400 text-xs">pH</TableHead>
+  1210→                      <TableHead className="text-slate-400 text-xs">ที่มา</TableHead>
+  1211→                      <TableHead className="text-slate-400 text-xs">คุณภาพ</TableHead>
+  1212→                    </TableRow>
+  1213→                  </TableHeader>
+  1214→                  <TableBody>
+  1215→                    {measurements.slice(0, 30).map(m => (
+  1216→                      <TableRow key={m.id} className="border-slate-700/30 hover:bg-slate-700/30">
+  1217→                        <TableCell className="text-xs font-mono text-emerald-400">{m.plotId}</TableCell>
+  1218→                        <TableCell className="text-xs text-slate-300">{fmtDateTime(m.measurementDate)}</TableCell>
+  1219→                        <TableCell className="text-xs text-slate-300">{m.measurementType}</TableCell>
+  1220→                        <TableCell className="text-xs text-emerald-400 font-medium">{fmt(m.socStock, 3)}</TableCell>
+  1221→                        <TableCell className="text-xs text-slate-300">{fmt(m.soilMoisture, 1)}</TableCell>
+  1222→                        <TableCell className="text-xs text-slate-300">{fmt(m.soilTemperature, 1)}</TableCell>
+  1223→                        <TableCell className="text-xs text-slate-300">{fmt(m.soilPH, 1)}</TableCell>
+  1224→                        <TableCell className="text-xs text-slate-300">{m.ingestionMode}</TableCell>
+  1225→                        <TableCell>
+  1226→                          <Badge variant="outline" className={`text-[10px] px-2 py-0 ${QUALITY_COLORS[m.qualityFlag] || ''}`}>
+  1227→                            {QUALITY_LABELS[m.qualityFlag] || m.qualityFlag}
+  1228→                          </Badge>
+  1229→                        </TableCell>
+  1230→                      </TableRow>
+  1231→                    ))}
+  1232→                  </TableBody>
+  1233→                </Table>
+  1234→              </div>
+  1235→            </CardContent>
+  1236→          </Card>
+  1237→        </TabsContent>
+  1238→
+  1239→        {/* ═══════════════════════════════════════════════════════════
+  1240→            TAB 4: คำนวณคาร์บอน (Calculator)
+  1241→        ═══════════════════════════════════════════════════════════ */}
+  1242→        <TabsContent value="calculator" className="space-y-4">
+  1243→          {/* Calculator Input */}
+  1244→          <Card className="bg-slate-800/50 border-slate-700/50">
+  1245→            <CardHeader className="pb-2">
+  1246→              <CardTitle className="text-sm font-medium text-slate-200 flex items-center gap-2">
+  1247→                <Calculator className="h-4 w-4 text-emerald-400" /> คำนวณเครดิตคาร์บอน — T-VER-SOIL-01
+  1248→              </CardTitle>
+  1249→            </CardHeader>
+  1250→            <CardContent>
+  1251→              <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 items-end">
+  1252→                <div className="space-y-1">
+  1253→                  <Label className="text-slate-300 text-xs">เลือกแปลง *</Label>
+  1254→                  <Select value={calcPlotId} onValueChange={setCalcPlotId}>
+  1255→                    <SelectTrigger className="bg-slate-900 border-slate-600 text-white text-sm">
+  1256→                      <SelectValue placeholder="เลือกแปลง..." />
+  1257→                    </SelectTrigger>
+  1258→                    <SelectContent className="bg-slate-800 border-slate-600">
+  1259→                      {plots.map(p => (
+  1260→                        <SelectItem key={p.plotId} value={p.plotId} className="text-white">
+  1261→                          {p.plotId} — {p.nameTh || p.name}
+  1262→                        </SelectItem>
+  1263→                      ))}
+  1264→                    </SelectContent>
+  1265→                  </Select>
+  1266→                </div>
+  1267→                <div className="space-y-1">
+  1268→                  <Label className="text-slate-300 text-xs">วันที่เริ่มติดตาม</Label>
+  1269→                  <Input
+  1270→                    type="date"
+  1271→                    className="bg-slate-900 border-slate-600 text-white text-sm"
+  1272→                    value={calcStartDate}
+  1273→                    onChange={e => setCalcStartDate(e.target.value)}
+  1274→                  />
+  1275→                </div>
+  1276→                <div className="space-y-1">
+  1277→                  <Label className="text-slate-300 text-xs">วันที่สิ้นสุดติดตาม</Label>
+  1278→                  <Input
+  1279→                    type="date"
+  1280→                    className="bg-slate-900 border-slate-600 text-white text-sm"
+  1281→                    value={calcEndDate}
+  1282→                    onChange={e => setCalcEndDate(e.target.value)}
+  1283→                  />
+  1284→                </div>
+  1285→                <Button
+  1286→                  onClick={handleCalculate}
+  1287→                  disabled={calculating || !calcPlotId}
+  1288→                  className="bg-emerald-600 hover:bg-emerald-700 text-white"
+  1289→                >
+  1290→                  {calculating ? <RefreshCw className="h-4 w-4 mr-1 animate-spin" /> : <Calculator className="h-4 w-4 mr-1" />}
+  1291→                  คำนวณ
+  1292→                </Button>
+  1293→              </div>
+  1294→            </CardContent>
+  1295→          </Card>
+  1296→
+  1297→          {/* Calculation Results */}
+  1298→          {calcResult && calcDetail && (
+  1299→            <div className="space-y-4">
+  1300→              {/* Results Summary Cards */}
+  1301→              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+  1302→                <Card className="bg-slate-900/50 border-slate-700/50">
+  1303→                  <CardContent className="p-3">
+  1304→                    <p className="text-[10px] text-slate-400 mb-1">ΔSOC</p>
+  1305→                    <p className={`text-lg font-bold ${calcDetail.socCalculation?.deltaSOC && calcDetail.socCalculation.deltaSOC > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+  1306→                      {fmt(calcDetail.socCalculation?.deltaSOC || 0, 3)}
+  1307→                    </p>
+  1308→                    <p className="text-[9px] text-slate-500">tC/ha</p>
+  1309→                  </CardContent>
+  1310→                </Card>
+  1311→                <Card className="bg-slate-900/50 border-slate-700/50">
+  1312→                  <CardContent className="p-3">
+  1313→                    <p className="text-[10px] text-slate-400 mb-1">SOC Stock Credits</p>
+  1314→                    <p className="text-lg font-bold text-emerald-400">{fmt(calcDetail.socStockCredits?.result || 0, 2)}</p>
+  1315→                    <p className="text-[9px] text-slate-500">tCO₂e</p>
+  1316→                  </CardContent>
+  1317→                </Card>
+  1318→                <Card className="bg-slate-900/50 border-slate-700/50">
+  1319→                  <CardContent className="p-3">
+  1320→                    <p className="text-[10px] text-slate-400 mb-1">การลดการปล่อย GHG</p>
+  1321→                    <p className="text-lg font-bold text-blue-400">{fmt(calcDetail.emissionCalculation?.totalEmissionReduction || 0, 2)}</p>
+  1322→                    <p className="text-[9px] text-slate-500">tCO₂e</p>
+  1323→                  </CardContent>
+  1324→                </Card>
+  1325→                <Card className="bg-slate-900/50 border-slate-700/50">
+  1326→                  <CardContent className="p-3">
+  1327→                    <p className="text-[10px] text-slate-400 mb-1">Gross Credits</p>
+  1328→                    <p className="text-lg font-bold text-white">{fmt(calcDetail.creditSummary?.grossCredits || 0, 2)}</p>
+  1329→                    <p className="text-[9px] text-slate-500">tCO₂e</p>
+  1330→                  </CardContent>
+  1331→                </Card>
+  1332→                <Card className="bg-slate-900/50 border-slate-700/50">
+  1333→                  <CardContent className="p-3">
+  1334→                    <p className="text-[10px] text-slate-400 mb-1">หัก Buffer ({calcDetail.creditSummary?.bufferDeductionPct || 20}%)</p>
+  1335→                    <p className="text-lg font-bold text-orange-400">-{fmt(calcDetail.creditSummary?.bufferDeduction || 0, 2)}</p>
+  1336→                    <p className="text-[9px] text-slate-500">tCO₂e</p>
+  1337→                  </CardContent>
+  1338→                </Card>
+  1339→                <Card className="bg-emerald-900/30 border-emerald-500/30">
+  1340→                  <CardContent className="p-3">
+  1341→                    <p className="text-[10px] text-emerald-300 mb-1">Net Carbon Credits</p>
+  1342→                    <p className="text-lg font-bold text-emerald-300">{fmt(calcDetail.creditSummary?.netCredits || 0, 2)}</p>
+  1343→                    <p className="text-[9px] text-emerald-500">tCO₂e</p>
+  1344→                  </CardContent>
+  1345→                </Card>
+  1346→              </div>
+  1347→
+  1348→              {/* Eligibility + Visual Breakdown */}
+  1349→              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+  1350→                {/* Eligibility Assessment */}
+  1351→                <Card className="bg-slate-800/50 border-slate-700/50">
+  1352→                  <CardHeader className="pb-2">
+  1353→                    <CardTitle className="text-sm font-medium text-slate-200 flex items-center gap-2">
+  1354→                      <ClipboardCheck className="h-4 w-4 text-emerald-400" /> ผลการประเมินสิทธิ์
+  1355→                    </CardTitle>
+  1356→                  </CardHeader>
+  1357→                  <CardContent>
+  1358→                    <div className="space-y-3">
+  1359→                      <div className="flex items-center gap-3 p-3 rounded-lg bg-slate-900/50 border border-slate-700/50">
+  1360→                        {calcDetail.assessment?.eligible ? (
+  1361→                          <CheckCircle2 className="h-8 w-8 text-emerald-400 flex-shrink-0" />
+  1362→                        ) : (
+  1363→                          <XCircle className="h-8 w-8 text-red-400 flex-shrink-0" />
+  1364→                        )}
+  1365→                        <div>
+  1366→                          <p className={`text-sm font-medium ${calcDetail.assessment?.eligible ? 'text-emerald-400' : 'text-red-400'}`}>
+  1367→                            {calcDetail.assessment?.eligible ? 'มีสิทธิ์รับเครดิตคาร์บอน' : 'ยังไม่มีสิทธิ์รับเครดิตคาร์บอน'}
+  1368→                          </p>
+  1369→                          <p className="text-xs text-slate-400">วิธีการ: {calcDetail.assessment?.methodology}</p>
+  1370→                          <p className="text-xs text-slate-400">หักค่าความไม่แน่นอน: {calcDetail.assessment?.uncertaintyDeduction}</p>
+  1371→                        </div>
+  1372→                      </div>
+  1373→
+  1374→                      {calcDetail.socCalculation && (
+  1375→                        <div className="text-xs text-slate-300 space-y-1">
+  1376→                          <p>Baseline SOC: <span className="text-yellow-400">{fmt(calcDetail.socCalculation.baselineSOC, 1)} tC/ha</span></p>
+  1377→                          <p>Project SOC: <span className="text-emerald-400">{fmt(calcDetail.socCalculation.projectSOC, 1)} tC/ha</span></p>
+  1378→                          <p>ΔSOC ต่อปี: <span className={calcDetail.socCalculation.annualDeltaSOC >= 0.05 ? 'text-emerald-400' : 'text-red-400'}>
+  1379→                            {fmt(calcDetail.socCalculation.annualDeltaSOC, 3)} tC/ha/yr
+  1380→                          </span> (ขั้นต่ำ {calcDetail.socCalculation.threshold} tC/ha/yr)</p>
+  1381→                        </div>
+  1382→                      )}
+  1383→
+  1384→                      {calcDetail.assessment?.recommendations && calcDetail.assessment.recommendations.length > 0 && (
+  1385→                        <div className="space-y-1">
+  1386→                          <p className="text-xs text-slate-400 font-medium">คำแนะนำ:</p>
+  1387→                          {calcDetail.assessment.recommendations.map((rec, i) => (
+  1388→                            <div key={i} className="flex items-start gap-1.5">
+  1389→                              <CircleDot className="h-3 w-3 text-yellow-400 mt-0.5 flex-shrink-0" />
+  1390→                              <p className="text-xs text-slate-300">{rec}</p>
+  1391→                            </div>
+  1392→                          ))}
+  1393→                        </div>
+  1394→                      )}
+  1395→                    </div>
+  1396→                  </CardContent>
+  1397→                </Card>
+  1398→
+  1399→                {/* Visual Breakdown Chart */}
+  1400→                <Card className="bg-slate-800/50 border-slate-700/50">
+  1401→                  <CardHeader className="pb-2">
+  1402→                    <CardTitle className="text-sm font-medium text-slate-200">ส่วนประกอบเครดิตคาร์บอน</CardTitle>
+  1403→                  </CardHeader>
+  1404→                  <CardContent className="pt-0">
+  1405→                    <ResponsiveContainer width="100%" height={280}>
+  1406→                      <BarChart
+  1407→                        data={[
+  1408→                          {
+  1409→                            name: 'ส่วนประกอบ',
+  1410→                            'SOC Stock Credits': calcDetail.socStockCredits?.result || 0,
+  1411→                            'การลดการปล่อย GHG': calcDetail.emissionCalculation?.totalEmissionReduction || 0,
+  1412→                            'หัก Buffer': -(calcDetail.creditSummary?.bufferDeduction || 0),
+  1413→                          },
+  1414→                        ]}
+  1415→                        layout="vertical"
+  1416→                      >
+  1417→                        <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+  1418→                        <XAxis type="number" tick={{ fill: '#94a3b8', fontSize: 11 }} />
+  1419→                        <YAxis dataKey="name" type="category" tick={{ fill: '#94a3b8', fontSize: 11 }} width={80} />
+  1420→                        <Tooltip
+  1421→                          contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #475569', borderRadius: 8 }}
+  1422→                          labelStyle={{ color: '#e2e8f0' }}
+  1423→                        />
+  1424→                        <Legend />
+  1425→                        <Bar dataKey="SOC Stock Credits" fill="#10b981" radius={[0, 4, 4, 0]} />
+  1426→                        <Bar dataKey="การลดการปล่อย GHG" fill="#3b82f6" radius={[0, 4, 4, 0]} />
+  1427→                        <Bar dataKey="หัก Buffer" fill="#f97316" radius={[0, 4, 4, 0]} />
+  1428→                      </BarChart>
+  1429→                    </ResponsiveContainer>
+  1430→                  </CardContent>
+  1431→                </Card>
+  1432→              </div>
+  1433→
+  1434→              {/* Detailed Calculation Info */}
+  1435→              {calcDetail.monitoringPeriod && (
+  1436→                <Card className="bg-slate-800/50 border-slate-700/50">
+  1437→                  <CardContent className="p-4">
+  1438→                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
+  1439→                      <div>
+  1440→                        <p className="text-slate-400">ช่วงเวลาติดตาม</p>
+  1441→                        <p className="text-white">{calcDetail.monitoringPeriod.start} — {calcDetail.monitoringPeriod.end}</p>
+  1442→                      </div>
+  1443→                      <div>
+  1444→                        <p className="text-slate-400">ระยะเวลา</p>
+  1445→                        <p className="text-white">{fmt(calcDetail.monitoringPeriod.years, 2)} ปี</p>
+  1446→                      </div>
+  1447→                      <div>
+  1448→                        <p className="text-slate-400">จำนวนการวัด</p>
+  1449→                        <p className="text-white">{calcDetail.monitoringPeriod.measurementCount} รายการ</p>
+  1450→                      </div>
+  1451→                      <div>
+  1452→                        <p className="text-slate-400">การวัดที่ผ่านการตรวจสอบ</p>
+  1453→                        <p className="text-emerald-400">{calcDetail.monitoringPeriod.validMeasurementCount} รายการ</p>
+  1454→                      </div>
+  1455→                    </div>
+  1456→                  </CardContent>
+  1457→                </Card>
+  1458→              )}
+  1459→            </div>
+  1460→          )}
+  1461→        </TabsContent>
+  1462→
+  1463→        {/* ═══════════════════════════════════════════════════════════
+  1464→            TAB 5: รับรอง (Certification)
+  1465→        ═══════════════════════════════════════════════════════════ */}
+  1466→        <TabsContent value="certification" className="space-y-4">
+  1467→          {/* Eligible Plots */}
+  1468→          <Card className="bg-slate-800/50 border-slate-700/50">
+  1469→            <CardHeader className="pb-2">
+  1470→              <CardTitle className="text-sm font-medium text-slate-200 flex items-center gap-2">
+  1471→                <Award className="h-4 w-4 text-emerald-400" /> แปลงที่มีสิทธิ์ขอรับรอง
+  1472→              </CardTitle>
+  1473→              <CardDescription className="text-xs text-slate-500">
+  1474→                แสดงเฉพาะแปลงที่มีสถานะ "กำลังติดตาม" หรือ "ตรวจสอบแล้ว"
+  1475→              </CardDescription>
+  1476→            </CardHeader>
+  1477→            <CardContent className="pt-0">
+  1478→              {eligiblePlots.length === 0 ? (
+  1479→                <div className="text-center py-8">
+  1480→                  <FileCheck className="h-10 w-10 text-slate-600 mx-auto mb-2" />
+  1481→                  <p className="text-sm text-slate-500">ไม่มีแปลงที่มีสิทธิ์ขอรับรองในขณะนี้</p>
+  1482→                  <p className="text-xs text-slate-600">แปลงต้องมีสถานะ MONITORING หรือ VERIFIED จึงจะสามารถขอรับรองได้</p>
+  1483→                </div>
+  1484→              ) : (
+  1485→                <div className="max-h-96 overflow-y-auto custom-scrollbar space-y-3">
+  1486→                  {eligiblePlots.map(plot => {
+  1487→                    const step = certStep[plot.plotId] || 0;
+  1488→                    const checks = certChecklist[plot.plotId] || {};
+  1489→                    const allChecked = certChecklistItems.every(item => checks[item.key]);
+  1490→                    return (
+  1491→                      <div key={plot.id} className="bg-slate-900/50 rounded-lg border border-slate-700/50 p-4">
+  1492→                        <div className="flex items-center justify-between mb-3">
+  1493→                          <div className="flex items-center gap-3">
+  1494→                            <div className="p-2 rounded-lg bg-emerald-500/10">
+  1495→                              <Sprout className="h-5 w-5 text-emerald-400" />
+  1496→                            </div>
+  1497→                            <div>
+  1498→                              <p className="text-sm font-medium text-white">{plot.nameTh || plot.name}</p>
+  1499→                              <p className="text-xs text-slate-400">{plot.plotId} · {plot.province} · {fmt(plot.areaRai, 1)} ไร่</p>
+  1500→                            </div>
+  1501→                          </div>
+  1502→                          <Badge variant="outline" className={`text-[10px] px-2 py-0 ${STATUS_COLORS[plot.status] || ''}`}>
+  1503→                            {STATUS_LABELS[plot.status] || plot.status}
+  1504→                          </Badge>
+  1505→                        </div>
+  1506→
+  1507→                        {/* Certification Workflow Steps */}
+  1508→                        <div className="flex items-center gap-2 mb-3">
+  1509→                          {['เลือกแปลง', 'ตรวจสอบข้อมูล', 'รับรอง'].map((label, i) => (
+  1510→                            <React.Fragment key={i}>
+  1511→                              <div className="flex items-center gap-1.5">
+  1512→                                <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold ${
+  1513→                                  step >= i ? 'bg-emerald-500 text-white' : 'bg-slate-700 text-slate-400'
+  1514→                                }`}>
+  1515→                                  {step > i ? <CheckCircle2 className="h-3 w-3" /> : i + 1}
+  1516→                                </div>
+  1517→                                <span className={`text-[10px] ${step >= i ? 'text-emerald-400' : 'text-slate-500'}`}>{label}</span>
+  1518→                              </div>
+  1519→                              {i < 2 && <div className={`flex-1 h-0.5 ${step > i ? 'bg-emerald-500' : 'bg-slate-700'}`} />}
+  1520→                            </React.Fragment>
+  1521→                          ))}
+  1522→                        </div>
+  1523→
+  1524→                        {/* Step Content */}
+  1525→                        {step === 0 && (
+  1526→                          <Button
+  1527→                            size="sm"
+  1528→                            className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs"
+  1529→                            onClick={() => setCertStep(prev => ({ ...prev, [plot.plotId]: 1 }))}
+  1530→                          >
+  1531→                            <Eye className="h-3 w-3 mr-1" /> เริ่มตรวจสอบ
+  1532→                          </Button>
+  1533→                        )}
+  1534→
+  1535→                        {step === 1 && (
+  1536→                          <div className="space-y-3">
+  1537→                            <p className="text-xs text-slate-300 font-medium">ตรวจสอบรายการดังต่อไปนี้:</p>
+  1538→                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+  1539→                              {certChecklistItems.map(item => (
+  1540→                                <button
+  1541→                                  key={item.key}
+  1542→                                  onClick={() => toggleCertCheck(plot.plotId, item.key)}
+  1543→                                  className={`flex items-start gap-2 p-2 rounded text-left text-xs transition-colors ${
+  1544→                                    checks[item.key]
+  1545→                                      ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-300'
+  1546→                                      : 'bg-slate-800/50 border border-slate-700/30 text-slate-400 hover:bg-slate-700/50'
+  1547→                                  }`}
+  1548→                                >
+  1549→                                  {checks[item.key] ? (
+  1550→                                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 flex-shrink-0 mt-0.5" />
+  1551→                                  ) : (
+  1552→                                    <div className="h-3.5 w-3.5 rounded-full border border-slate-600 flex-shrink-0 mt-0.5" />
+  1553→                                  )}
+  1554→                                  {item.label}
+  1555→                                </button>
+  1556→                              ))}
+  1557→                            </div>
+  1558→                            <div className="flex items-center gap-2">
+  1559→                              <Button
+  1560→                                size="sm"
+  1561→                                className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs"
+  1562→                                disabled={!allChecked}
+  1563→                                onClick={() => setCertStep(prev => ({ ...prev, [plot.plotId]: 2 }))}
+  1564→                              >
+  1565→                                <FileCheck className="h-3 w-3 mr-1" /> ยืนยันการตรวจสอบ
+  1566→                              </Button>
+  1567→                              <Button
+  1568→                                variant="outline"
+  1569→                                size="sm"
+  1570→                                className="border-slate-600 text-slate-400 text-xs"
+  1571→                                onClick={() => setCertStep(prev => ({ ...prev, [plot.plotId]: 0 }))}
+  1572→                              >
+  1573→                                ย้อนกลับ
+  1574→                              </Button>
+  1575→                            </div>
+  1576→                          </div>
+  1577→                        )}
+  1578→
+  1579→                        {step === 2 && (
+  1580→                          <div className="space-y-3">
+  1581→                            <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+  1582→                              <p className="text-xs text-emerald-300 mb-1">พร้อมรับรองเครดิตคาร์บอน</p>
+  1583→                              <p className="text-[10px] text-slate-400">
+  1584→                                แปลง {plot.nameTh || plot.name} ผ่านการตรวจสอบทุกข้อ สามารถดำเนินการรับรองได้
+  1585→                              </p>
+  1586→                            </div>
+  1587→                            <div className="flex items-center gap-2">
+  1588→                              <Button
+  1589→                                size="sm"
+  1590→                                className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs"
+  1591→                                onClick={() => handleCertifyPlot(plot.plotId)}
+  1592→                              >
+  1593→                                <Award className="h-3 w-3 mr-1" /> รับรองเครดิตคาร์บอน
+  1594→                              </Button>
+  1595→                              <Button
+  1596→                                variant="outline"
+  1597→                                size="sm"
+  1598→                                className="border-slate-600 text-slate-400 text-xs"
+  1599→                                onClick={() => setCertStep(prev => ({ ...prev, [plot.plotId]: 1 }))}
+  1600→                              >
+  1601→                                ย้อนกลับ
+  1602→                              </Button>
+  1603→                            </div>
+  1604→                          </div>
+  1605→                        )}
+  1606→
+  1607→                        {step === 3 && (
+  1608→                          <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+  1609→                            <div className="flex items-center gap-2 mb-1">
+  1610→                              <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+  1611→                              <p className="text-xs text-emerald-300 font-medium">รับรองเครดิตคาร์บอนสำเร็จ</p>
+  1612→                            </div>
+  1613→                            <p className="text-[10px] text-slate-400">
+  1614→                              Certificate ID: {certHistory.find(c => c.plotId === plot.plotId)?.certificateId || `T-VER-${plot.plotId}`}
+  1615→                            </p>
+  1616→                          </div>
+  1617→                        )}
+  1618→                      </div>
+  1619→                    );
+  1620→                  })}
+  1621→                </div>
+  1622→              )}
+  1623→            </CardContent>
+  1624→          </Card>
+  1625→
+  1626→          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+  1627→            {/* Certification Requirements */}
+  1628→            <Card className="bg-slate-800/50 border-slate-700/50">
+  1629→              <CardHeader className="pb-2">
+  1630→                <CardTitle className="text-sm font-medium text-slate-200 flex items-center gap-2">
+  1631→                  <FileText className="h-4 w-4 text-yellow-400" /> ข้อกำหนดการรับรอง T-VER-SOIL-01
+  1632→                </CardTitle>
+  1633→              </CardHeader>
+  1634→              <CardContent>
+  1635→                <div className="space-y-2 text-xs">
+  1636→                  <div className="flex items-start gap-2 p-2 rounded bg-slate-900/50">
+  1637→                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 flex-shrink-0 mt-0.5" />
+  1638→                    <div>
+  1639→                      <p className="text-slate-200">ขอบเขตโครงการชัดเจน</p>
+  1640→                      <p className="text-slate-500">ระบุพิกัด GPS และพื้นที่แปลงที่สอดคล้องกับหลักฐานสิทธิ์การใช้ที่ดิน</p>
+  1641→                    </div>
+  1642→                  </div>
+  1643→                  <div className="flex items-start gap-2 p-2 rounded bg-slate-900/50">
+  1644→                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 flex-shrink-0 mt-0.5" />
+  1645→                    <div>
+  1646→                      <p className="text-slate-200">Baseline SOC สมบูรณ์</p>
+  1647→                      <p className="text-slate-500">ต้องมีข้อมูล Baseline SOC จากการวัดภาคสนามหรือห้องปฏิบัติการ</p>
+  1648→                    </div>
+  1649→                  </div>
+  1650→                  <div className="flex items-start gap-2 p-2 rounded bg-slate-900/50">
+  1651→                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 flex-shrink-0 mt-0.5" />
+  1652→                    <div>
+  1653→                      <p className="text-slate-200">รอบติดตามขั้นต่ำ 1 ปี</p>
+  1654→                      <p className="text-slate-500">ข้อมูลการติดตามต้องต่อเนื่องอย่างน้อย 1 ปี (สูงสุด 10 ปี)</p>
+  1655→                    </div>
+  1656→                  </div>
+  1657→                  <div className="flex items-start gap-2 p-2 rounded bg-slate-900/50">
+  1658→                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 flex-shrink-0 mt-0.5" />
+  1659→                    <div>
+  1660→                      <p className="text-slate-200">หักค่าความไม่แน่นอน (Buffer) 20%</p>
+  1661→                      <p className="text-slate-500">ตาม T-VER-SOIL-01 ต้องหัก Buffer Pool 20% จาก Gross Credits</p>
+  1662→                    </div>
+  1663→                  </div>
+  1664→                  <div className="flex items-start gap-2 p-2 rounded bg-slate-900/50">
+  1665→                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 flex-shrink-0 mt-0.5" />
+  1666→                    <div>
+  1667→                      <p className="text-slate-200">ΔSOC ขั้นต่ำ 0.05 tC/ha/yr</p>
+  1668→                      <p className="text-slate-500">การเปลี่ยนแปลง SOC ต้องผ่านขีดแบ่งขั้นต่ำตามวิธีการ</p>
+  1669→                    </div>
+  1670→                  </div>
+  1671→                  <div className="flex items-start gap-2 p-2 rounded bg-slate-900/50">
+  1672→                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 flex-shrink-0 mt-0.5" />
+  1673→                    <div>
+  1674→                      <p className="text-slate-200">Additionality</p>
+  1675→                      <p className="text-slate-500">ต้องพิสูจน์ว่ากิจกรรมเพิ่มการกักคาร์บอนเกิดขึ้นเพราะโครงการ ไม่ใช่สิ่งที่จะเกิดขึ้นเอง</p>
+  1676→                    </div>
+  1677→                  </div>
+  1678→                  <div className="flex items-start gap-2 p-2 rounded bg-slate-900/50">
+  1679→                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 flex-shrink-0 mt-0.5" />
+  1680→                    <div>
+  1681→                      <p className="text-slate-200">Permanence</p>
+  1682→                      <p className="text-slate-500">ต้องมีแผนรักษาความคงตัวของคาร์บอนในดินอย่างน้อย 10 ปี</p>
+  1683→                    </div>
+  1684→                  </div>
+  1685→                </div>
+  1686→              </CardContent>
+  1687→            </Card>
+  1688→
+  1689→            {/* Certification History */}
+  1690→            <Card className="bg-slate-800/50 border-slate-700/50">
+  1691→              <CardHeader className="pb-2">
+  1692→                <CardTitle className="text-sm font-medium text-slate-200 flex items-center gap-2">
+  1693→                  <Clock className="h-4 w-4 text-blue-400" /> ประวัติการรับรอง
+  1694→                </CardTitle>
+  1695→              </CardHeader>
+  1696→              <CardContent className="pt-0">
+  1697→                {certHistory.length === 0 ? (
+  1698→                  <div className="text-center py-6">
+  1699→                    <Award className="h-8 w-8 text-slate-700 mx-auto mb-2" />
+  1700→                    <p className="text-xs text-slate-500">ยังไม่มีประวัติการรับรอง</p>
+  1701→                  </div>
+  1702→                ) : (
+  1703→                  <div className="max-h-80 overflow-y-auto custom-scrollbar space-y-2">
+  1704→                    {certHistory.map((cert, i) => (
+  1705→                      <div key={i} className="flex items-center justify-between p-2 rounded bg-slate-900/50 border border-slate-700/30">
+  1706→                        <div className="flex items-center gap-2">
+  1707→                          <CheckCircle2 className="h-4 w-4 text-emerald-400 flex-shrink-0" />
+  1708→                          <div>
+  1709→                            <p className="text-xs text-white font-medium">{cert.plotNameTh || cert.plotName}</p>
+  1710→                            <p className="text-[10px] text-slate-400">{cert.plotId} · {cert.province}</p>
+  1711→                          </div>
+  1712→                        </div>
+  1713→                        <div className="text-right">
+  1714→                          <p className="text-xs text-emerald-400 font-medium">{fmt(cert.netCredits, 2)} tCO₂e</p>
+  1715→                          <p className="text-[10px] text-slate-500">{fmtDateTime(cert.certifiedAt || '')}</p>
+  1716→                          <p className="text-[9px] text-slate-600 font-mono">{cert.certificateId}</p>
+  1717→                        </div>
+  1718→                      </div>
+  1719→                    ))}
+  1720→                  </div>
+  1721→                )}
+  1722→              </CardContent>
+  1723→            </Card>
+  1724→          </div>
+  1725→        </TabsContent>
+  1726→      </Tabs>
+  1727→
+  1728→      {/* Custom Scrollbar Styles */}
+  1729→      <style jsx global>{`
+  1730→        .custom-scrollbar::-webkit-scrollbar {
+  1731→          width: 6px;
+  1732→          height: 6px;
+  1733→        }
+  1734→        .custom-scrollbar::-webkit-scrollbar-track {
+  1735→          background: transparent;
+  1736→        }
+  1737→        .custom-scrollbar::-webkit-scrollbar-thumb {
+  1738→          background: #475569;
+  1739→          border-radius: 3px;
+  1740→        }
+  1741→        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  1742→          background: #64748b;
+  1743→        }
+  1744→      `}</style>
+  1745→    </div>
+  1746→  );
+  1747→}
+  1748→

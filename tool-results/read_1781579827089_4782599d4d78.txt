@@ -1,0 +1,502 @@
+   600→          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+   601→            <Card className="bg-slate-800/50 border-slate-700/50">
+   602→              <CardContent className="p-4">
+   603→                <div className="flex items-center justify-between">
+   604→                  <div>
+   605→                    <p className="text-xs text-slate-400">แปลงทั้งหมด</p>
+   606→                    <p className="text-2xl font-bold text-white">{summary.totalPlots}</p>
+   607→                    <p className="text-xs text-slate-500">พื้นที่ {fmt(summary.totalAreaHa, 1)} เฮกตาร์</p>
+   608→                  </div>
+   609→                  <div className="p-3 rounded-lg bg-blue-500/10">
+   610→                    <MapPin className="h-6 w-6 text-blue-400" />
+   611→                  </div>
+   612→                </div>
+   613→              </CardContent>
+   614→            </Card>
+   615→
+   616→            <Card className="bg-slate-800/50 border-slate-700/50">
+   617→              <CardContent className="p-4">
+   618→                <div className="flex items-center justify-between">
+   619→                  <div>
+   620→                    <p className="text-xs text-slate-400">แปลงที่ติดตาม</p>
+   621→                    <p className="text-2xl font-bold text-yellow-400">{summary.monitoringPlots}</p>
+   622→                    <p className="text-xs text-slate-500">จากทั้งหมด {summary.totalPlots} แปลง</p>
+   623→                  </div>
+   624→                  <div className="p-3 rounded-lg bg-yellow-500/10">
+   625→                    <Eye className="h-6 w-6 text-yellow-400" />
+   626→                  </div>
+   627→                </div>
+   628→              </CardContent>
+   629→            </Card>
+   630→
+   631→            <Card className="bg-slate-800/50 border-slate-700/50">
+   632→              <CardContent className="p-4">
+   633→                <div className="flex items-center justify-between">
+   634→                  <div>
+   635→                    <p className="text-xs text-slate-400">การลดการปล่อยรวม</p>
+   636→                    <p className="text-2xl font-bold text-emerald-400">{fmt(summary.totalEmissionReduction, 1)}</p>
+   637→                    <p className="text-xs text-slate-500">tCO₂e</p>
+   638→                  </div>
+   639→                  <div className="p-3 rounded-lg bg-emerald-500/10">
+   640→                    <TrendingDown className="h-6 w-6 text-emerald-400" />
+   641→                  </div>
+   642→                </div>
+   643→              </CardContent>
+   644→            </Card>
+   645→
+   646→            <Card className="bg-slate-800/50 border-slate-700/50">
+   647→              <CardContent className="p-4">
+   648→                <div className="flex items-center justify-between">
+   649→                  <div>
+   650→                    <p className="text-xs text-slate-400">เครดิตคาร์บอนที่คาดการณ์</p>
+   651→                    <p className="text-2xl font-bold text-emerald-300">{fmt(summary.estimatedCredits, 1)}</p>
+   652→                    <p className="text-xs text-slate-500">tCO₂e (หัก buffer 20%)</p>
+   653→                  </div>
+   654→                  <div className="p-3 rounded-lg bg-emerald-500/10">
+   655→                    <Award className="h-6 w-6 text-emerald-300" />
+   656→                  </div>
+   657→                </div>
+   658→              </CardContent>
+   659→            </Card>
+   660→          </div>
+   661→
+   662→          {/* Charts Row */}
+   663→          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+   664→            {/* SOC Stock Line Chart */}
+   665→            <Card className="bg-slate-800/50 border-slate-700/50">
+   666→              <CardHeader className="pb-2">
+   667→                <CardTitle className="text-sm font-medium text-slate-200">SOC Stock: Baseline vs Project</CardTitle>
+   668→              </CardHeader>
+   669→              <CardContent className="pt-0">
+   670→                <ResponsiveContainer width="100%" height={280}>
+   671→                  <LineChart data={socChartData}>
+   672→                    <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+   673→                    <XAxis dataKey="month" tick={{ fill: '#94a3b8', fontSize: 11 }} />
+   674→                    <YAxis tick={{ fill: '#94a3b8', fontSize: 11 }} />
+   675→                    <Tooltip
+   676→                      contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #475569', borderRadius: 8 }}
+   677→                      labelStyle={{ color: '#e2e8f0' }}
+   678→                    />
+   679→                    <Legend />
+   680→                    <Line type="monotone" dataKey="baseline" stroke="#f59e0b" strokeWidth={2} name="Baseline SOC (tC/ha)" dot={{ r: 3 }} />
+   681→                    <Line type="monotone" dataKey="project" stroke="#10b981" strokeWidth={2} name="Project SOC (tC/ha)" dot={{ r: 3 }} />
+   682→                  </LineChart>
+   683→                </ResponsiveContainer>
+   684→              </CardContent>
+   685→            </Card>
+   686→
+   687→            {/* Emission by Province Bar Chart */}
+   688→            <Card className="bg-slate-800/50 border-slate-700/50">
+   689→              <CardHeader className="pb-2">
+   690→                <CardTitle className="text-sm font-medium text-slate-200">การลดการปล่อยตามจังหวัด (tCO₂e)</CardTitle>
+   691→              </CardHeader>
+   692→              <CardContent className="pt-0">
+   693→                <ResponsiveContainer width="100%" height={280}>
+   694→                  <BarChart data={emissionByProvince}>
+   695→                    <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+   696→                    <XAxis dataKey="province" tick={{ fill: '#94a3b8', fontSize: 11 }} />
+   697→                    <YAxis tick={{ fill: '#94a3b8', fontSize: 11 }} />
+   698→                    <Tooltip
+   699→                      contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #475569', borderRadius: 8 }}
+   700→                      labelStyle={{ color: '#e2e8f0' }}
+   701→                    />
+   702→                    <Bar dataKey="reduction" fill="#10b981" radius={[4, 4, 0, 0]} name="การลดการปล่อย (tCO₂e)" />
+   703→                  </BarChart>
+   704→                </ResponsiveContainer>
+   705→              </CardContent>
+   706→            </Card>
+   707→          </div>
+   708→
+   709→          {/* Pie Chart + Table Row */}
+   710→          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+   711→            {/* Land Use Pie Chart */}
+   712→            <Card className="bg-slate-800/50 border-slate-700/50">
+   713→              <CardHeader className="pb-2">
+   714→                <CardTitle className="text-sm font-medium text-slate-200">สัดส่วนประเภทการใช้ประโยชน์ที่ดิน</CardTitle>
+   715→              </CardHeader>
+   716→              <CardContent className="pt-0">
+   717→                <ResponsiveContainer width="100%" height={240}>
+   718→                  <PieChart>
+   719→                    <Pie
+   720→                      data={landUseDistribution}
+   721→                      cx="50%"
+   722→                      cy="50%"
+   723→                      innerRadius={50}
+   724→                      outerRadius={80}
+   725→                      paddingAngle={3}
+   726→                      dataKey="value"
+   727→                      label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+   728→                    >
+   729→                      {landUseDistribution.map((_, index) => (
+   730→                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+   731→                      ))}
+   732→                    </Pie>
+   733→                    <Tooltip
+   734→                      contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #475569', borderRadius: 8 }}
+   735→                    />
+   736→                  </PieChart>
+   737→                </ResponsiveContainer>
+   738→              </CardContent>
+   739→            </Card>
+   740→
+   741→            {/* Recent Plots Table */}
+   742→            <Card className="bg-slate-800/50 border-slate-700/50 lg:col-span-2">
+   743→              <CardHeader className="pb-2">
+   744→                <CardTitle className="text-sm font-medium text-slate-200">รายการแปลงล่าสุด</CardTitle>
+   745→              </CardHeader>
+   746→              <CardContent className="pt-0">
+   747→                <div className="max-h-64 overflow-y-auto custom-scrollbar">
+   748→                  <Table>
+   749→                    <TableHeader>
+   750→                      <TableRow className="border-slate-700/50 hover:bg-transparent">
+   751→                        <TableHead className="text-slate-400 text-xs">Plot ID</TableHead>
+   752→                        <TableHead className="text-slate-400 text-xs">ชื่อแปลง</TableHead>
+   753→                        <TableHead className="text-slate-400 text-xs">จังหวัด</TableHead>
+   754→                        <TableHead className="text-slate-400 text-xs">พื้นที่ (ไร่)</TableHead>
+   755→                        <TableHead className="text-slate-400 text-xs">สถานะ</TableHead>
+   756→                      </TableRow>
+   757→                    </TableHeader>
+   758→                    <TableBody>
+   759→                      {latestPlots.map(plot => (
+   760→                        <TableRow key={plot.id} className="border-slate-700/30 hover:bg-slate-700/30">
+   761→                          <TableCell className="text-xs font-mono text-emerald-400">{plot.plotId}</TableCell>
+   762→                          <TableCell className="text-xs text-slate-200">{plot.nameTh || plot.name}</TableCell>
+   763→                          <TableCell className="text-xs text-slate-300">{plot.province}</TableCell>
+   764→                          <TableCell className="text-xs text-slate-300">{fmt(plot.areaRai, 1)}</TableCell>
+   765→                          <TableCell>
+   766→                            <Badge variant="outline" className={`text-[10px] px-2 py-0 ${STATUS_COLORS[plot.status] || ''}`}>
+   767→                              {STATUS_LABELS[plot.status] || plot.status}
+   768→                            </Badge>
+   769→                          </TableCell>
+   770→                        </TableRow>
+   771→                      ))}
+   772→                    </TableBody>
+   773→                  </Table>
+   774→                </div>
+   775→              </CardContent>
+   776→            </Card>
+   777→          </div>
+   778→        </TabsContent>
+   779→
+   780→        {/* ═══════════════════════════════════════════════════════════
+   781→            TAB 2: แปลงเกษตร (Plots)
+   782→        ═══════════════════════════════════════════════════════════ */}
+   783→        <TabsContent value="plots" className="space-y-4">
+   784→          {/* Toolbar */}
+   785→          <div className="flex items-center justify-between">
+   786→            <div className="flex items-center gap-2">
+   787→              <Search className="h-4 w-4 text-slate-400" />
+   788→              <span className="text-sm text-slate-400">ทั้งหมด {plots.length} แปลง</span>
+   789→            </div>
+   790→            <Dialog open={showNewPlotDialog} onOpenChange={setShowNewPlotDialog}>
+   791→              <DialogTrigger asChild>
+   792→                <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white">
+   793→                  <Plus className="h-4 w-4 mr-1" /> เพิ่มแปลงใหม่
+   794→                </Button>
+   795→              </DialogTrigger>
+   796→              <DialogContent className="bg-slate-900 border-slate-700 max-w-lg max-h-[90vh] overflow-y-auto">
+   797→                <DialogHeader>
+   798→                  <DialogTitle className="text-white">เพิ่มแปลงเกษตรใหม่</DialogTitle>
+   799→                  <DialogDescription className="text-slate-400">กรอกข้อมูลแปลงสำหรับโครงการกักคาร์บอนในดิน</DialogDescription>
+   800→                </DialogHeader>
+   801→                <div className="grid gap-3 py-4">
+   802→                  <div className="grid grid-cols-2 gap-3">
+   803→                    <div className="space-y-1">
+   804→                      <Label className="text-slate-300 text-xs">Plot ID *</Label>
+   805→                      <Input
+   806→                        className="bg-slate-800 border-slate-600 text-white text-sm"
+   807→                        placeholder="SOIL-XXX-001"
+   808→                        value={newPlotForm.plotId}
+   809→                        onChange={e => setNewPlotForm(f => ({ ...f, plotId: e.target.value }))}
+   810→                      />
+   811→                    </div>
+   812→                    <div className="space-y-1">
+   813→                      <Label className="text-slate-300 text-xs">ชื่อแปลง (EN) *</Label>
+   814→                      <Input
+   815→                        className="bg-slate-800 border-slate-600 text-white text-sm"
+   816→                        placeholder="Plot Name"
+   817→                        value={newPlotForm.name}
+   818→                        onChange={e => setNewPlotForm(f => ({ ...f, name: e.target.value }))}
+   819→                      />
+   820→                    </div>
+   821→                  </div>
+   822→                  <div className="grid grid-cols-2 gap-3">
+   823→                    <div className="space-y-1">
+   824→                      <Label className="text-slate-300 text-xs">ชื่อแปลง (TH)</Label>
+   825→                      <Input
+   826→                        className="bg-slate-800 border-slate-600 text-white text-sm"
+   827→                        placeholder="ชื่อแปลงภาษาไทย"
+   828→                        value={newPlotForm.nameTh}
+   829→                        onChange={e => setNewPlotForm(f => ({ ...f, nameTh: e.target.value }))}
+   830→                      />
+   831→                    </div>
+   832→                    <div className="space-y-1">
+   833→                      <Label className="text-slate-300 text-xs">จังหวัด</Label>
+   834→                      <Input
+   835→                        className="bg-slate-800 border-slate-600 text-white text-sm"
+   836→                        placeholder="จังหวัด"
+   837→                        value={newPlotForm.province}
+   838→                        onChange={e => setNewPlotForm(f => ({ ...f, province: e.target.value }))}
+   839→                      />
+   840→                    </div>
+   841→                  </div>
+   842→                  <div className="grid grid-cols-2 gap-3">
+   843→                    <div className="space-y-1">
+   844→                      <Label className="text-slate-300 text-xs">พื้นที่ (ไร่)</Label>
+   845→                      <Input
+   846→                        type="number"
+   847→                        className="bg-slate-800 border-slate-600 text-white text-sm"
+   848→                        placeholder="0"
+   849→                        value={newPlotForm.areaRai}
+   850→                        onChange={e => setNewPlotForm(f => ({ ...f, areaRai: e.target.value }))}
+   851→                      />
+   852→                    </div>
+   853→                    <div className="space-y-1">
+   854→                      <Label className="text-slate-300 text-xs">ประเภทการใช้ประโยชน์ที่ดิน</Label>
+   855→                      <Select value={newPlotForm.landUseType} onValueChange={v => setNewPlotForm(f => ({ ...f, landUseType: v }))}>
+   856→                        <SelectTrigger className="bg-slate-800 border-slate-600 text-white text-sm">
+   857→                          <SelectValue />
+   858→                        </SelectTrigger>
+   859→                        <SelectContent className="bg-slate-800 border-slate-600">
+   860→                          {Object.entries(LAND_USE_LABELS).map(([k, v]) => (
+   861→                            <SelectItem key={k} value={k} className="text-white">{v}</SelectItem>
+   862→                          ))}
+   863→                        </SelectContent>
+   864→                      </Select>
+   865→                    </div>
+   866→                  </div>
+   867→                  <div className="grid grid-cols-2 gap-3">
+   868→                    <div className="space-y-1">
+   869→                      <Label className="text-slate-300 text-xs">ประเภทดิน</Label>
+   870→                      <Input
+   871→                        className="bg-slate-800 border-slate-600 text-white text-sm"
+   872→                        placeholder="Clay Loam, Sandy Loam, etc."
+   873→                        value={newPlotForm.soilType}
+   874→                        onChange={e => setNewPlotForm(f => ({ ...f, soilType: e.target.value }))}
+   875→                      />
+   876→                    </div>
+   877→                    <div className="space-y-1">
+   878→                      <Label className="text-slate-300 text-xs">ประเภทพืช</Label>
+   879→                      <Input
+   880→                        className="bg-slate-800 border-slate-600 text-white text-sm"
+   881→                        placeholder="Rice, Cassava, Sugarcane, etc."
+   882→                        value={newPlotForm.cropType}
+   883→                        onChange={e => setNewPlotForm(f => ({ ...f, cropType: e.target.value }))}
+   884→                      />
+   885→                    </div>
+   886→                  </div>
+   887→                  <div className="grid grid-cols-2 gap-3">
+   888→                    <div className="space-y-1">
+   889→                      <Label className="text-slate-300 text-xs">แนวปฏิบัติ</Label>
+   890→                      <Select value={newPlotForm.practiceType} onValueChange={v => setNewPlotForm(f => ({ ...f, practiceType: v }))}>
+   891→                        <SelectTrigger className="bg-slate-800 border-slate-600 text-white text-sm">
+   892→                          <SelectValue />
+   893→                        </SelectTrigger>
+   894→                        <SelectContent className="bg-slate-800 border-slate-600">
+   895→                          {Object.entries(PRACTICE_LABELS).map(([k, v]) => (
+   896→                            <SelectItem key={k} value={k} className="text-white">{v}</SelectItem>
+   897→                          ))}
+   898→                        </SelectContent>
+   899→                      </Select>
+   900→                    </div>
+   901→                    <div className="space-y-1">
+   902→                      <Label className="text-slate-300 text-xs">วิธีการ</Label>
+   903→                      <Input
+   904→                        className="bg-slate-800 border-slate-600 text-white text-sm"
+   905→                        value={newPlotForm.methodology}
+   906→                        onChange={e => setNewPlotForm(f => ({ ...f, methodology: e.target.value }))}
+   907→                      />
+   908→                    </div>
+   909→                  </div>
+   910→                </div>
+   911→                <DialogFooter>
+   912→                  <Button variant="outline" onClick={() => setShowNewPlotDialog(false)} className="border-slate-600 text-slate-300">
+   913→                    ยกเลิก
+   914→                  </Button>
+   915→                  <Button
+   916→                    onClick={handleCreatePlot}
+   917→                    disabled={creatingPlot || !newPlotForm.plotId || !newPlotForm.name}
+   918→                    className="bg-emerald-600 hover:bg-emerald-700 text-white"
+   919→                  >
+   920→                    {creatingPlot ? <RefreshCw className="h-4 w-4 mr-1 animate-spin" /> : <Plus className="h-4 w-4 mr-1" />}
+   921→                    สร้างแปลง
+   922→                  </Button>
+   923→                </DialogFooter>
+   924→              </DialogContent>
+   925→            </Dialog>
+   926→          </div>
+   927→
+   928→          {/* Plots Table */}
+   929→          <Card className="bg-slate-800/50 border-slate-700/50">
+   930→            <CardContent className="p-0">
+   931→              <div className="max-h-[600px] overflow-y-auto custom-scrollbar">
+   932→                <Table>
+   933→                  <TableHeader>
+   934→                    <TableRow className="border-slate-700/50 hover:bg-transparent">
+   935→                      <TableHead className="text-slate-400 text-xs w-8"></TableHead>
+   936→                      <TableHead className="text-slate-400 text-xs">Plot ID</TableHead>
+   937→                      <TableHead className="text-slate-400 text-xs">ชื่อ</TableHead>
+   938→                      <TableHead className="text-slate-400 text-xs">จังหวัด</TableHead>
+   939→                      <TableHead className="text-slate-400 text-xs">พื้นที่ (ไร่)</TableHead>
+   940→                      <TableHead className="text-slate-400 text-xs">ประเภทพืช</TableHead>
+   941→                      <TableHead className="text-slate-400 text-xs">แนวปฏิบัติ</TableHead>
+   942→                      <TableHead className="text-slate-400 text-xs">SOC Baseline</TableHead>
+   943→                      <TableHead className="text-slate-400 text-xs">SOC Project</TableHead>
+   944→                      <TableHead className="text-slate-400 text-xs">การลดการปล่อย</TableHead>
+   945→                      <TableHead className="text-slate-400 text-xs">สถานะ</TableHead>
+   946→                    </TableRow>
+   947→                  </TableHeader>
+   948→                  <TableBody>
+   949→                    {plots.map(plot => (
+   950→                      <React.Fragment key={plot.id}>
+   951→                        <TableRow
+   952→                          className="border-slate-700/30 hover:bg-slate-700/30 cursor-pointer"
+   953→                          onClick={() => handleToggleExpand(plot.plotId)}
+   954→                        >
+   955→                          <TableCell className="text-xs">
+   956→                            {expandedPlot === plot.plotId ? (
+   957→                              <ChevronUp className="h-3 w-3 text-slate-400" />
+   958→                            ) : (
+   959→                              <ChevronDown className="h-3 w-3 text-slate-400" />
+   960→                            )}
+   961→                          </TableCell>
+   962→                          <TableCell className="text-xs font-mono text-emerald-400">{plot.plotId}</TableCell>
+   963→                          <TableCell className="text-xs text-slate-200">{plot.nameTh || plot.name}</TableCell>
+   964→                          <TableCell className="text-xs text-slate-300">{plot.province}</TableCell>
+   965→                          <TableCell className="text-xs text-slate-300">{fmt(plot.areaRai, 1)}</TableCell>
+   966→                          <TableCell className="text-xs text-slate-300">{plot.cropType}</TableCell>
+   967→                          <TableCell className="text-xs text-slate-300">{PRACTICE_LABELS[plot.practiceType] || plot.practiceType}</TableCell>
+   968→                          <TableCell className="text-xs text-slate-300">{fmt(plot.baselineSOC, 1)}</TableCell>
+   969→                          <TableCell className="text-xs text-emerald-400 font-medium">{fmt(plot.projectSOC, 1)}</TableCell>
+   970→                          <TableCell className="text-xs text-emerald-400">{fmt(plot.emissionReduction, 2)} tCO₂e</TableCell>
+   971→                          <TableCell>
+   972→                            <Badge variant="outline" className={`text-[10px] px-2 py-0 ${STATUS_COLORS[plot.status] || ''}`}>
+   973→                              {STATUS_LABELS[plot.status] || plot.status}
+   974→                            </Badge>
+   975→                          </TableCell>
+   976→                        </TableRow>
+   977→                        {expandedPlot === plot.plotId && (
+   978→                          <TableRow className="border-slate-700/30 bg-slate-900/50">
+   979→                            <TableCell colSpan={11} className="p-4">
+   980→                              <div className="space-y-3">
+   981→                                <h4 className="text-sm font-medium text-emerald-400 flex items-center gap-1">
+   982→                                  <Database className="h-3 w-3" /> ประวัติการวัด — {plot.nameTh || plot.name}
+   983→                                </h4>
+   984→                                {plotMeasurements.length === 0 ? (
+   985→                                  <p className="text-xs text-slate-500">ไม่มีข้อมูลการวัด</p>
+   986→                                ) : (
+   987→                                  <div className="max-h-48 overflow-y-auto custom-scrollbar">
+   988→                                    <Table>
+   989→                                      <TableHeader>
+   990→                                        <TableRow className="border-slate-700/30 hover:bg-transparent">
+   991→                                          <TableHead className="text-slate-500 text-[10px]">วันที่</TableHead>
+   992→                                          <TableHead className="text-slate-500 text-[10px]">ประเภท</TableHead>
+   993→                                          <TableHead className="text-slate-500 text-[10px]">ความชื้น (%)</TableHead>
+   994→                                          <TableHead className="text-slate-500 text-[10px]">อุณหภูมิ (°C)</TableHead>
+   995→                                          <TableHead className="text-slate-500 text-[10px]">pH</TableHead>
+   996→                                          <TableHead className="text-slate-500 text-[10px]">BD (g/cm³)</TableHead>
+   997→                                          <TableHead className="text-slate-500 text-[10px]">OC (%)</TableHead>
+   998→                                          <TableHead className="text-slate-500 text-[10px]">SOC Stock (tC/ha)</TableHead>
+   999→                                          <TableHead className="text-slate-500 text-[10px]">คุณภาพ</TableHead>
+  1000→                                        </TableRow>
+  1001→                                      </TableHeader>
+  1002→                                      <TableBody>
+  1003→                                        {plotMeasurements.map(m => (
+  1004→                                          <TableRow key={m.id} className="border-slate-700/20 hover:bg-transparent">
+  1005→                                            <TableCell className="text-[10px] text-slate-300">{fmtDate(m.measurementDate)}</TableCell>
+  1006→                                            <TableCell className="text-[10px] text-slate-300">{m.measurementType}</TableCell>
+  1007→                                            <TableCell className="text-[10px] text-slate-300">{fmt(m.soilMoisture, 1)}</TableCell>
+  1008→                                            <TableCell className="text-[10px] text-slate-300">{fmt(m.soilTemperature, 1)}</TableCell>
+  1009→                                            <TableCell className="text-[10px] text-slate-300">{fmt(m.soilPH, 1)}</TableCell>
+  1010→                                            <TableCell className="text-[10px] text-slate-300">{fmt(m.bulkDensity, 2)}</TableCell>
+  1011→                                            <TableCell className="text-[10px] text-slate-300">{fmt(m.organicCarbonPct, 2)}</TableCell>
+  1012→                                            <TableCell className="text-[10px] text-emerald-400 font-medium">{fmt(m.socStock, 3)}</TableCell>
+  1013→                                            <TableCell>
+  1014→                                              <Badge variant="outline" className={`text-[9px] px-1.5 py-0 ${QUALITY_COLORS[m.qualityFlag] || ''}`}>
+  1015→                                                {QUALITY_LABELS[m.qualityFlag] || m.qualityFlag}
+  1016→                                              </Badge>
+  1017→                                            </TableCell>
+  1018→                                          </TableRow>
+  1019→                                        ))}
+  1020→                                      </TableBody>
+  1021→                                    </Table>
+  1022→                                  </div>
+  1023→                                )}
+  1024→                              </div>
+  1025→                            </TableCell>
+  1026→                          </TableRow>
+  1027→                        )}
+  1028→                      </React.Fragment>
+  1029→                    ))}
+  1030→                  </TableBody>
+  1031→                </Table>
+  1032→              </div>
+  1033→            </CardContent>
+  1034→          </Card>
+  1035→        </TabsContent>
+  1036→
+  1037→        {/* ═══════════════════════════════════════════════════════════
+  1038→            TAB 3: รับข้อมูล (Ingestion)
+  1039→        ═══════════════════════════════════════════════════════════ */}
+  1040→        <TabsContent value="ingestion" className="space-y-4">
+  1041→          {/* Real-time Sensor Cards */}
+  1042→          <Card className="bg-slate-800/50 border-slate-700/50">
+  1043→            <CardHeader className="pb-2">
+  1044→              <div className="flex items-center justify-between">
+  1045→                <CardTitle className="text-sm font-medium text-slate-200 flex items-center gap-2">
+  1046→                  <Cpu className="h-4 w-4 text-emerald-400" /> ข้อมูลเซ็นเซอร์ล่าสุด
+  1047→                </CardTitle>
+  1048→                <div className="flex items-center gap-2">
+  1049→                  <span className="text-[10px] text-slate-500">รีเฟรชอัตโนมัติ</span>
+  1050→                  <Button
+  1051→                    variant={autoRefresh ? 'default' : 'outline'}
+  1052→                    size="sm"
+  1053→                    className={autoRefresh ? 'bg-emerald-600 text-white h-6 text-xs' : 'border-slate-600 text-slate-400 h-6 text-xs'}
+  1054→                    onClick={() => setAutoRefresh(!autoRefresh)}
+  1055→                  >
+  1056→                    {autoRefresh ? 'เปิด' : 'ปิด'}
+  1057→                  </Button>
+  1058→                </div>
+  1059→              </div>
+  1060→            </CardHeader>
+  1061→            <CardContent className="pt-2">
+  1062→              {latestSensorData ? (
+  1063→                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+  1064→                  {Object.entries(latestSensorData).map(([key, sensor]) => {
+  1065→                    const Icon = sensor.icon;
+  1066→                    const inRange = sensor.value >= sensor.min && sensor.value <= sensor.max;
+  1067→                    return (
+  1068→                      <div key={key} className="bg-slate-900/50 rounded-lg p-3 border border-slate-700/50">
+  1069→                        <div className="flex items-center gap-2 mb-1">
+  1070→                          <Icon className={`h-4 w-4 ${inRange ? 'text-emerald-400' : 'text-orange-400'}`} />
+  1071→                          <span className="text-[10px] text-slate-400">{sensor.label}</span>
+  1072→                        </div>
+  1073→                        <div className="flex items-baseline gap-1">
+  1074→                          <span className={`text-lg font-bold ${inRange ? 'text-white' : 'text-orange-400'}`}>
+  1075→                            {fmt(sensor.value, key === 'bulk_density' ? 2 : 1)}
+  1076→                          </span>
+  1077→                          <span className="text-[10px] text-slate-500">{sensor.unit}</span>
+  1078→                        </div>
+  1079→                        <Progress
+  1080→                          value={Math.min(100, Math.max(0, ((sensor.value - sensor.min) / (sensor.max - sensor.min)) * 100))}
+  1081→                          className="h-1 mt-1"
+  1082→                        />
+  1083→                      </div>
+  1084→                    );
+  1085→                  })}
+  1086→                </div>
+  1087→              ) : (
+  1088→                <p className="text-xs text-slate-500 text-center py-4">ยังไม่มีข้อมูลเซ็นเซอร์</p>
+  1089→              )}
+  1090→            </CardContent>
+  1091→          </Card>
+  1092→
+  1093→          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+  1094→            {/* Batch Upload Section */}
+  1095→            <Card className="bg-slate-800/50 border-slate-700/50">
+  1096→              <CardHeader className="pb-2">
+  1097→                <CardTitle className="text-sm font-medium text-slate-200 flex items-center gap-2">
+  1098→                  <Upload className="h-4 w-4 text-blue-400" /> นำเข้าข้อมูลแบบกลุ่ม (Batch Upload)
+  1099→                </CardTitle>
+
+[showing lines 600-1099 of 1748; use offset=1100 with limit to continue reading]

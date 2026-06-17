@@ -1,0 +1,502 @@
+     1→  1100→  1100→                <div className="flex items-center justify-between">
+     2→  1101→  1101→                  <div>
+     3→  1102→  1102→                    <p className="text-xs text-slate-400">แปลงทั้งหมด</p>
+     4→  1103→  1103→                    <p className="text-2xl font-bold text-white">{summary.totalPlots}</p>
+     5→  1104→  1104→                    <p className="text-xs text-slate-500">พื้นที่ {fmt(summary.totalAreaHa, 1)} เฮกตาร์</p>
+     6→  1105→  1105→                  </div>
+     7→  1106→  1106→                  <div className="p-3 rounded-lg bg-blue-500/10">
+     8→  1107→  1107→                    <MapPin className="h-6 w-6 text-blue-400" />
+     9→  1108→  1108→                  </div>
+    10→  1109→  1109→                </div>
+    11→  1110→  1110→              </CardContent>
+    12→  1111→  1111→            </Card>
+    13→  1112→  1112→
+    14→  1113→  1113→            <Card className="bg-slate-800/50 border-slate-700/50">
+    15→  1114→  1114→              <CardContent className="p-4">
+    16→  1115→  1115→                <div className="flex items-center justify-between">
+    17→  1116→  1116→                  <div>
+    18→  1117→  1117→                    <p className="text-xs text-slate-400">ชั้นปลูกรวม</p>
+    19→  1118→  1118→                    <p className="text-2xl font-bold text-emerald-400">{summary.totalTerraceCount}</p>
+    20→  1119→  1119→                    <p className="text-xs text-slate-500">จาก {summary.totalPlots} แปลง</p>
+    21→  1120→  1120→                  </div>
+    22→  1121→  1121→                  <div className="p-3 rounded-lg bg-emerald-500/10">
+    23→  1122→  1122→                    <Layers className="h-6 w-6 text-emerald-400" />
+    24→  1123→  1123→                  </div>
+    25→  1124→  1124→                </div>
+    26→  1125→  1125→              </CardContent>
+    27→  1126→  1126→            </Card>
+    28→  1127→  1127→
+    29→  1128→  1128→            <Card className="bg-slate-800/50 border-slate-700/50">
+    30→  1129→  1129→              <CardContent className="p-4">
+    31→  1130→  1130→                <div className="flex items-center justify-between">
+    32→  1131→  1131→                  <div>
+    33→  1132→  1132→                    <p className="text-xs text-slate-400">ตะกอนดินที่กักได้</p>
+    34→  1133→  1133→                    <p className="text-2xl font-bold text-amber-400">{fmt(summary.totalSedimentTrapped, 1)}</p>
+    35→  1134→  1134→                    <p className="text-xs text-slate-500">ตัน/ปี</p>
+    36→  1135→  1135→                  </div>
+    37→  1136→  1136→                  <div className="p-3 rounded-lg bg-amber-500/10">
+    38→  1137→  1137→                    <Waves className="h-6 w-6 text-amber-400" />
+    39→  1138→  1138→                  </div>
+    40→  1139→  1139→                </div>
+    41→  1140→  1140→              </CardContent>
+    42→  1141→  1141→            </Card>
+    43→  1142→  1142→
+    44→  1143→  1143→            <Card className="bg-slate-800/50 border-slate-700/50">
+    45→  1144→  1144→              <CardContent className="p-4">
+    46→  1145→  1145→                <div className="flex items-center justify-between">
+    47→  1146→  1146→                  <div>
+    48→  1147→  1147→                    <p className="text-xs text-slate-400">เครดิตคาร์บอน</p>
+    49→  1148→  1148→                    <p className="text-2xl font-bold text-emerald-400">{fmt(summary.estimatedCredits, 1)}</p>
+    50→  1149→  1149→                    <p className="text-xs text-slate-500">tCO₂e (สุทธิ)</p>
+    51→  1150→  1150→                  </div>
+    52→  1151→  1151→                  <div className="p-3 rounded-lg bg-emerald-500/10">
+    53→  1152→  1152→                    <Leaf className="h-6 w-6 text-emerald-400" />
+    54→  1153→  1153→                  </div>
+    55→  1154→  1154→                </div>
+    56→  1155→  1155→              </CardContent>
+    57→  1156→  1156→            </Card>
+    58→  1157→  1157→          </div>
+    59→  1158→  1158→
+    60→  1159→  1159→          {/* Charts Row 1 */}
+    61→  1160→  1160→          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+    62→  1161→  1161→            {/* Stacked Bar: Sediment by Terrace Layer */}
+    63→  1162→  1162→            <Card className="bg-slate-800/50 border-slate-700/50">
+    64→  1163→  1163→              <CardHeader className="pb-2">
+    65→  1164→  1164→                <CardTitle className="text-sm font-medium text-slate-200 flex items-center gap-2">
+    66→  1165→  1165→                  <Layers className="h-4 w-4 text-amber-400" /> ปริมาณตะกอนดินตามชั้น
+    67→  1166→  1166→                </CardTitle>
+    68→  1167→  1167→                <CardDescription className="text-xs text-slate-500">
+    69→  1168→  1168→                  ตะกอนดินที่กักได้ในแต่ละชั้นปลูก (กก.) — ชั้นล่างสะสมมากขึ้น
+    70→  1169→  1169→                </CardDescription>
+    71→  1170→  1170→              </CardHeader>
+    72→  1171→  1171→              <CardContent className="pt-0">
+    73→  1172→  1172→                <ResponsiveContainer width="100%" height={260}>
+    74→  1173→  1173→                  <BarChart data={sedimentByLayerData}>
+    75→  1174→  1174→                    <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+    76→  1175→  1175→                    <XAxis dataKey="layer" tick={{ fill: '#94a3b8', fontSize: 11 }} />
+    77→  1176→  1176→                    <YAxis tick={{ fill: '#94a3b8', fontSize: 11 }} />
+    78→  1177→  1177→                    <Tooltip
+    79→  1178→  1178→                      contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #475569', borderRadius: 8 }}
+    80→  1179→  1179→                      labelStyle={{ color: '#e2e8f0' }}
+    81→  1180→  1180→                    />
+    82→  1181→  1181→                    <Legend wrapperStyle={{ fontSize: 11 }} />
+    83→  1182→  1182→                    <Bar dataKey="ตะกอนหลังฝาย" stackId="a" fill="#f59e0b" radius={[0, 0, 0, 0]} />
+    84→  1183→  1183→                    <Bar dataKey="ตะกอนที่เหลือ" stackId="a" fill="#10b981" radius={[4, 4, 0, 0]} />
+    85→  1184→  1184→                  </BarChart>
+    86→  1185→  1185→                </ResponsiveContainer>
+    87→  1186→  1186→              </CardContent>
+    88→  1187→  1187→            </Card>
+    89→  1188→  1188→
+    90→  1189→  1189→            {/* ComposedChart: Water Flow by Layer */}
+    91→  1190→  1190→            <Card className="bg-slate-800/50 border-slate-700/50">
+    92→  1191→  1191→              <CardHeader className="pb-2">
+    93→  1192→  1192→                <CardTitle className="text-sm font-medium text-slate-200 flex items-center gap-2">
+    94→  1193→  1193→                  <Droplets className="h-4 w-4 text-blue-400" /> การไหลของน้ำตามชั้น
+    95→  1194→  1194→                </CardTitle>
+    96→  1195→  1195→                <CardDescription className="text-xs text-slate-500">
+    97→  1196→  1196→                  อัตราการไหลของน้ำลดลงจากชั้นบนสุดไปชั้นล่างสุด
+    98→  1197→  1197→                </CardDescription>
+    99→  1198→  1198→              </CardHeader>
+   100→  1199→  1199→              <CardContent className="pt-0">
+   101→  1200→  1200→                <ResponsiveContainer width="100%" height={260}>
+   102→  1201→  1201→                  <ComposedChart data={waterFlowData}>
+   103→  1202→  1202→                    <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+   104→  1203→  1203→                    <XAxis dataKey="layer" tick={{ fill: '#94a3b8', fontSize: 11 }} />
+   105→  1204→  1204→                    <YAxis yAxisId="left" tick={{ fill: '#94a3b8', fontSize: 11 }} />
+   106→  1205→  1205→                    <YAxis yAxisId="right" orientation="right" tick={{ fill: '#f59e0b', fontSize: 11 }} unit="%" />
+   107→  1206→  1206→                    <Tooltip
+   108→  1207→  1207→                      contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #475569', borderRadius: 8 }}
+   109→  1208→  1208→                      labelStyle={{ color: '#e2e8f0' }}
+   110→  1209→  1209→                    />
+   111→  1210→  1210→                    <Legend wrapperStyle={{ fontSize: 11 }} />
+   112→  1211→  1211→                    <Bar yAxisId="left" dataKey="น้ำเข้า" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+   113→  1212→  1212→                    <Bar yAxisId="left" dataKey="น้ำออก" fill="#60a5fa" radius={[4, 4, 0, 0]} />
+   114→  1213→  1213→                    <Line yAxisId="right" type="monotone" dataKey="ลดลง" stroke="#f59e0b" strokeWidth={2} dot={{ fill: '#f59e0b' }} />
+   115→  1214→  1214→                  </ComposedChart>
+   116→  1215→  1215→                </ResponsiveContainer>
+   117→  1216→  1216→              </CardContent>
+   118→  1217→  1217→            </Card>
+   119→  1218→  1218→          </div>
+   120→  1219→  1219→
+   121→  1220→  1220→          {/* Charts Row 2 */}
+   122→  1221→  1221→          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+   123→  1222→  1222→            {/* Pie: Credit Sources */}
+   124→  1223→  1223→            <Card className="bg-slate-800/50 border-slate-700/50">
+   125→  1224→  1224→              <CardHeader className="pb-2">
+   126→  1225→  1225→                <CardTitle className="text-sm font-medium text-slate-200 flex items-center gap-2">
+   127→  1226→  1226→                  <Leaf className="h-4 w-4 text-emerald-400" /> สัดส่วนแหล่งที่มาเครดิตคาร์บอน
+   128→  1227→  1227→                </CardTitle>
+   129→  1228→  1228→              </CardHeader>
+   130→  1229→  1229→              <CardContent className="pt-0">
+   131→  1230→  1230→                <ResponsiveContainer width="100%" height={260}>
+   132→  1231→  1231→                  <PieChart>
+   133→  1232→  1232→                    <Pie
+   134→  1233→  1233→                      data={creditSourceData}
+   135→  1234→  1234→                      cx="50%"
+   136→  1235→  1235→                      cy="50%"
+   137→  1236→  1236→                      outerRadius={90}
+   138→  1237→  1237→                      innerRadius={50}
+   139→  1238→  1238→                      paddingAngle={3}
+   140→  1239→  1239→                      dataKey="value"
+   141→  1240→  1240→                      label={({ name, value }) => `${name} ${value}%`}
+   142→  1241→  1241→                    >
+   143→  1242→  1242→                      {creditSourceData.map((_, i) => (
+   144→  1243→  1243→                        <Cell key={i} fill={CREDIT_SOURCE_COLORS[i]} />
+   145→  1244→  1244→                      ))}
+   146→  1245→  1245→                    </Pie>
+   147→  1246→  1246→                    <Tooltip
+   148→  1247→  1247→                      contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #475569', borderRadius: 8 }}
+   149→  1248→  1248→                      labelStyle={{ color: '#e2e8f0' }}
+   150→  1249→  1249→                    />
+   151→  1250→  1250→                    <Legend
+   152→  1251→  1251→                      formatter={(value, entry) => <span style={{ color: '#94a3b8', fontSize: 11 }}>{creditSourceData.find(d => d.name === value)?.label || value}</span>}
+   153→  1252→  1252→                    />
+   154→  1253→  1253→                  </PieChart>
+   155→  1254→  1254→                </ResponsiveContainer>
+   156→  1255→  1255→              </CardContent>
+   157→  1256→  1256→            </Card>
+   158→  1257→  1257→
+   159→  1258→  1258→            {/* Latest Plots Table */}
+   160→  1259→  1259→            <Card className="bg-slate-800/50 border-slate-700/50">
+   161→  1260→  1260→              <CardHeader className="pb-2">
+   162→  1261→  1261→                <CardTitle className="text-sm font-medium text-slate-200 flex items-center gap-2">
+   163→  1262→  1262→                  <Clock className="h-4 w-4 text-blue-400" /> แปลงล่าสุด
+   164→  1263→  1263→                </CardTitle>
+   165→  1264→  1264→              </CardHeader>
+   166→  1265→  1265→              <CardContent className="pt-0">
+   167→  1266→  1266→                <div className="max-h-[260px] overflow-y-auto custom-scrollbar">
+   168→  1267→  1267→                  <Table>
+   169→  1268→  1268→                    <TableHeader>
+   170→  1269→  1269→                      <TableRow className="border-slate-700/50 hover:bg-transparent">
+   171→  1270→  1270→                        <TableHead className="text-[10px] text-slate-400 py-1">แปลง</TableHead>
+   172→  1271→  1271→                        <TableHead className="text-[10px] text-slate-400 py-1">จังหวัด</TableHead>
+   173→  1272→  1272→                        <TableHead className="text-[10px] text-slate-400 py-1 text-right">ระดับความสูง</TableHead>
+   174→  1273→  1273→                        <TableHead className="text-[10px] text-slate-400 py-1 text-right">ความลาดชัน</TableHead>
+   175→  1274→  1274→                        <TableHead className="text-[10px] text-slate-400 py-1 text-right">ชั้นปลูก</TableHead>
+   176→  1275→  1275→                        <TableHead className="text-[10px] text-slate-400 py-1 text-right">ฝาย</TableHead>
+   177→  1276→  1276→                      </TableRow>
+   178→  1277→  1277→                    </TableHeader>
+   179→  1278→  1278→                    <TableBody>
+   180→  1279→  1279→                      {latestPlots.map(plot => (
+   181→  1280→  1280→                        <TableRow key={plot.id} className="border-slate-700/30 hover:bg-slate-700/30">
+   182→  1281→  1281→                          <TableCell className="text-xs text-white py-1.5 font-medium">{plot.nameTh || plot.name}</TableCell>
+   183→  1282→  1282→                          <TableCell className="text-xs text-slate-400 py-1.5">{plot.province}</TableCell>
+   184→  1283→  1283→                          <TableCell className="text-xs text-slate-300 py-1.5 text-right">{plot.altitudeMasl ? `${plot.altitudeMasl} ม.` : '—'}</TableCell>
+   185→  1284→  1284→                          <TableCell className="text-xs text-slate-300 py-1.5 text-right">{plot.slopeDegree ? `${plot.slopeDegree}°` : '—'}</TableCell>
+   186→  1285→  1285→                          <TableCell className="text-xs text-emerald-400 py-1.5 text-right">{plot.terraceCount || 5}</TableCell>
+   187→  1286→  1286→                          <TableCell className="text-xs text-amber-400 py-1.5 text-right">{plot.checkDamCount || 5}</TableCell>
+   188→  1287→  1287→                        </TableRow>
+   189→  1288→  1288→                      ))}
+   190→  1289→  1289→                    </TableBody>
+   191→  1290→  1290→                  </Table>
+   192→  1291→  1291→                </div>
+   193→  1292→  1292→              </CardContent>
+   194→  1293→  1293→            </Card>
+   195→  1294→  1294→          </div>
+   196→  1295→  1295→        </TabsContent>
+   197→  1296→  1296→
+   198→  1297→  1297→        {/* ═══════════════════════════════════════════════════════════
+   199→  1298→  1298→            TAB 2: แปลงเกษตร (Plots)
+   200→  1299→  1299→        ═══════════════════════════════════════════════════════════ */}
+   201→  1300→  1300→        <TabsContent value="plots" className="space-y-4">
+   202→  1301→  1301→          {/* Add Plot Button */}
+   203→  1302→  1302→          <div className="flex items-center justify-between">
+   204→  1303→  1303→            <p className="text-sm text-slate-400">รายการแปลงเกษตรขั้นบันได ({plots.length} แปลง)</p>
+   205→  1304→  1304→            <Dialog open={showNewPlotDialog} onOpenChange={setShowNewPlotDialog}>
+   206→  1305→  1305→              <DialogTrigger asChild>
+   207→  1306→  1306→                <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white">
+   208→  1307→  1307→                  <Plus className="h-4 w-4 mr-1" /> เพิ่มแปลง
+   209→  1308→  1308→                </Button>
+   210→  1309→  1309→              </DialogTrigger>
+   211→  1310→  1310→              <DialogContent className="bg-slate-900 border-slate-700 max-h-[85vh] overflow-y-auto custom-scrollbar">
+   212→  1311→  1311→                <DialogHeader>
+   213→  1312→  1312→                  <DialogTitle className="text-white">เพิ่มแปลงเกษตรขั้นบันได</DialogTitle>
+   214→  1313→  1313→                  <DialogDescription className="text-slate-400">กรอกข้อมูลแปลงใหม่ รวมข้อมูลชั้นปลูกและฝายชะลอน้ำ</DialogDescription>
+   215→  1314→  1314→                </DialogHeader>
+   216→  1315→  1315→
+   217→  1316→  1316→                <div className="space-y-4 py-2">
+   218→  1317→  1317→                  {/* Basic Info */}
+   219→  1318→  1318→                  <div className="space-y-2">
+   220→  1319→  1319→                    <p className="text-xs text-slate-300 font-semibold">ข้อมูลพื้นฐาน</p>
+   221→  1320→  1320→                    <div className="grid grid-cols-2 gap-2">
+   222→  1321→  1321→                      <div>
+   223→  1322→  1322→                        <Label className="text-xs text-slate-400">Plot ID *</Label>
+   224→  1323→  1323→                        <Input className="bg-slate-800 border-slate-600 text-white text-sm" value={newPlotForm.plotId} onChange={e => setNewPlotForm(p => ({ ...p, plotId: e.target.value }))} placeholder="SOIL-XXX-001" />
+   225→  1324→  1324→                      </div>
+   226→  1325→  1325→                      <div>
+   227→  1326→  1326→                        <Label className="text-xs text-slate-400">ชื่อแปลง *</Label>
+   228→  1327→  1327→                        <Input className="bg-slate-800 border-slate-600 text-white text-sm" value={newPlotForm.name} onChange={e => setNewPlotForm(p => ({ ...p, name: e.target.value }))} placeholder="ชื่อแปลง" />
+   229→  1328→  1328→                      </div>
+   230→  1329→  1329→                      <div>
+   231→  1330→  1330→                        <Label className="text-xs text-slate-400">ชื่อภาษาไทย</Label>
+   232→  1331→  1331→                        <Input className="bg-slate-800 border-slate-600 text-white text-sm" value={newPlotForm.nameTh} onChange={e => setNewPlotForm(p => ({ ...p, nameTh: e.target.value }))} placeholder="ชื่อแปลงภาษาไทย" />
+   233→  1332→  1332→                      </div>
+   234→  1333→  1333→                      <div>
+   235→  1334→  1334→                        <Label className="text-xs text-slate-400">จังหวัด</Label>
+   236→  1335→  1335→                        <Input className="bg-slate-800 border-slate-600 text-white text-sm" value={newPlotForm.province} onChange={e => setNewPlotForm(p => ({ ...p, province: e.target.value }))} placeholder="จังหวัด" />
+   237→  1336→  1336→                      </div>
+   238→  1337→  1337→                      <div>
+   239→  1338→  1338→                        <Label className="text-xs text-slate-400">พื้นที่ (ไร่)</Label>
+   240→  1339→  1339→                        <Input className="bg-slate-800 border-slate-600 text-white text-sm" type="number" value={newPlotForm.areaRai} onChange={e => setNewPlotForm(p => ({ ...p, areaRai: e.target.value }))} />
+   241→  1340→  1340→                      </div>
+   242→  1341→  1341→                      <div>
+   243→  1342→  1342→                        <Label className="text-xs text-slate-400">ประเภทพืช</Label>
+   244→  1343→  1343→                        <Input className="bg-slate-800 border-slate-600 text-white text-sm" value={newPlotForm.cropType} onChange={e => setNewPlotForm(p => ({ ...p, cropType: e.target.value }))} placeholder="ข้าว, ผัก, ไม้ผล" />
+   245→  1344→  1344→                      </div>
+   246→  1345→  1345→                    </div>
+   247→  1346→  1346→                  </div>
+   248→  1347→  1347→
+   249→  1348→  1348→                  <Separator className="bg-slate-700" />
+   250→  1349→  1349→
+   251→  1350→  1350→                  {/* Terrain Info */}
+   252→  1351→  1351→                  <div className="space-y-2">
+   253→  1352→  1352→                    <p className="text-xs text-slate-300 font-semibold flex items-center gap-1">
+   254→  1353→  1353→                      <Mountain className="h-3.5 w-3.5 text-emerald-400" /> ข้อมูลภูมิประเทศ
+   255→  1354→  1354→                    </p>
+   256→  1355→  1355→                    <div className="grid grid-cols-2 gap-2">
+   257→  1356→  1356→                      <div>
+   258→  1357→  1357→                        <Label className="text-xs text-slate-400">ระดับความสูง (ม.จรดทะเล)</Label>
+   259→  1358→  1358→                        <Input className="bg-slate-800 border-slate-600 text-white text-sm" type="number" value={newPlotForm.altitudeMasl} onChange={e => setNewPlotForm(p => ({ ...p, altitudeMasl: e.target.value }))} placeholder="เช่น 350" />
+   260→  1359→  1359→                      </div>
+   261→  1360→  1360→                      <div>
+   262→  1361→  1361→                        <Label className="text-xs text-slate-400">ความลาดชัน (องศา)</Label>
+   263→  1362→  1362→                        <Input className="bg-slate-800 border-slate-600 text-white text-sm" type="number" value={newPlotForm.slopeDegree} onChange={e => setNewPlotForm(p => ({ ...p, slopeDegree: e.target.value }))} placeholder="เช่น 25" />
+   264→  1363→  1363→                      </div>
+   265→  1364→  1364→                      <div>
+   266→  1365→  1365→                        <Label className="text-xs text-slate-400">ทิศทางความลาด</Label>
+   267→  1366→  1366→                        <Select value={newPlotForm.slopeAspect} onValueChange={v => setNewPlotForm(p => ({ ...p, slopeAspect: v }))}>
+   268→  1367→  1367→                          <SelectTrigger className="bg-slate-800 border-slate-600 text-white text-sm">
+   269→  1368→  1368→                            <SelectValue />
+   270→  1369→  1369→                          </SelectTrigger>
+   271→  1370→  1370→                          <SelectContent className="bg-slate-800 border-slate-600">
+   272→  1371→  1371→                            {SLOPE_ASPECT_OPTIONS.map(opt => (
+   273→  1372→  1372→                              <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+   274→  1373→  1373→                            ))}
+   275→  1374→  1374→                          </SelectContent>
+   276→  1375→  1375→                        </Select>
+   277→  1376→  1376→                      </div>
+   278→  1377→  1377→                      <div>
+   279→  1378→  1378→                        <Label className="text-xs text-slate-400">ประเภทดิน</Label>
+   280→  1379→  1379→                        <Input className="bg-slate-800 border-slate-600 text-white text-sm" value={newPlotForm.soilType} onChange={e => setNewPlotForm(p => ({ ...p, soilType: e.target.value }))} placeholder="Clay Loam" />
+   281→  1380→  1380→                      </div>
+   282→  1381→  1381→                    </div>
+   283→  1382→  1382→                  </div>
+   284→  1383→  1383→
+   285→  1384→  1384→                  <Separator className="bg-slate-700" />
+   286→  1385→  1385→
+   287→  1386→  1386→                  {/* Terrace Info */}
+   288→  1387→  1387→                  <div className="space-y-2">
+   289→  1388→  1388→                    <p className="text-xs text-slate-300 font-semibold flex items-center gap-1">
+   290→  1389→  1389→                      <Layers className="h-3.5 w-3.5 text-emerald-400" /> ข้อมูลชั้นปลูก
+   291→  1390→  1390→                    </p>
+   292→  1391→  1391→                    <div className="grid grid-cols-3 gap-2">
+   293→  1392→  1392→                      <div>
+   294→  1393→  1393→                        <Label className="text-xs text-slate-400">จำนวนชั้นปลูก</Label>
+   295→  1394→  1394→                        <Input className="bg-slate-800 border-slate-600 text-white text-sm" type="number" value={newPlotForm.terraceCount} onChange={e => setNewPlotForm(p => ({ ...p, terraceCount: e.target.value }))} />
+   296→  1395→  1395→                      </div>
+   297→  1396→  1396→                      <div>
+   298→  1397→  1397→                        <Label className="text-xs text-slate-400">ความกว้างชั้น (ม.)</Label>
+   299→  1398→  1398→                        <Input className="bg-slate-800 border-slate-600 text-white text-sm" type="number" value={newPlotForm.terraceWidthM} onChange={e => setNewPlotForm(p => ({ ...p, terraceWidthM: e.target.value }))} placeholder="4" />
+   300→  1399→  1399→                      </div>
+   301→  1400→  1400→                      <div>
+   302→  1401→  1401→                        <Label className="text-xs text-slate-400">ความสูงชั้น (ม.)</Label>
+   303→  1402→  1402→                        <Input className="bg-slate-800 border-slate-600 text-white text-sm" type="number" value={newPlotForm.terraceHeightM} onChange={e => setNewPlotForm(p => ({ ...p, terraceHeightM: e.target.value }))} placeholder="1.5" />
+   304→  1403→  1403→                      </div>
+   305→  1404→  1404→                    </div>
+   306→  1405→  1405→                  </div>
+   307→  1406→  1406→
+   308→  1407→  1407→                  <Separator className="bg-slate-700" />
+   309→  1408→  1408→
+   310→  1409→  1409→                  {/* Check Dam Info */}
+   311→  1410→  1410→                  <div className="space-y-2">
+   312→  1411→  1411→                    <p className="text-xs text-slate-300 font-semibold flex items-center gap-1">
+   313→  1412→  1412→                      <Dam className="h-3.5 w-3.5 text-amber-400" /> ข้อมูลฝายชะลอน้ำ
+   314→  1413→  1413→                    </p>
+   315→  1414→  1414→                    <div className="grid grid-cols-2 gap-2">
+   316→  1415→  1415→                      <div>
+   317→  1416→  1416→                        <Label className="text-xs text-slate-400">จำนวนฝาย</Label>
+   318→  1417→  1417→                        <Input className="bg-slate-800 border-slate-600 text-white text-sm" type="number" value={newPlotForm.checkDamCount} onChange={e => setNewPlotForm(p => ({ ...p, checkDamCount: e.target.value }))} />
+   319→  1418→  1418→                      </div>
+   320→  1419→  1419→                      <div>
+   321→  1420→  1420→                        <Label className="text-xs text-slate-400">ประเภทฝาย</Label>
+   322→  1421→  1421→                        <Select value={newPlotForm.checkDamType} onValueChange={v => setNewPlotForm(p => ({ ...p, checkDamType: v }))}>
+   323→  1422→  1422→                          <SelectTrigger className="bg-slate-800 border-slate-600 text-white text-sm">
+   324→  1423→  1423→                            <SelectValue />
+   325→  1424→  1424→                          </SelectTrigger>
+   326→  1425→  1425→                          <SelectContent className="bg-slate-800 border-slate-600">
+   327→  1426→  1426→                            {CHECK_DAM_TYPE_OPTIONS.map(opt => (
+   328→  1427→  1427→                              <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+   329→  1428→  1428→                            ))}
+   330→  1429→  1429→                          </SelectContent>
+   331→  1430→  1430→                        </Select>
+   332→  1431→  1431→                      </div>
+   333→  1432→  1432→                    </div>
+   334→  1433→  1433→                  </div>
+   335→  1434→  1434→
+   336→  1435→  1435→                  <Separator className="bg-slate-700" />
+   337→  1436→  1436→
+   338→  1437→  1437→                  {/* Sediment Baseline */}
+   339→  1438→  1438→                  <div className="space-y-2">
+   340→  1439→  1439→                    <p className="text-xs text-slate-300 font-semibold flex items-center gap-1">
+   341→  1440→  1440→                      <Waves className="h-3.5 w-3.5 text-blue-400" /> ข้อมูลตะกอนพื้นฐาน
+   342→  1441→  1441→                    </p>
+   343→  1442→  1442→                    <div className="grid grid-cols-2 gap-2">
+   344→  1443→  1443→                      <div>
+   345→  1444→  1444→                        <Label className="text-xs text-slate-400">ตะกอน Baseline (t/ha/yr)</Label>
+   346→  1445→  1445→                        <Input className="bg-slate-800 border-slate-600 text-white text-sm" type="number" value={newPlotForm.baselineSediment} onChange={e => setNewPlotForm(p => ({ ...p, baselineSediment: e.target.value }))} placeholder="8" />
+   347→  1446→  1446→                      </div>
+   348→  1447→  1447→                      <div>
+   349→  1448→  1448→                        <Label className="text-xs text-slate-400">ตะกอนโครงการ (t/ha/yr)</Label>
+   350→  1449→  1449→                        <Input className="bg-slate-800 border-slate-600 text-white text-sm" type="number" value={newPlotForm.projectSediment} onChange={e => setNewPlotForm(p => ({ ...p, projectSediment: e.target.value }))} placeholder="3" />
+   351→  1450→  1450→                      </div>
+   352→  1451→  1451→                    </div>
+   353→  1452→  1452→                  </div>
+   354→  1453→  1453→                </div>
+   355→  1454→  1454→
+   356→  1455→  1455→                <DialogFooter>
+   357→  1456→  1456→                  <Button variant="outline" className="border-slate-600 text-slate-400" onClick={() => setShowNewPlotDialog(false)}>ยกเลิก</Button>
+   358→  1457→  1457→                  <Button className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={handleCreatePlot} disabled={creatingPlot || !newPlotForm.plotId || !newPlotForm.name}>
+   359→  1458→  1458→                    {creatingPlot ? <RefreshCw className="h-4 w-4 mr-1 animate-spin" /> : <Plus className="h-4 w-4 mr-1" />}
+   360→  1459→  1459→                    สร้างแปลง
+   361→  1460→  1460→                  </Button>
+   362→  1461→  1461→                </DialogFooter>
+   363→  1462→  1462→              </DialogContent>
+   364→  1463→  1463→            </Dialog>
+   365→  1464→  1464→          </div>
+   366→  1465→  1465→
+   367→  1466→  1466→          {/* Plots Table */}
+   368→  1467→  1467→          <Card className="bg-slate-800/50 border-slate-700/50">
+   369→  1468→  1468→            <CardContent className="p-0">
+   370→  1469→  1469→              <div className="max-h-[600px] overflow-y-auto custom-scrollbar">
+   371→  1470→  1470→                <Table>
+   372→  1471→  1471→                  <TableHeader>
+   373→  1472→  1472→                    <TableRow className="border-slate-700/50 hover:bg-transparent">
+   374→  1473→  1473→                      <TableHead className="text-[10px] text-slate-400 py-2 w-8"></TableHead>
+   375→  1474→  1474→                      <TableHead className="text-[10px] text-slate-400 py-2">Plot ID</TableHead>
+   376→  1475→  1475→                      <TableHead className="text-[10px] text-slate-400 py-2">ชื่อ</TableHead>
+   377→  1476→  1476→                      <TableHead className="text-[10px] text-slate-400 py-2">จังหวัด</TableHead>
+   378→  1477→  1477→                      <TableHead className="text-[10px] text-slate-400 py-2 text-right">ระดับความสูง</TableHead>
+   379→  1478→  1478→                      <TableHead className="text-[10px] text-slate-400 py-2 text-right">ความลาดชัน</TableHead>
+   380→  1479→  1479→                      <TableHead className="text-[10px] text-slate-400 py-2 text-right">ชั้นปลูก</TableHead>
+   381→  1480→  1480→                      <TableHead className="text-[10px] text-slate-400 py-2 text-right">ฝาย</TableHead>
+   382→  1481→  1481→                      <TableHead className="text-[10px] text-slate-400 py-2 text-right">ตะกอนที่กัก</TableHead>
+   383→  1482→  1482→                      <TableHead className="text-[10px] text-slate-400 py-2 text-right">การลดการปล่อย</TableHead>
+   384→  1483→  1483→                      <TableHead className="text-[10px] text-slate-400 py-2">สถานะ</TableHead>
+   385→  1484→  1484→                    </TableRow>
+   386→  1485→  1485→                  </TableHeader>
+   387→  1486→  1486→                  <TableBody>
+   388→  1487→  1487→                    {plots.map(plot => (
+   389→  1488→  1488→                      <React.Fragment key={plot.id}>
+   390→  1489→  1489→                        <TableRow
+   391→  1490→  1490→                          className="border-slate-700/30 hover:bg-slate-700/30 cursor-pointer"
+   392→  1491→  1491→                          onClick={() => handleToggleExpand(plot.plotId)}
+   393→  1492→  1492→                        >
+   394→  1493→  1493→                          <TableCell className="py-2">
+   395→  1494→  1494→                            {expandedPlot === plot.plotId
+   396→  1495→  1495→                              ? <ChevronUp className="h-3 w-3 text-slate-400" />
+   397→  1496→  1496→                              : <ChevronDown className="h-3 w-3 text-slate-400" />}
+   398→  1497→  1497→                          </TableCell>
+   399→  1498→  1498→                          <TableCell className="text-[11px] text-slate-300 font-mono py-2">{plot.plotId}</TableCell>
+   400→  1499→  1499→                          <TableCell className="text-xs text-white py-2 font-medium">{plot.nameTh || plot.name}</TableCell>
+   401→  1500→  1500→                          <TableCell className="text-xs text-slate-400 py-2">{plot.province}</TableCell>
+   402→  1501→  1501→                          <TableCell className="text-xs text-slate-300 py-2 text-right">{plot.altitudeMasl ? `${plot.altitudeMasl} ม.` : '—'}</TableCell>
+   403→  1502→  1502→                          <TableCell className="text-xs text-slate-300 py-2 text-right">{plot.slopeDegree ? `${plot.slopeDegree}°` : '—'}</TableCell>
+   404→  1503→  1503→                          <TableCell className="text-xs text-emerald-400 py-2 text-right font-medium">{plot.terraceCount || 5}</TableCell>
+   405→  1504→  1504→                          <TableCell className="text-xs text-amber-400 py-2 text-right font-medium">{plot.checkDamCount || 5}</TableCell>
+   406→  1505→  1505→                          <TableCell className="text-xs text-slate-300 py-2 text-right">{plot.baselineSediment && plot.projectSediment ? fmt(plot.baselineSediment - plot.projectSediment, 1) : '—'} t/ha</TableCell>
+   407→  1506→  1506→                          <TableCell className="text-xs text-slate-300 py-2 text-right">{fmt(plot.emissionReduction, 2)}</TableCell>
+   408→  1507→  1507→                          <TableCell className="py-2">
+   409→  1508→  1508→                            <Badge variant="outline" className={`text-[10px] px-2 py-0 ${STATUS_COLORS[plot.status] || ''}`}>
+   410→  1509→  1509→                              {STATUS_LABELS[plot.status] || plot.status}
+   411→  1510→  1510→                            </Badge>
+   412→  1511→  1511→                          </TableCell>
+   413→  1512→  1512→                        </TableRow>
+   414→  1513→  1513→
+   415→  1514→  1514→                        {/* Expanded Row: Terrace Cross-Section */}
+   416→  1515→  1515→                        {expandedPlot === plot.plotId && (
+   417→  1516→  1516→                          <TableRow className="border-slate-700/30 bg-slate-900/30">
+   418→  1517→  1517→                            <TableCell colSpan={11} className="p-4">
+   419→  1518→  1518→                              <div className="space-y-4">
+   420→  1519→  1519→                                <div className="flex items-center gap-2 mb-2">
+   421→  1520→  1520→                                  <Layers className="h-4 w-4 text-emerald-400" />
+   422→  1521→  1521→                                  <p className="text-sm font-medium text-white">ภาพตัดขวางชั้นปลูก</p>
+   423→  1522→  1522→                                </div>
+   424→  1523→  1523→
+   425→  1524→  1524→                                {/* Terrace Cross-Section SVG */}
+   426→  1525→  1525→                                <div className="bg-slate-900/50 rounded-lg border border-slate-700/50 p-3">
+   427→  1526→  1526→                                  <TerraceCrossSection
+   428→  1527→  1527→                                    layers={plotTerraces.length > 0 ? plotTerraces : generateMockTerraces(plot.plotId)}
+   429→  1528→  1528→                                    checkDams={plotCheckDams.length > 0 ? plotCheckDams : generateMockCheckDams(plot.plotId)}
+   430→  1529→  1529→                                  />
+   431→  1530→  1530→                                </div>
+   432→  1531→  1531→
+   433→  1532→  1532→                                {/* Layer Details */}
+   434→  1533→  1533→                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2">
+   435→  1534→  1534→                                  {(plotTerraces.length > 0 ? plotTerraces : generateMockTerraces(plot.plotId)).map((layer, i) => (
+   436→  1535→  1535→                                    <div key={layer.id || i} className="bg-slate-800/50 rounded-lg border border-slate-700/30 p-3">
+   437→  1536→  1536→                                      <div className="flex items-center gap-2 mb-2">
+   438→  1537→  1537→                                        <div className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white" style={{ backgroundColor: TERRACE_COLORS[i % TERRACE_COLORS.length] }}>
+   439→  1538→  1538→                                          {layer.layerNumber || i + 1}
+   440→  1539→  1539→                                        </div>
+   441→  1540→  1540→                                        <span className="text-xs text-white font-medium">ชั้น {layer.layerNumber || i + 1}</span>
+   442→  1541→  1541→                                      </div>
+   443→  1542→  1542→                                      <div className="space-y-1 text-[10px]">
+   444→  1543→  1543→                                        <div className="flex justify-between">
+   445→  1544→  1544→                                          <span className="text-slate-400">พืช:</span>
+   446→  1545→  1545→                                          <span className="text-slate-200">{layer.cropType || '—'}</span>
+   447→  1546→  1546→                                        </div>
+   448→  1547→  1547→                                        <div className="flex justify-between">
+   449→  1548→  1548→                                          <span className="text-slate-400">ความลึกตะกอน:</span>
+   450→  1549→  1549→                                          <span className="text-amber-400">{layer.sedimentDepthCm || 0} cm</span>
+   451→  1550→  1550→                                        </div>
+   452→  1551→  1551→                                        <div className="flex justify-between">
+   453→  1552→  1552→                                          <span className="text-slate-400">น้ำเข้า:</span>
+   454→  1553→  1553→                                          <span className="text-blue-400">{layer.waterFlowInLpm || 0} L/min</span>
+   455→  1554→  1554→                                        </div>
+   456→  1555→  1555→                                        <div className="flex justify-between">
+   457→  1556→  1556→                                          <span className="text-slate-400">น้ำออก:</span>
+   458→  1557→  1557→                                          <span className="text-blue-300">{layer.waterFlowOutLpm || 0} L/min</span>
+   459→  1558→  1558→                                        </div>
+   460→  1559→  1559→                                      </div>
+   461→  1560→  1560→                                    </div>
+   462→  1561→  1561→                                  ))}
+   463→  1562→  1562→                                </div>
+   464→  1563→  1563→
+   465→  1564→  1564→                                {/* Check Dam Details */}
+   466→  1565→  1565→                                <div className="space-y-2">
+   467→  1566→  1566→                                  <p className="text-xs font-medium text-slate-300 flex items-center gap-1">
+   468→  1567→  1567→                                    <Dam className="h-3.5 w-3.5 text-amber-400" /> ฝายชะลอน้ำ
+   469→  1568→  1568→                                  </p>
+   470→  1569→  1569→                                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2">
+   471→  1570→  1570→                                    {(plotCheckDams.length > 0 ? plotCheckDams : generateMockCheckDams(plot.plotId)).map((dam, i) => (
+   472→  1571→  1571→                                      <div key={dam.id || i} className="bg-amber-500/5 rounded-lg border border-amber-500/20 p-3">
+   473→  1572→  1572→                                        <div className="flex items-center gap-2 mb-1">
+   474→  1573→  1573→                                          <div className="w-2 h-4 rounded-sm bg-amber-500" />
+   475→  1574→  1574→                                          <span className="text-[10px] text-amber-400 font-medium">ฝาย ชั้น {i + 1}</span>
+   476→  1575→  1575→                                        </div>
+   477→  1576→  1576→                                        <div className="space-y-0.5 text-[10px]">
+   478→  1577→  1577→                                          <div className="flex justify-between">
+   479→  1578→  1578→                                            <span className="text-slate-400">ประเภท:</span>
+   480→  1579→  1579→                                            <span className="text-slate-200">{CHECK_DAM_TYPE_OPTIONS.find(o => o.value === dam.damType)?.label || dam.damType}</span>
+   481→  1580→  1580→                                          </div>
+   482→  1581→  1581→                                          <div className="flex justify-between">
+   483→  1582→  1582→                                            <span className="text-slate-400">ตะกอนที่กัก:</span>
+   484→  1583→  1583→                                            <span className="text-amber-300">{dam.sedimentTrappedKg || 0} กก.</span>
+   485→  1584→  1584→                                          </div>
+   486→  1585→  1585→                                          <div className="flex justify-between">
+   487→  1586→  1586→                                            <span className="text-slate-400">ประสิทธิภาพ:</span>
+   488→  1587→  1587→                                            <span className="text-emerald-400">{((dam.efficiency || 0) * 100).toFixed(0)}%</span>
+   489→  1588→  1588→                                          </div>
+   490→  1589→  1589→                                        </div>
+   491→  1590→  1590→                                      </div>
+   492→  1591→  1591→                                    ))}
+   493→  1592→  1592→                                  </div>
+   494→  1593→  1593→                                </div>
+   495→  1594→  1594→                              </div>
+   496→  1595→  1595→                            </TableCell>
+   497→  1596→  1596→                          </TableRow>
+   498→  1597→  1597→                        )}
+   499→  1598→  1598→                      </React.Fragment>
+   500→  1599→  1599→                    ))}
+
+[showing lines 1-500 of 502; use offset=501 with limit to continue reading]

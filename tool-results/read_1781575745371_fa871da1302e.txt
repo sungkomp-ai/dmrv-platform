@@ -1,0 +1,1172 @@
+     1→'use client';
+     2→
+     3→import React, { useState, useEffect, useCallback, useMemo, useSyncExternalStore } from 'react';
+     4→import { io, Socket } from 'socket.io-client';
+     5→import {
+     6→  Play, Square, RotateCcw, Send, Activity, BarChart3,
+     7→  TrendingUp, MapPin, Zap, Clock, RefreshCw,
+     8→  CheckCircle2, Shield, FileCheck, Eye, Radio,
+     9→  Database, Server, Upload, Download, AlertTriangle,
+    10→  Wifi, WifiOff, Cpu, HardDrive, Thermometer,
+    11→  Beaker, Copy, ChevronDown, ChevronRight, Info,
+    12→  FileText, Hash, Lock, Unlock,
+    13→} from 'lucide-react';
+    14→import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+    15→import { Button } from '@/components/ui/button';
+    16→import { Badge } from '@/components/ui/badge';
+    17→import { Progress } from '@/components/ui/progress';
+    18→import { Separator } from '@/components/ui/separator';
+    19→import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+    20→import {
+    21→  LineChart, Line, AreaChart, Area, BarChart, Bar,
+    22→  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+    23→  ComposedChart, ReferenceLine,
+    24→} from 'recharts';
+    25→
+    26→// ─── Types ──────────────────────────────────────────────────────────
+    27→interface SensorReading {
+    28→  id: string;
+    29→  edgeNodeId: string;
+    30→  sensorId: string;
+    31→  sensorType: string;
+    32→  value: number;
+    33→  unit: string;
+    34→  timestamp: string;
+    35→  receivedAt: string;
+    36→  ingestionMode: 'realtime' | 'batch';
+    37→  qualityFlag: 'RAW' | 'VALIDATED' | 'CERTIFIED' | 'REJECTED' | 'ANOMALY';
+    38→  integrityHash: string;
+    39→  signature: string;
+    40→}
+    41→
+    42→interface EdgeNodeState {
+    43→  nodeId: string;
+    44→  name: string;
+    45→  nameTh: string;
+    46→  province: string;
+    47→  lat: number;
+    48→  lng: number;
+    49→  status: 'online' | 'offline' | 'maintenance';
+    50→  protocol: string;
+    51→  batteryLevel: number;
+    52→  signalStrength: number;
+    53→  sensors: SensorConfig[];
+    54→  totalReadings: number;
+    55→  lastHeartbeat: string;
+    56→}
+    57→
+    58→interface SensorConfig {
+    59→  sensorId: string;
+    60→  sensorType: string;
+    61→  unit: string;
+    62→  minRange: number;
+    63→  maxRange: number;
+    64→  samplingRate: number;
+    65→  status: 'active' | 'inactive';
+    66→}
+    67→
+    68→interface BatchJobState {
+    69→  id: string;
+    70→  edgeNodeId: string;
+    71→  fileName: string;
+    72→  fileType: string;
+    73→  totalRecords: number;
+    74→  processedRecords: number;
+    75→  validRecords: number;
+    76→  rejectedRecords: number;
+    77→  anomalyRecords: number;
+    78→  status: string;
+    79→  certificationStatus: string;
+    80→  merkleRoot: string;
+    81→  createdAt: string;
+    82→  completedAt?: string;
+    83→}
+    84→
+    85→interface IoTSimStatus {
+    86→  running: boolean;
+    87→  tick: number;
+    88→  edgeNodes: EdgeNodeState[];
+    89→  totalReadings: number;
+    90→  batchJobs: number;
+    91→  connectedClients: number;
+    92→}
+    93→
+    94→// ─── Config ─────────────────────────────────────────────────────────
+    95→const IOT_PORT = 3035;
+    96→
+    97→const SENSOR_COLORS: Record<string, string> = {
+    98→  ch4: '#f97316',
+    99→  co2: '#ef4444',
+   100→  temperature: '#3b82f6',
+   101→  humidity: '#06b6d4',
+   102→  soil_moisture: '#22c55e',
+   103→  water_level: '#6366f1',
+   104→  ph: '#8b5cf6',
+   105→  dissolved_oxygen: '#14b8a6',
+   106→  cod: '#eab308',
+   107→  bod: '#a855f7',
+   108→  nitrogen: '#0ea5e9',
+   109→  phosphorus: '#ec4899',
+   110→  wind_speed: '#64748b',
+   111→  solar_irradiance: '#f59e0b',
+   112→};
+   113→
+   114→const SENSOR_LABELS: Record<string, { en: string; th: string }> = {
+   115→  ch4: { en: 'CH₄ (Methane)', th: 'มีเทน' },
+   116→  co2: { en: 'CO₂', th: 'คาร์บอนไดออกไซด์' },
+   117→  temperature: { en: 'Temperature', th: 'อุณหภูมิ' },
+   118→  humidity: { en: 'Humidity', th: 'ความชื้น' },
+   119→  soil_moisture: { en: 'Soil Moisture', th: 'ความชื้นดิน' },
+   120→  water_level: { en: 'Water Level', th: 'ระดับน้ำ' },
+   121→  ph: { en: 'pH', th: 'ค่า pH' },
+   122→  dissolved_oxygen: { en: 'Dissolved O₂', th: 'ออกซิเจนละลาย' },
+   123→  cod: { en: 'COD', th: 'COD' },
+   124→  bod: { en: 'BOD', th: 'BOD' },
+   125→  nitrogen: { en: 'Nitrogen', th: 'ไนโตรเจน' },
+   126→  phosphorus: { en: 'Phosphorus', th: 'ฟอสฟอรัส' },
+   127→  wind_speed: { en: 'Wind Speed', th: 'ความเร็วลม' },
+   128→  solar_irradiance: { en: 'Solar Irradiance', th: 'รังสีดวงอาทิตย์' },
+   129→};
+   130→
+   131→const PROTOCOL_ICONS: Record<string, string> = {
+   132→  MQTT: '📡',
+   133→  HTTP: '🌐',
+   134→  WebSocket: '🔌',
+   135→  LoRaWAN: '📻',
+   136→};
+   137→
+   138→const mountedEmptySub = () => () => {};
+   139→function useMounted() {
+   140→  return useSyncExternalStore(mountedEmptySub, () => true, () => false);
+   141→}
+   142→
+   143→// ─── Component ──────────────────────────────────────────────────────
+   144→export default function IoTIngestionView() {
+   145→  const mounted = useMounted();
+   146→  const [socket, setSocket] = useState<Socket | null>(null);
+   147→  const [connected, setConnected] = useState(false);
+   148→  const [status, setStatus] = useState<IoTSimStatus | null>(null);
+   149→  const [readings, setReadings] = useState<SensorReading[]>([]);
+   150→  const [batchJobs, setBatchJobs] = useState<BatchJobState[]>([]);
+   151→  const [selectedEdgeNode, setSelectedEdgeNode] = useState<string | null>(null);
+   152→  const [selectedSensorType, setSelectedSensorType] = useState<string | null>(null);
+   153→  const [certificationResult, setCertificationResult] = useState<any>(null);
+   154→  const [sampleData, setSampleData] = useState<any>(null);
+   155→  const [sendingBatch, setSendingBatch] = useState(false);
+   156→  const [sendingRealtime, setSendingRealtime] = useState(false);
+   157→  const [certifying, setCertifying] = useState(false);
+   158→  const [expandedSample, setExpandedSample] = useState<string | null>(null);
+   159→  const [copiedId, setCopiedId] = useState<string | null>(null);
+   160→
+   161→  // Connect to IoT Gateway
+   162→  useEffect(() => {
+   163→    if (!mounted) return;
+   164→    let s: Socket | null = null;
+   165→    try {
+   166→      s = io(`/?XTransformPort=${IOT_PORT}`, {
+   167→        transports: ['polling', 'websocket'],
+   168→        reconnectionAttempts: 5,
+   169→        reconnectionDelay: 3000,
+   170→        timeout: 8000,
+   171→      });
+   172→      s.on('connect', () => setConnected(true));
+   173→      s.on('disconnect', () => setConnected(false));
+   174→      s.on('iot:status', (data: IoTSimStatus) => setStatus(data));
+   175→      s.on('iot:reading', (data: SensorReading) => {
+   176→        setReadings(prev => [...prev, data].slice(-500));
+   177→      });
+   178→      s.on('iot:readings', (data: SensorReading[]) => {
+   179→        setReadings(prev => [...prev, ...data].slice(-500));
+   180→      });
+   181→      s.on('iot:batch:started', (data: BatchJobState) => {
+   182→        setBatchJobs(prev => [data, ...prev]);
+   183→      });
+   184→      s.on('iot:batch:completed', (data: BatchJobState) => {
+   185→        setBatchJobs(prev => prev.map(j => j.id === data.id ? data : j));
+   186→      });
+   187→      s.on('iot:sim:started', () => {});
+   188→      s.on('iot:sim:stopped', () => {});
+   189→      s.on('iot:sim:reset', () => { setReadings([]); setBatchJobs([]); });
+   190→      setSocket(s);
+   191→    } catch { /* fallback */ }
+   192→
+   193→    // HTTP polling via Next.js API routes (proxies to IoT Gateway)
+   194→    const pollInterval = setInterval(async () => {
+   195→      try {
+   196→        const res = await fetch('/api/iot/edge-nodes');
+   197→        if (res.ok) {
+   198→          const data = await res.json();
+   199→          const edgeNodes = data.edgeNodes || [];
+   200→          setStatus(prev => ({
+   201→            running: prev?.running || false,
+   202→            tick: prev?.tick || 0,
+   203→            edgeNodes,
+   204→            totalReadings: edgeNodes.reduce((s: number, n: EdgeNodeState) => s + n.totalReadings, 0),
+   205→            batchJobs: prev?.batchJobs || 0,
+   206→            connectedClients: prev?.connectedClients || 0,
+   207→          }));
+   208→          setConnected(true);
+   209→        }
+   210→      } catch { /* ignore */ }
+   211→    }, 5000);
+   212→
+   213→    // Initial fetch — with fallback to hardcoded data
+   214→    (async () => {
+   215→      let edgeNodes: EdgeNodeState[] = [];
+   216→      try {
+   217→        const res = await fetch('/api/iot/edge-nodes');
+   218→        if (res.ok) {
+   219→          const data = await res.json();
+   220→          edgeNodes = data.edgeNodes || [];
+   221→          setConnected(true);
+   222→        }
+   223→      } catch { /* gateway not available */ }
+   224→
+   225→      // Fallback: use embedded edge node config when gateway is unavailable
+   226→      if (edgeNodes.length === 0) {
+   227→        edgeNodes = [
+   228→          { nodeId: 'EDGE-BKK-001', name: 'Bangkok Landfill Monitor', nameTh: 'สถานีติดตามขยะกรุงเทพ', province: 'กรุงเทพมหานคร', lat: 13.7563, lng: 100.5018, status: 'online', protocol: 'MQTT', batteryLevel: 92, signalStrength: -45, totalReadings: 0, lastHeartbeat: new Date().toISOString(), sensors: [
+   229→            { sensorId: 'CH4-BKK-001', sensorType: 'ch4', unit: 'ppm', minRange: 0, maxRange: 5000, samplingRate: 60, status: 'active' },
+   230→            { sensorId: 'CO2-BKK-001', sensorType: 'co2', unit: 'ppm', minRange: 0, maxRange: 5000, samplingRate: 60, status: 'active' },
+   231→            { sensorId: 'TEMP-BKK-001', sensorType: 'temperature', unit: '°C', minRange: -10, maxRange: 60, samplingRate: 300, status: 'active' },
+   232→            { sensorId: 'HUM-BKK-001', sensorType: 'humidity', unit: '%', minRange: 0, maxRange: 100, samplingRate: 300, status: 'active' },
+   233→            { sensorId: 'DO-BKK-001', sensorType: 'dissolved_oxygen', unit: 'mg/L', minRange: 0, maxRange: 20, samplingRate: 600, status: 'active' },
+   234→          ]},
+   235→          { nodeId: 'EDGE-CNX-001', name: 'Chiang Mai Rice Paddy', nameTh: 'สถานีนาข้าวเชียงใหม่', province: 'เชียงใหม่', lat: 18.7883, lng: 98.9853, status: 'online', protocol: 'LoRaWAN', batteryLevel: 78, signalStrength: -62, totalReadings: 0, lastHeartbeat: new Date().toISOString(), sensors: [
+   236→            { sensorId: 'CH4-CNX-001', sensorType: 'ch4', unit: 'ppm', minRange: 0, maxRange: 2000, samplingRate: 30, status: 'active' },
+   237→            { sensorId: 'TEMP-CNX-001', sensorType: 'temperature', unit: '°C', minRange: -10, maxRange: 50, samplingRate: 300, status: 'active' },
+   238→            { sensorId: 'SM-CNX-001', sensorType: 'soil_moisture', unit: '%', minRange: 0, maxRange: 100, samplingRate: 600, status: 'active' },
+   239→            { sensorId: 'WL-CNX-001', sensorType: 'water_level', unit: 'cm', minRange: 0, maxRange: 50, samplingRate: 300, status: 'active' },
+   240→            { sensorId: 'PH-CNX-001', sensorType: 'ph', unit: 'pH', minRange: 0, maxRange: 14, samplingRate: 900, status: 'active' },
+   241→          ]},
+   242→          { nodeId: 'EDGE-KKN-001', name: 'Khon Kaen Biogas Plant', nameTh: 'สถานีติดตามโรงไบโอก๊าซขอนแก่น', province: 'ขอนแก่น', lat: 16.4322, lng: 102.8236, status: 'online', protocol: 'MQTT', batteryLevel: 85, signalStrength: -55, totalReadings: 0, lastHeartbeat: new Date().toISOString(), sensors: [
+   243→            { sensorId: 'CH4-KKN-001', sensorType: 'ch4', unit: 'ppm', minRange: 0, maxRange: 10000, samplingRate: 30, status: 'active' },
+   244→            { sensorId: 'CO2-KKN-001', sensorType: 'co2', unit: 'ppm', minRange: 0, maxRange: 5000, samplingRate: 30, status: 'active' },
+   245→            { sensorId: 'TEMP-KKN-001', sensorType: 'temperature', unit: '°C', minRange: 0, maxRange: 80, samplingRate: 300, status: 'active' },
+   246→            { sensorId: 'PH-KKN-001', sensorType: 'ph', unit: 'pH', minRange: 0, maxRange: 14, samplingRate: 600, status: 'active' },
+   247→            { sensorId: 'COD-KKN-001', sensorType: 'cod', unit: 'mg/L', minRange: 0, maxRange: 1000, samplingRate: 1800, status: 'active' },
+   248→            { sensorId: 'BOD-KKN-001', sensorType: 'bod', unit: 'mg/L', minRange: 0, maxRange: 500, samplingRate: 1800, status: 'active' },
+   249→          ]},
+   250→          { nodeId: 'EDGE-PKT-001', name: 'Phuket Solar & Coastal', nameTh: 'สถานีติดตามโซลาร์และชายฝั่งภูเก็ต', province: 'ภูเก็ต', lat: 7.8804, lng: 98.3923, status: 'offline', protocol: 'HTTP', batteryLevel: 45, signalStrength: -78, totalReadings: 0, lastHeartbeat: new Date(Date.now() - 3600000).toISOString(), sensors: [
+   251→            { sensorId: 'SOLAR-PKT-001', sensorType: 'solar_irradiance', unit: 'W/m²', minRange: 0, maxRange: 1200, samplingRate: 300, status: 'active' },
+   252→            { sensorId: 'WS-PKT-001', sensorType: 'wind_speed', unit: 'm/s', minRange: 0, maxRange: 50, samplingRate: 300, status: 'active' },
+   253→            { sensorId: 'TEMP-PKT-001', sensorType: 'temperature', unit: '°C', minRange: 10, maxRange: 50, samplingRate: 600, status: 'active' },
+   254→            { sensorId: 'HUM-PKT-001', sensorType: 'humidity', unit: '%', minRange: 0, maxRange: 100, samplingRate: 600, status: 'inactive' },
+   255→          ]},
+   256→          { nodeId: 'EDGE-SKT-001', name: 'Surat Thani Mangrove', nameTh: 'สถานีป่าชายเลมสุราษฎร์ธานี', province: 'สุราษฎร์ธานี', lat: 9.1382, lng: 99.3217, status: 'online', protocol: 'WebSocket', batteryLevel: 67, signalStrength: -58, totalReadings: 0, lastHeartbeat: new Date().toISOString(), sensors: [
+   257→            { sensorId: 'CH4-SKT-001', sensorType: 'ch4', unit: 'ppm', minRange: 0, maxRange: 3000, samplingRate: 60, status: 'active' },
+   258→            { sensorId: 'CO2-SKT-001', sensorType: 'co2', unit: 'ppm', minRange: 0, maxRange: 5000, samplingRate: 60, status: 'active' },
+   259→            { sensorId: 'DO-SKT-001', sensorType: 'dissolved_oxygen', unit: 'mg/L', minRange: 0, maxRange: 20, samplingRate: 600, status: 'active' },
+   260→            { sensorId: 'N-SKT-001', sensorType: 'nitrogen', unit: 'mg/L', minRange: 0, maxRange: 50, samplingRate: 1800, status: 'active' },
+   261→            { sensorId: 'P-SKT-001', sensorType: 'phosphorus', unit: 'mg/L', minRange: 0, maxRange: 20, samplingRate: 1800, status: 'active' },
+   262→          ]},
+   263→        ];
+   264→        setConnected(false); // Gateway not available
+   265→      }
+   266→
+   267→      setStatus({
+   268→        running: false,
+   269→        tick: 0,
+   270→        edgeNodes,
+   271→        totalReadings: 0,
+   272→        batchJobs: 0,
+   273→        connectedClients: 0,
+   274→      });
+   275→
+   276→      try {
+   277→        const sampleRes = await fetch('/api/iot/sample');
+   278→        if (sampleRes.ok) { const data = await sampleRes.json(); setSampleData(data); }
+   279→      } catch { /* ignore */ }
+   280→    })();
+   281→
+   282→    return () => {
+   283→      if (s) s.disconnect();
+   284→      clearInterval(pollInterval);
+   285→    };
+   286→  }, [mounted]);
+   287→
+   288→  // Controls
+   289→  const startSim = useCallback(async () => {
+   290→    if (socket?.connected) { socket.emit('iot:sim:start'); return; }
+   291→    // For demo: mark as running and start local data generation
+   292→    setStatus(prev => prev ? { ...prev, running: true } : prev);
+   293→  }, [socket]);
+   294→
+   295→  const stopSim = useCallback(async () => {
+   296→    if (socket?.connected) { socket.emit('iot:sim:stop'); return; }
+   297→    setStatus(prev => prev ? { ...prev, running: false } : prev);
+   298→  }, [socket]);
+   299→
+   300→  const resetSim = useCallback(async () => {
+   301→    if (socket?.connected) { socket.emit('iot:sim:reset'); setReadings([]); setBatchJobs([]); return; }
+   302→    setReadings([]);
+   303→    setBatchJobs([]);
+   304→    setStatus(prev => prev ? { ...prev, running: false } : prev);
+   305→  }, [socket]);
+   306→
+   307→  // ─── Local simulation when no WebSocket ──────────────────────────
+   308→  useEffect(() => {
+   309→    if (!mounted || !status?.running || socket?.connected) return;
+   310→    const interval = setInterval(() => {
+   311→      const edgeNodes = status.edgeNodes.filter(n => n.status === 'online');
+   312→      if (edgeNodes.length === 0) return;
+   313→      const newReadings: SensorReading[] = [];
+   314→      for (const node of edgeNodes) {
+   315→        const activeSensors = node.sensors.filter(s => s.status === 'active');
+   316→        for (const sensor of activeSensors) {
+   317→          // Only generate for some sensors each tick
+   318→          if (Math.random() > 0.3) continue;
+   319→          const range = sensor.maxRange - sensor.minRange;
+   320→          const baseValues: Record<string, number> = {
+   321→            ch4: 850, co2: 420, temperature: 30, humidity: 75,
+   322→            soil_moisture: 45, water_level: 15, ph: 7.2,
+   323→            dissolved_oxygen: 6.5, cod: 120, bod: 45,
+   324→            nitrogen: 8, phosphorus: 3, wind_speed: 3.5, solar_irradiance: 600,
+   325→          };
+   326→          const base = baseValues[sensor.sensorType] || 50;
+   327→          const variance = range * 0.15;
+   328→          const value = Math.round((base + (Math.random() - 0.5) * variance) * 100) / 100;
+   329→          const clampedValue = Math.max(sensor.minRange, Math.min(sensor.maxRange, value));
+   330→          const timestamp = new Date().toISOString();
+   331→          const hashInput = `${sensor.sensorId}:${clampedValue}:${timestamp}`;
+   332→          let hash = 0;
+   333→          for (let i = 0; i < hashInput.length; i++) { hash = ((hash << 5) - hash) + hashInput.charCodeAt(i); hash = hash & hash; }
+   334→          const integrityHash = `sha256-${Math.abs(hash).toString(16).padStart(16, '0')}`;
+   335→          let sig = 0;
+   336→          const sigInput = `${node.nodeId}:${integrityHash}`;
+   337→          for (let i = 0; i < sigInput.length; i++) { sig = ((sig << 5) - sig) + sigInput.charCodeAt(i); sig = sig & sig; }
+   338→          const signature = `sig-${Math.abs(sig).toString(16).padStart(16, '0')}`;
+   339→
+   340→          let qualityFlag: 'VALIDATED' | 'ANOMALY' | 'REJECTED' = 'VALIDATED';
+   341→          if (clampedValue < sensor.minRange || clampedValue > sensor.maxRange) qualityFlag = 'REJECTED';
+   342→          else if (clampedValue < sensor.minRange + range * 0.02 || clampedValue > sensor.maxRange - range * 0.02) qualityFlag = 'ANOMALY';
+   343→
+   344→          newReadings.push({
+   345→            id: `RD-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+   346→            edgeNodeId: node.nodeId,
+   347→            sensorId: sensor.sensorId,
+   348→            sensorType: sensor.sensorType,
+   349→            value: clampedValue,
+   350→            unit: sensor.unit,
+   351→            timestamp,
+   352→            receivedAt: new Date().toISOString(),
+   353→            ingestionMode: 'realtime',
+   354→            qualityFlag,
+   355→            integrityHash,
+   356→            signature,
+   357→          });
+   358→        }
+   359→      }
+   360→      if (newReadings.length > 0) {
+   361→        setReadings(prev => [...prev, ...newReadings].slice(-500));
+   362→      }
+   363→    }, 2000);
+   364→    return () => clearInterval(interval);
+   365→  }, [mounted, status?.running, status?.edgeNodes, socket?.connected]);
+   366→
+   367→  // Send realtime test data
+   368→  const sendRealtimeTest = useCallback(async () => {
+   369→    setSendingRealtime(true);
+   370→    try {
+   371→      const edgeNodes = status?.edgeNodes || [];
+   372→      const onlineNodes = edgeNodes.filter(n => n.status === 'online');
+   373→      if (onlineNodes.length === 0) return;
+   374→      const node = onlineNodes[Math.floor(Math.random() * onlineNodes.length)];
+   375→      const activeSensors = node.sensors.filter(s => s.status === 'active');
+   376→      if (activeSensors.length === 0) return;
+   377→      const sensor = activeSensors[Math.floor(Math.random() * activeSensors.length)];
+   378→      const value = Math.round((sensor.minRange + Math.random() * (sensor.maxRange - sensor.minRange)) * 100) / 100;
+   379→
+   380→      if (socket?.connected) {
+   381→        socket.emit('iot:ingest:realtime', {
+   382→          edgeNodeId: node.nodeId,
+   383→          sensorId: sensor.sensorId,
+   384→          sensorType: sensor.sensorType,
+   385→          value,
+   386→          unit: sensor.unit,
+   387→          timestamp: new Date().toISOString(),
+   388→        });
+   389→      } else {
+   390→        await fetch('/api/iot/ingest', {
+   391→          method: 'POST',
+   392→          headers: { 'Content-Type': 'application/json' },
+   393→          body: JSON.stringify({
+   394→            edgeNodeId: node.nodeId,
+   395→            sensorId: sensor.sensorId,
+   396→            sensorType: sensor.sensorType,
+   397→            value,
+   398→            unit: sensor.unit,
+   399→            timestamp: new Date().toISOString(),
+   400→          }),
+   401→        });
+   402→      }
+   403→    } finally { setSendingRealtime(false); }
+   404→  }, [status, socket]);
+   405→
+   406→  // Send batch test data
+   407→  const sendBatchTest = useCallback(async () => {
+   408→    setSendingBatch(true);
+   409→    try {
+   410→      const edgeNodes = status?.edgeNodes || [];
+   411→      const onlineNodes = edgeNodes.filter(n => n.status === 'online');
+   412→      if (onlineNodes.length === 0) return;
+   413→      const node = onlineNodes[Math.floor(Math.random() * onlineNodes.length)];
+   414→      const records = [];
+   415→      const now = new Date();
+   416→      for (let i = 0; i < 20; i++) {
+   417→        const sensor = node.sensors[Math.floor(Math.random() * node.sensors.length)];
+   418→        const ts = new Date(now.getTime() - (20 - i) * 60000);
+   419→        const value = Math.round((sensor.minRange + Math.random() * (sensor.maxRange - sensor.minRange)) * 100) / 100;
+   420→        records.push({
+   421→          sensorId: sensor.sensorId,
+   422→          sensorType: sensor.sensorType,
+   423→          value,
+   424→          unit: sensor.unit,
+   425→          timestamp: ts.toISOString(),
+   426→        });
+   427→      }
+   428→
+   429→      if (socket?.connected) {
+   430→        socket.emit('iot:ingest:batch', {
+   431→          edgeNodeId: node.nodeId,
+   432→          fileName: `test_batch_${Date.now()}.csv`,
+   433→          fileType: 'CSV',
+   434→          records,
+   435→        });
+   436→      } else {
+   437→        await fetch('/api/iot/batch', {
+   438→          method: 'POST',
+   439→          headers: { 'Content-Type': 'application/json' },
+   440→          body: JSON.stringify({
+   441→            edgeNodeId: node.nodeId,
+   442→            fileName: `test_batch_${Date.now()}.csv`,
+   443→            fileType: 'CSV',
+   444→            records,
+   445→          }),
+   446→        });
+   447→      }
+   448→    } finally { setSendingBatch(false); }
+   449→  }, [status, socket]);
+   450→
+   451→  // Certify batch
+   452→  const certifyBatch = useCallback(async (batchJob: BatchJobState) => {
+   453→    setCertifying(true);
+   454→    try {
+   455→      const batchReadings = readings.filter(r => r.ingestionMode === 'batch');
+   456→      const res = await fetch('/api/iot/certify', {
+   457→        method: 'POST',
+   458→        headers: { 'Content-Type': 'application/json' },
+   459→        body: JSON.stringify({ batchJobId: batchJob.id, readings: batchReadings }),
+   460→      });
+   461→      if (res.ok) {
+   462→        const data = await res.json();
+   463→        setCertificationResult(data);
+   464→      }
+   465→    } finally { setCertifying(false); }
+   466→  }, [readings]);
+   467→
+   468→  // Copy to clipboard
+   469→  const copyToClipboard = useCallback((text: string, id: string) => {
+   470→    navigator.clipboard.writeText(text).then(() => {
+   471→      setCopiedId(id);
+   472→      setTimeout(() => setCopiedId(null), 2000);
+   473→    });
+   474→  }, []);
+   475→
+   476→  // ─── Computed ────────────────────────────────────────────────────
+   477→  const filteredReadings = useMemo(() => {
+   478→    let r = readings;
+   479→    if (selectedEdgeNode) r = r.filter(x => x.edgeNodeId === selectedEdgeNode);
+   480→    if (selectedSensorType) r = r.filter(x => x.sensorType === selectedSensorType);
+   481→    return r;
+   482→  }, [readings, selectedEdgeNode, selectedSensorType]);
+   483→
+   484→  const onlineNodes = useMemo(() => (status?.edgeNodes || []).filter(n => n.status === 'online'), [status?.edgeNodes]);
+   485→  const offlineNodes = useMemo(() => (status?.edgeNodes || []).filter(n => n.status !== 'online'), [status?.edgeNodes]);
+   486→
+   487→  const qualityStats = useMemo(() => {
+   488→    const total = readings.length;
+   489→    const validated = readings.filter(r => r.qualityFlag === 'VALIDATED').length;
+   490→    const anomaly = readings.filter(r => r.qualityFlag === 'ANOMALY').length;
+   491→    const rejected = readings.filter(r => r.qualityFlag === 'REJECTED').length;
+   492→    const raw = readings.filter(r => r.qualityFlag === 'RAW').length;
+   493→    return { total, validated, anomaly, rejected, raw };
+   494→  }, [readings]);
+   495→
+   496→  const modeStats = useMemo(() => {
+   497→    const realtime = readings.filter(r => r.ingestionMode === 'realtime').length;
+   498→    const batch = readings.filter(r => r.ingestionMode === 'batch').length;
+   499→    return { realtime, batch };
+   500→  }, [readings]);
+   501→
+   502→  // Chart data
+   503→  const chartData = useMemo(() => {
+   504→    const byTimestamp: Record<string, Record<string, number>> = {};
+   505→    for (const r of filteredReadings.slice(-200)) {
+   506→      const key = new Date(r.timestamp).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+   507→      if (!byTimestamp[key]) byTimestamp[key] = {};
+   508→      const sKey = `${r.edgeNodeId.split('-')[1]}-${r.sensorType}`;
+   509→      byTimestamp[key][sKey] = r.value;
+   510→      byTimestamp[key]['time'] = key as any;
+   511→    }
+   512→    return Object.values(byTimestamp);
+   513→  }, [filteredReadings]);
+   514→
+   515→  // Edge node chart data
+   516→  const edgeNodeChartData = useMemo(() => {
+   517→    if (!selectedEdgeNode) return [];
+   518→    const nodeReadings = readings.filter(r => r.edgeNodeId === selectedEdgeNode).slice(-100);
+   519→    const byTime: Record<string, any> = {};
+   520→    for (const r of nodeReadings) {
+   521→      const key = new Date(r.timestamp).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+   522→      if (!byTime[key]) byTime[key] = { time: key };
+   523→      byTime[key][r.sensorType] = r.value;
+   524→    }
+   525→    return Object.values(byTime);
+   526→  }, [readings, selectedEdgeNode]);
+   527→
+   528→  const latestReadingBySensor = useMemo(() => {
+   529→    const map: Record<string, SensorReading> = {};
+   530→    for (const r of readings) {
+   531→      map[r.sensorId] = r;
+   532→    }
+   533→    return map;
+   534→  }, [readings]);
+   535→
+   536→  if (!mounted) {
+   537→    return <div className="flex items-center justify-center h-64"><RefreshCw className="h-8 w-8 animate-spin text-emerald-600" /></div>;
+   538→  }
+   539→
+   540→  return (
+   541→    <div className="space-y-6">
+   542→      {/* ─── Hero Header ─────────────────────────────────────────── */}
+   543→      <div className="relative overflow-hidden rounded-xl bg-gradient-to-r from-slate-800 via-slate-700 to-slate-900 p-6 text-white">
+   544→        <div className="absolute inset-0 opacity-10">
+   545→          <div className="absolute top-4 right-10 text-8xl">📡</div>
+   546→          <div className="absolute bottom-2 left-20 text-6xl">🔌</div>
+   547→        </div>
+   548→        <div className="relative z-10">
+   549→          <div className="flex items-center gap-3 mb-2 flex-wrap">
+   550→            <Radio className="h-7 w-7" />
+   551→            <h2 className="text-2xl font-bold">IoT Ingestion Gateway</h2>
+   552→            <Badge className="bg-white/20 text-white hover:bg-white/30 text-xs">นำเข้าข้อมูลเซ็นเซอร์</Badge>
+   553→            <Badge className="bg-amber-500/80 text-white text-[9px]">T-VER-P-TOOL-001</Badge>
+   554→          </div>
+   555→          <p className="text-sm text-white/80 mb-1">
+   556→            ระบบนำเข้าข้อมูล IoT ทั้งแบบ Realtime (WebSocket/MQTT) และ Batch (CSV/JSON) พร้อมการรับรองข้อมูลตามมาตรฐาน
+   557→          </p>
+   558→          <p className="text-[10px] text-white/60 mb-4">
+   559→            อ้างอิง: TGO T-VER-P-TOOL-001 | ISO 14064-3 | ISO 14065 | Edge Node Signing | Merkle Tree Certification | CH₄ GWP = 25
+   560→          </p>
+   561→          <div className="flex flex-wrap items-center gap-3">
+   562→            <Button size="sm" onClick={startSim} disabled={status?.running} className="bg-white/20 hover:bg-white/30 text-white border-white/30">
+   563→              <Play className="h-3.5 w-3.5 mr-1" /> เริ่มจำลอง
+   564→            </Button>
+   565→            <Button size="sm" variant="outline" onClick={stopSim} disabled={!status?.running} className="border-white/30 text-white hover:bg-white/20">
+   566→              <Square className="h-3.5 w-3.5 mr-1" /> หยุด
+   567→            </Button>
+   568→            <Button size="sm" variant="outline" onClick={resetSim} className="border-white/30 text-white hover:bg-white/20">
+   569→              <RotateCcw className="h-3.5 w-3.5 mr-1" /> รีเซ็ต
+   570→            </Button>
+   571→            <div className="w-px h-6 bg-white/30" />
+   572→            <Button size="sm" onClick={sendRealtimeTest} disabled={sendingRealtime} className="bg-emerald-500 hover:bg-emerald-400 text-white">
+   573→              <Zap className="h-3.5 w-3.5 mr-1" /> ส่ง Realtime
+   574→            </Button>
+   575→            <Button size="sm" onClick={sendBatchTest} disabled={sendingBatch} className="bg-amber-500 hover:bg-amber-400 text-white">
+   576→              <Upload className="h-3.5 w-3.5 mr-1" /> ส่ง Batch
+   577→            </Button>
+   578→            <div className="flex items-center gap-2 ml-auto text-xs text-white/70">
+   579→              <div className={`h-2 w-2 rounded-full ${connected ? 'bg-green-400 animate-pulse' : 'bg-red-400'}`} />
+   580→              {connected ? 'เชื่อมต่อแล้ว' : 'ตัดการเชื่อมต่อ'}
+   581→              {status?.running && <Badge className="bg-green-500/50 text-white text-[9px] animate-pulse">LIVE</Badge>}
+   582→            </div>
+   583→          </div>
+   584→        </div>
+   585→      </div>
+   586→
+   587→      {/* ─── KPI Cards ───────────────────────────────────────────── */}
+   588→      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+   589→        {[
+   590→          { icon: Database, label: 'ข้อมูลทั้งหมด', value: qualityStats.total.toLocaleString(), color: 'text-emerald-600', bg: 'bg-emerald-50' },
+   591→          { icon: Wifi, label: 'Edge Node ออนไลน์', value: `${onlineNodes.length}/${(status?.edgeNodes?.length || 0)}`, color: 'text-blue-600', bg: 'bg-blue-50' },
+   592→          { icon: Zap, label: 'Realtime', value: modeStats.realtime.toLocaleString(), color: 'text-amber-600', bg: 'bg-amber-50' },
+   593→          { icon: Upload, label: 'Batch', value: modeStats.batch.toLocaleString(), color: 'text-purple-600', bg: 'bg-purple-50' },
+   594→          { icon: CheckCircle2, label: 'ผ่านการตรวจ', value: qualityStats.validated.toLocaleString(), color: 'text-green-600', bg: 'bg-green-50' },
+   595→          { icon: AlertTriangle, label: 'Anomaly', value: qualityStats.anomaly.toLocaleString(), color: 'text-orange-600', bg: 'bg-orange-50' },
+   596→        ].map(s => (
+   597→          <Card key={s.label} className="shadow-none">
+   598→            <CardContent className="p-3 flex items-center gap-3">
+   599→              <div className={`h-9 w-9 rounded-xl ${s.bg} flex items-center justify-center shrink-0`}>
+   600→                <s.icon className={`h-4 w-4 ${s.color}`} />
+   601→              </div>
+   602→              <div>
+   603→                <p className="text-[10px] text-muted-foreground font-medium">{s.label}</p>
+   604→                <p className="text-lg font-bold leading-none">{s.value}</p>
+   605→              </div>
+   606→            </CardContent>
+   607→          </Card>
+   608→        ))}
+   609→      </div>
+   610→
+   611→      {/* ─── Main Tabs ───────────────────────────────────────────── */}
+   612→      <Tabs defaultValue="realtime" className="space-y-4">
+   613→        <TabsList className="h-9 flex-wrap">
+   614→          <TabsTrigger value="realtime" className="text-xs h-7 gap-1"><Zap className="h-3 w-3" /> Realtime</TabsTrigger>
+   615→          <TabsTrigger value="batch" className="text-xs h-7 gap-1"><Upload className="h-3 w-3" /> Batch</TabsTrigger>
+   616→          <TabsTrigger value="edge" className="text-xs h-7 gap-1"><Server className="h-3 w-3" /> Edge Nodes</TabsTrigger>
+   617→          <TabsTrigger value="certify" className="text-xs h-7 gap-1"><Shield className="h-3 w-3" /> การรับรอง</TabsTrigger>
+   618→          <TabsTrigger value="chart" className="text-xs h-7 gap-1"><BarChart3 className="h-3 w-3" /> กราฟ</TabsTrigger>
+   619→          <TabsTrigger value="sample" className="text-xs h-7 gap-1"><FileText className="h-3 w-3" /> ตัวอย่าง/API</TabsTrigger>
+   620→        </TabsList>
+   621→
+   622→        {/* ─── TAB: Realtime ──────────────────────────────────────── */}
+   623→        <TabsContent value="realtime" className="space-y-4">
+   624→          <Card className="border-l-4 border-l-emerald-500">
+   625→            <CardHeader className="pb-2">
+   626→              <CardTitle className="text-base flex items-center gap-2">
+   627→                <Zap className="h-4 w-4 text-emerald-600" />
+   628→                ข้อมูล Realtime (เรียลไทม์)
+   629→                <Badge variant="secondary" className="text-[9px] h-4">WebSocket / MQTT</Badge>
+   630→              </CardTitle>
+   631→            </CardHeader>
+   632→            <CardContent>
+   633→              <div className="bg-emerald-50 rounded-lg p-4 mb-4">
+   634→                <div className="flex items-start gap-3">
+   635→                  <div className="h-8 w-8 rounded-lg bg-emerald-100 flex items-center justify-center shrink-0">
+   636→                    <Info className="h-4 w-4 text-emerald-600" />
+   637→                  </div>
+   638→                  <div className="space-y-2 text-xs text-emerald-800">
+   639→                    <p className="font-semibold">กระบวนการนำเข้าข้อมูล Realtime</p>
+   640→                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+   641→                      <div>
+   642→                        <p className="font-medium">1️⃣ Edge Node อ่านค่าจาก Sensor</p>
+   643→                        <p className="text-emerald-700">เซ็นเซอร์วัดค่า (CH₄, CO₂, อุณหภูมิ ฯลฯ) ตาม sampling rate</p>
+   644→                      </div>
+   645→                      <div>
+   646→                        <p className="font-medium">2️⃣ Edge Node ลงลายเซ็นดิจิทัล</p>
+   647→                        <p className="text-emerald-700">สร้าง integrity hash (SHA-256) และลงลายเซ็นด้วย private key ของ Edge Node</p>
+   648→                      </div>
+   649→                      <div>
+   650→                        <p className="font-medium">3️⃣ ส่งผ่าน WebSocket/MQTT</p>
+   651→                        <p className="text-emerald-700">ข้อมูลถูกส่งทันทีไปยัง dMRV Platform ผ่าน protocol ที่กำหนด</p>
+   652→                      </div>
+   653→                      <div>
+   654→                        <p className="font-medium">4️⃣ Platform ตรวจสอบและจัดเก็บ</p>
+   655→                        <p className="text-emerald-700">ตรวจสอบ range, hash, signature → กำกับ quality flag (VALIDATED/ANOMALY/REJECTED)</p>
+   656→                      </div>
+   657→                    </div>
+   658→                  </div>
+   659→                </div>
+   660→              </div>
+   661→
+   662→              {/* Live Readings Table */}
+   663→              <div className="max-h-96 overflow-y-auto rounded-lg border">
+   664→                <table className="w-full text-xs">
+   665→                  <thead className="bg-muted/50 sticky top-0">
+   666→                    <tr>
+   667→                      <th className="p-2 text-left font-medium">เวลา</th>
+   668→                      <th className="p-2 text-left font-medium">Edge Node</th>
+   669→                      <th className="p-2 text-left font-medium">Sensor</th>
+   670→                      <th className="p-2 text-right font-medium">ค่า</th>
+   671→                      <th className="p-2 text-center font-medium">Quality</th>
+   672→                      <th className="p-2 text-left font-medium">Hash</th>
+   673→                    </tr>
+   674→                  </thead>
+   675→                  <tbody>
+   676→                    {filteredReadings.filter(r => r.ingestionMode === 'realtime').slice(-50).reverse().map(r => (
+   677→                      <tr key={r.id} className="border-b border-muted/30 hover:bg-muted/20">
+   678→                        <td className="p-2 font-mono text-[10px]">{new Date(r.timestamp).toLocaleTimeString('th-TH')}</td>
+   679→                        <td className="p-2">
+   680→                          <Badge variant="secondary" className="text-[8px] h-4">{r.edgeNodeId}</Badge>
+   681→                        </td>
+   682→                        <td className="p-2">
+   683→                          <div className="flex items-center gap-1">
+   684→                            <div className="h-2 w-2 rounded-full" style={{ backgroundColor: SENSOR_COLORS[r.sensorType] || '#999' }} />
+   685→                            <span>{SENSOR_LABELS[r.sensorType]?.th || r.sensorType}</span>
+   686→                          </div>
+   687→                        </td>
+   688→                        <td className="p-2 text-right font-mono font-medium">{r.value} {r.unit}</td>
+   689→                        <td className="p-2 text-center">
+   690→                          <Badge className={`text-[8px] h-4 ${
+   691→                            r.qualityFlag === 'VALIDATED' ? 'bg-emerald-100 text-emerald-700' :
+   692→                            r.qualityFlag === 'ANOMALY' ? 'bg-amber-100 text-amber-700' :
+   693→                            r.qualityFlag === 'REJECTED' ? 'bg-red-100 text-red-700' :
+   694→                            'bg-slate-100 text-slate-700'
+   695→                          }`}>{r.qualityFlag}</Badge>
+   696→                        </td>
+   697→                        <td className="p-2 font-mono text-[9px] text-muted-foreground">{r.integrityHash.slice(0, 16)}…</td>
+   698→                      </tr>
+   699→                    ))}
+   700→                    {filteredReadings.filter(r => r.ingestionMode === 'realtime').length === 0 && (
+   701→                      <tr><td colSpan={6} className="p-8 text-center text-muted-foreground">กด &quot;เริ่มจำลอง&quot; เพื่อดูข้อมูล Realtime</td></tr>
+   702→                    )}
+   703→                  </tbody>
+   704→                </table>
+   705→              </div>
+   706→            </CardContent>
+   707→          </Card>
+   708→        </TabsContent>
+   709→
+   710→        {/* ─── TAB: Batch ─────────────────────────────────────────── */}
+   711→        <TabsContent value="batch" className="space-y-4">
+   712→          <Card className="border-l-4 border-l-amber-500">
+   713→            <CardHeader className="pb-2">
+   714→              <CardTitle className="text-base flex items-center gap-2">
+   715→                <Upload className="h-4 w-4 text-amber-600" />
+   716→                ข้อมูล Batch (อัปโหลดเป็นชุด)
+   717→                <Badge variant="secondary" className="text-[9px] h-4">CSV / JSON / XML</Badge>
+   718→              </CardTitle>
+   719→            </CardHeader>
+   720→            <CardContent>
+   721→              <div className="bg-amber-50 rounded-lg p-4 mb-4">
+   722→                <div className="flex items-start gap-3">
+   723→                  <div className="h-8 w-8 rounded-lg bg-amber-100 flex items-center justify-center shrink-0">
+   724→                    <Info className="h-4 w-4 text-amber-600" />
+   725→                  </div>
+   726→                  <div className="space-y-2 text-xs text-amber-800">
+   727→                    <p className="font-semibold">กระบวนการนำเข้าข้อมูล Batch</p>
+   728→                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+   729→                      <div>
+   730→                        <p className="font-medium">1️⃣ Edge Node บันทึกข้อมูล</p>
+   731→                        <p className="text-amber-700">Sensor บันทึกค่าลง local storage เมื่อไม่มีการเชื่อมต่อ (offline buffer)</p>
+   732→                      </div>
+   733→                      <div>
+   734→                        <p className="font-medium">2️⃣ อัปโหลดเมื่อเชื่อมต่อ</p>
+   735→                        <p className="text-amber-700">เมื่อการเชื่อมต่อกลับมา ข้อมูลจะถูกส่งเป็นชุด (CSV/JSON) พร้อมลายเซ็นรวม</p>
+   736→                      </div>
+   737→                      <div>
+   738→                        <p className="font-medium">3️⃣ ตรวจสอบและรับรอง</p>
+   739→                        <p className="text-amber-700">ตรวจสอบแต่ละรายการ + สร้าง Merkle Root + รับรองชุดข้อมูลทั้งหมด</p>
+   740→                      </div>
+   741→                    </div>
+   742→                  </div>
+   743→                </div>
+   744→              </div>
+   745→
+   746→              {/* Batch Jobs */}
+   747→              <div className="space-y-3">
+   748→                {batchJobs.length === 0 ? (
+   749→                  <div className="py-8 text-center text-sm text-muted-foreground">
+   750→                    ยังไม่มี Batch Job — กด &quot;ส่ง Batch&quot; เพื่อทดสอบ
+   751→                  </div>
+   752→                ) : (
+   753→                  batchJobs.slice(0, 10).map(job => (
+   754→                    <Card key={job.id} className="shadow-sm">
+   755→                      <CardContent className="p-4">
+   756→                        <div className="flex items-center justify-between mb-2">
+   757→                          <div className="flex items-center gap-2">
+   758→                            <HardDrive className="h-4 w-4 text-amber-600" />
+   759→                            <span className="text-sm font-medium">{job.fileName}</span>
+   760→                            <Badge variant="secondary" className="text-[8px] h-4">{job.fileType}</Badge>
+   761→                            <Badge className={`text-[8px] h-4 ${
+   762→                              job.status === 'COMPLETED' ? 'bg-emerald-100 text-emerald-700' :
+   763→                              job.status === 'PROCESSING' ? 'bg-amber-100 text-amber-700' :
+   764→                              job.status === 'FAILED' ? 'bg-red-100 text-red-700' :
+   765→                              'bg-slate-100 text-slate-700'
+   766→                            }`}>{job.status}</Badge>
+   767→                            <Badge className={`text-[8px] h-4 ${
+   768→                              job.certificationStatus === 'CERTIFIED' ? 'bg-emerald-100 text-emerald-700' :
+   769→                              job.certificationStatus === 'PARTIAL' ? 'bg-amber-100 text-amber-700' :
+   770→                              job.certificationStatus === 'REJECTED' ? 'bg-red-100 text-red-700' :
+   771→                              'bg-slate-100 text-slate-700'
+   772→                            }`}>{job.certificationStatus}</Badge>
+   773→                          </div>
+   774→                          <div className="flex items-center gap-2">
+   775→                            <span className="text-[10px] text-muted-foreground">{job.edgeNodeId}</span>
+   776→                            {job.status === 'COMPLETED' && (
+   777→                              <Button size="sm" variant="outline" className="h-6 text-[10px]" onClick={() => certifyBatch(job)} disabled={certifying}>
+   778→                                <Shield className="h-3 w-3 mr-1" /> รับรอง
+   779→                              </Button>
+   780→                            )}
+   781→                          </div>
+   782→                        </div>
+   783→                        <div className="grid grid-cols-5 gap-2 text-[10px]">
+   784→                          <div className="bg-blue-50 rounded p-1.5 text-center">
+   785→                            <div className="font-bold text-blue-700">{job.totalRecords}</div>
+   786→                            <div className="text-blue-600">ทั้งหมด</div>
+   787→                          </div>
+   788→                          <div className="bg-emerald-50 rounded p-1.5 text-center">
+   789→                            <div className="font-bold text-emerald-700">{job.validRecords}</div>
+   790→                            <div className="text-emerald-600">ผ่าน</div>
+   791→                          </div>
+   792→                          <div className="bg-amber-50 rounded p-1.5 text-center">
+   793→                            <div className="font-bold text-amber-700">{job.anomalyRecords}</div>
+   794→                            <div className="text-amber-600">Anomaly</div>
+   795→                          </div>
+   796→                          <div className="bg-red-50 rounded p-1.5 text-center">
+   797→                            <div className="font-bold text-red-700">{job.rejectedRecords}</div>
+   798→                            <div className="text-red-600">ปฏิเสธ</div>
+   799→                          </div>
+   800→                          <div className="bg-purple-50 rounded p-1.5 text-center">
+   801→                            <div className="font-bold text-purple-700 font-mono text-[8px]">{job.merkleRoot?.slice(0, 12) || '-'}…</div>
+   802→                            <div className="text-purple-600">Merkle Root</div>
+   803→                          </div>
+   804→                        </div>
+   805→                        <div className="mt-2">
+   806→                          <Progress value={(job.processedRecords / Math.max(1, job.totalRecords)) * 100} className="h-1.5" />
+   807→                        </div>
+   808→                      </CardContent>
+   809→                    </Card>
+   810→                  ))
+   811→                )}
+   812→              </div>
+   813→            </CardContent>
+   814→          </Card>
+   815→        </TabsContent>
+   816→
+   817→        {/* ─── TAB: Edge Nodes ────────────────────────────────────── */}
+   818→        <TabsContent value="edge" className="space-y-4">
+   819→          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+   820→            {(status?.edgeNodes || []).map(node => (
+   821→              <Card
+   822→                key={node.nodeId}
+   823→                className={`shadow-sm cursor-pointer transition-all hover:shadow-md ${selectedEdgeNode === node.nodeId ? 'ring-2 ring-emerald-300' : ''} ${node.status === 'offline' ? 'opacity-60' : ''}`}
+   824→                onClick={() => setSelectedEdgeNode(selectedEdgeNode === node.nodeId ? null : node.nodeId)}
+   825→              >
+   826→                <CardContent className="p-4 space-y-3">
+   827→                  <div className="flex items-center gap-2">
+   828→                    <span className="text-xl">{PROTOCOL_ICONS[node.protocol] || '📡'}</span>
+   829→                    <div className="flex-1 min-w-0">
+   830→                      <p className="text-sm font-bold truncate">{node.name}</p>
+   831→                      <p className="text-[10px] text-muted-foreground">{node.nameTh}</p>
+   832→                    </div>
+   833→                    <Badge className={`text-[9px] h-5 ${
+   834→                      node.status === 'online' ? 'bg-emerald-100 text-emerald-700' :
+   835→                      node.status === 'maintenance' ? 'bg-amber-100 text-amber-700' :
+   836→                      'bg-red-100 text-red-700'
+   837→                    }`}>
+   838→                      {node.status === 'online' ? '● ออนไลน์' : node.status === 'maintenance' ? '⚠ ซ่อมบำรุง' : '✕ ออฟไลน์'}
+   839→                    </Badge>
+   840→                  </div>
+   841→
+   842→                  <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+   843→                    <MapPin className="h-3 w-3" />
+   844→                    <span>{node.province}</span>
+   845→                    <span>·</span>
+   846→                    <span>{node.protocol}</span>
+   847→                    <span>·</span>
+   848→                    <span>{node.sensors.filter(s => s.status === 'active').length}/{node.sensors.length} sensors</span>
+   849→                  </div>
+   850→
+   851→                  <div className="grid grid-cols-4 gap-1.5 text-[10px]">
+   852→                    <div className="bg-slate-50 rounded p-1.5 text-center">
+   853→                      <div className="font-bold">{node.batteryLevel}%</div>
+   854→                      <div className="text-[8px] text-muted-foreground">แบตเตอรี่</div>
+   855→                    </div>
+   856→                    <div className="bg-slate-50 rounded p-1.5 text-center">
+   857→                      <div className="font-bold">{node.signalStrength} dBm</div>
+   858→                      <div className="text-[8px] text-muted-foreground">สัญญาณ</div>
+   859→                    </div>
+   860→                    <div className="bg-slate-50 rounded p-1.5 text-center">
+   861→                      <div className="font-bold">{node.totalReadings}</div>
+   862→                      <div className="text-[8px] text-muted-foreground">ข้อมูล</div>
+   863→                    </div>
+   864→                    <div className="bg-slate-50 rounded p-1.5 text-center">
+   865→                      <div className="font-bold">{node.sensors.filter(s => s.status === 'active').length}</div>
+   866→                      <div className="text-[8px] text-muted-foreground">Active</div>
+   867→                    </div>
+   868→                  </div>
+   869→
+   870→                  {/* Sensor Tags */}
+   871→                  <div className="flex flex-wrap gap-1">
+   872→                    {node.sensors.map(s => {
+   873→                      const latest = latestReadingBySensor[s.sensorId];
+   874→                      return (
+   875→                        <Badge
+   876→                          key={s.sensorId}
+   877→                          variant="secondary"
+   878→                          className={`text-[8px] h-5 ${s.status === 'active' ? 'bg-slate-100 text-slate-700' : 'bg-slate-50 text-slate-400 line-through'}`}
+   879→                        >
+   880→                          <div className="h-1.5 w-1.5 rounded-full mr-1" style={{ backgroundColor: SENSOR_COLORS[s.sensorType] || '#999' }} />
+   881→                          {SENSOR_LABELS[s.sensorType]?.th || s.sensorType}
+   882→                          {latest ? `: ${latest.value}` : ''}
+   883→                        </Badge>
+   884→                      );
+   885→                    })}
+   886→                  </div>
+   887→
+   888→                  {/* Last Heartbeat */}
+   889→                  <div className="flex items-center justify-between text-[9px] text-muted-foreground">
+   890→                    <span>Last heartbeat: {new Date(node.lastHeartbeat).toLocaleString('th-TH')}</span>
+   891→                  </div>
+   892→                </CardContent>
+   893→              </Card>
+   894→            ))}
+   895→          </div>
+   896→        </TabsContent>
+   897→
+   898→        {/* ─── TAB: Certification ─────────────────────────────────── */}
+   899→        <TabsContent value="certify" className="space-y-4">
+   900→          <Card className="border-l-4 border-l-purple-500">
+   901→            <CardHeader className="pb-2">
+   902→              <CardTitle className="text-base flex items-center gap-2">
+   903→                <Shield className="h-4 w-4 text-purple-600" />
+   904→                การรับรองข้อมูล (Data Certification)
+   905→                <Badge variant="secondary" className="text-[9px] h-4">ISO 14064-3</Badge>
+   906→              </CardTitle>
+   907→            </CardHeader>
+   908→            <CardContent>
+   909→              <div className="bg-purple-50 rounded-lg p-4 mb-4">
+   910→                <div className="space-y-2 text-xs text-purple-800">
+   911→                  <p className="font-semibold">ขั้นตอนการรับรองข้อมูล IoT สำหรับ T-VER</p>
+   912→                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+   913→                    <div>
+   914→                      <p className="font-medium">1️⃣ ตรวจสอบช่วงค่า (Range Check)</p>
+   915→                      <p className="text-purple-700">ค่า sensor ต้องอยู่ใน min-max range ที่กำหนด → ถ้าเกิน = REJECTED</p>
+   916→                    </div>
+   917→                    <div>
+   918→                      <p className="font-medium">2️⃣ ตรวจสอบลำดับเวลา (Timestamp Order)</p>
+   919→                      <p className="text-purple-700">ข้อมูลต้องเรียงตามเวลาไม่ย้อนหลัง → ป้องกัน data tampering</p>
+   920→                    </div>
+   921→                    <div>
+   922→                      <p className="font-medium">3️⃣ ตรวจสอบ Integrity Hash (SHA-256)</p>
+   923→                      <p className="text-purple-700">แต่ละรายการมี hash = SHA256(sensorId + value + timestamp) → ตรวจจับการแก้ไขข้อมูล</p>
+   924→                    </div>
+   925→                    <div>
+   926→                      <p className="font-medium">4️⃣ ตรวจสอบลายเซ็น Edge Node</p>
+   927→                      <p className="text-purple-700">ข้อมูลต้องมี digital signature จาก Edge Node → ยืนยันแหล่งที่มา</p>
+   928→                    </div>
+   929→                    <div>
+   930→                      <p className="font-medium">5️⃣ ตรวจสอบ Anomaly Ratio</p>
+   931→                      <p className="text-purple-700">สัดส่วน anomaly ต้อง &lt; 10% → ถ้าเกินแสดงว่า sensor มีปัญหา</p>
+   932→                    </div>
+   933→                    <div>
+   934→                      <p className="font-medium">6️⃣ สร้าง Merkle Root & Certificate</p>
+   935→                      <p className="text-purple-700">สร้าง Merkle Tree จาก hash ทั้งหมด → ใช้ตรวจสอบภายหลังโดยไม่ต้องเก็บข้อมูลทั้งหมด</p>
+   936→                    </div>
+   937→                  </div>
+   938→                </div>
+   939→              </div>
+   940→
+   941→              {/* Quality Distribution */}
+   942→              <div className="grid grid-cols-5 gap-2 mb-4">
+   943→                {[
+   944→                  { label: 'VALIDATED', count: qualityStats.validated, color: 'bg-emerald-500', bg: 'bg-emerald-50' },
+   945→                  { label: 'ANOMALY', count: qualityStats.anomaly, color: 'bg-amber-500', bg: 'bg-amber-50' },
+   946→                  { label: 'REJECTED', count: qualityStats.rejected, color: 'bg-red-500', bg: 'bg-red-50' },
+   947→                  { label: 'RAW', count: qualityStats.raw, color: 'bg-slate-400', bg: 'bg-slate-50' },
+   948→                  { label: 'TOTAL', count: qualityStats.total, color: 'bg-blue-500', bg: 'bg-blue-50' },
+   949→                ].map(s => (
+   950→                  <div key={s.label} className={`${s.bg} rounded-lg p-3 text-center`}>
+   951→                    <div className={`text-xl font-bold ${s.color.replace('bg-', 'text-')}`}>{s.count}</div>
+   952→                    <div className="text-[10px] text-muted-foreground font-medium">{s.label}</div>
+   953→                  </div>
+   954→                ))}
+   955→              </div>
+   956→
+   957→              {/* Certification Result */}
+   958→              {certificationResult && (
+   959→                <Card className="border-emerald-200 bg-emerald-50/50">
+   960→                  <CardContent className="p-4">
+   961→                    <div className="flex items-center gap-2 mb-3">
+   962→                      <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+   963→                      <span className="font-semibold text-emerald-800">ผลการรับรองข้อมูล</span>
+   964→                      <Badge className={`text-[9px] h-5 ${
+   965→                        certificationResult.certificationStatus === 'CERTIFIED' ? 'bg-emerald-200 text-emerald-800' :
+   966→                        certificationResult.certificationStatus === 'PARTIAL' ? 'bg-amber-200 text-amber-800' :
+   967→                        'bg-red-200 text-red-800'
+   968→                      }`}>{certificationResult.certificationStatus}</Badge>
+   969→                    </div>
+   970→                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3 text-[10px]">
+   971→                      <div className="bg-white rounded p-2 text-center">
+   972→                        <div className="font-bold text-lg">{certificationResult.summary?.integrityScore}%</div>
+   973→                        <div className="text-muted-foreground">Integrity Score</div>
+   974→                      </div>
+   975→                      <div className="bg-white rounded p-2 text-center">
+   976→                        <div className="font-bold text-lg">{certificationResult.summary?.validatedReadings}</div>
+   977→                        <div className="text-muted-foreground">ผ่าน</div>
+   978→                      </div>
+   979→                      <div className="bg-white rounded p-2 text-center">
+   980→                        <div className="font-bold text-lg">{certificationResult.summary?.anomalyReadings}</div>
+   981→                        <div className="text-muted-foreground">Anomaly</div>
+   982→                      </div>
+   983→                      <div className="bg-white rounded p-2 text-center">
+   984→                        <div className="font-bold text-lg">{certificationResult.summary?.rejectedReadings}</div>
+   985→                        <div className="text-muted-foreground">ปฏิเสธ</div>
+   986→                      </div>
+   987→                    </div>
+   988→                    <div className="space-y-1">
+   989→                      {certificationResult.rules?.map((rule: any) => (
+   990→                        <div key={rule.id} className="flex items-center gap-2 text-[10px]">
+   991→                          {rule.passed ? <CheckCircle2 className="h-3 w-3 text-emerald-600" /> : <AlertTriangle className="h-3 w-3 text-amber-600" />}
+   992→                          <span className="font-medium">{rule.id}</span>
+   993→                          <span className="text-muted-foreground">{rule.description}</span>
+   994→                        </div>
+   995→                      ))}
+   996→                    </div>
+   997→                    <div className="mt-2 text-[9px] text-muted-foreground">
+   998→                      Certification ID: {certificationResult.certificationId} | By: {certificationResult.certifiedBy} | Ref: {certificationResult.standardRef}
+   999→                    </div>
+  1000→                  </CardContent>
+  1001→                </Card>
+  1002→              )}
+  1003→            </CardContent>
+  1004→          </Card>
+  1005→        </TabsContent>
+  1006→
+  1007→        {/* ─── TAB: Charts ────────────────────────────────────────── */}
+  1008→        <TabsContent value="chart" className="space-y-4">
+  1009→          <Card>
+  1010→            <CardHeader className="pb-2">
+  1011→              <CardTitle className="text-base flex items-center gap-2">
+  1012→                <BarChart3 className="h-4 w-4 text-emerald-600" />
+  1013→                กราฟข้อมูล Sensor
+  1014→              </CardTitle>
+  1015→            </CardHeader>
+  1016→            <CardContent>
+  1017→              {/* Sensor Type Filter */}
+  1018→              <div className="flex flex-wrap gap-1 mb-4">
+  1019→                <Button size="sm" variant={selectedSensorType === null ? 'default' : 'outline'} className="h-6 text-[10px]"
+  1020→                  onClick={() => setSelectedSensorType(null)}>ทั้งหมด</Button>
+  1021→                {Object.entries(SENSOR_LABELS).map(([key, label]) => (
+  1022→                  <Button key={key} size="sm" variant={selectedSensorType === key ? 'default' : 'outline'} className="h-6 text-[10px] gap-1"
+  1023→                    onClick={() => setSelectedSensorType(selectedSensorType === key ? null : key)}>
+  1024→                    <div className="h-2 w-2 rounded-full" style={{ backgroundColor: SENSOR_COLORS[key] }} />
+  1025→                    {label.th}
+  1026→                  </Button>
+  1027→                ))}
+  1028→              </div>
+  1029→
+  1030→              {selectedEdgeNode ? (
+  1031→                <ResponsiveContainer width="100%" height={350}>
+  1032→                  <ComposedChart data={edgeNodeChartData}>
+  1033→                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+  1034→                    <XAxis dataKey="time" tick={{ fontSize: 9 }} />
+  1035→                    <YAxis tick={{ fontSize: 10 }} />
+  1036→                    <Tooltip contentStyle={{ fontSize: 11 }} />
+  1037→                    <Legend wrapperStyle={{ fontSize: 10 }} />
+  1038→                    {Object.entries(SENSOR_COLORS).map(([type, color]) => (
+  1039→                      <Line key={type} type="monotone" dataKey={type} stroke={color} dot={false} strokeWidth={1.5}
+  1040→                        name={SENSOR_LABELS[type]?.th || type} />
+  1041→                    ))}
+  1042→                  </ComposedChart>
+  1043→                </ResponsiveContainer>
+  1044→              ) : (
+  1045→                <div className="text-center py-8 text-sm text-muted-foreground">
+  1046→                  เลือก Edge Node เพื่อดูกราฟ (คลิกที่ Edge Node ในแท็บ Edge Nodes)
+  1047→                </div>
+  1048→              )}
+  1049→            </CardContent>
+  1050→          </Card>
+  1051→        </TabsContent>
+  1052→
+  1053→        {/* ─── TAB: Sample Data & API ─────────────────────────────── */}
+  1054→        <TabsContent value="sample" className="space-y-4">
+  1055→          <Card className="border-l-4 border-l-blue-500">
+  1056→            <CardHeader className="pb-2">
+  1057→              <CardTitle className="text-base flex items-center gap-2">
+  1058→                <FileText className="h-4 w-4 text-blue-600" />
+  1059→                ตัวอย่างข้อมูลและ API Reference
+  1060→              </CardTitle>
+  1061→            </CardHeader>
+  1062→            <CardContent>
+  1063→              <div className="bg-blue-50 rounded-lg p-4 mb-4">
+  1064→                <div className="space-y-2 text-xs text-blue-800">
+  1065→                  <p className="font-semibold">รูปแบบการนำเข้าข้อมูล 2 แบบ</p>
+  1066→                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+  1067→                    <div className="bg-white rounded-lg p-3">
+  1068→                      <p className="font-bold text-emerald-700 mb-1">⚡ Realtime (เรียลไทม์)</p>
+  1069→                      <p className="text-[10px] mb-2">ส่งข้อมูลทีละรายการทันที ผ่าน WebSocket หรือ HTTP POST</p>
+  1070→                      <ul className="text-[10px] space-y-0.5 text-blue-700">
+  1071→                        <li>• Protocol: WebSocket / MQTT / HTTP POST</li>
+  1072→                        <li>• ความถี่: ตาม sampling rate ของแต่ละ sensor (30s–1800s)</li>
+  1073→                        <li>• ข้อดี: ตรวจจับ anomaly ทันที, แจ้งเตือน real-time</li>
+  1074→                        <li>• ใช้กรณี: มอนิเตอร์สถานี, ตรวจจับรั่วไหล CH₄</li>
+  1075→                      </ul>
+  1076→                    </div>
+  1077→                    <div className="bg-white rounded-lg p-3">
+  1078→                      <p className="font-bold text-amber-700 mb-1">📦 Batch (อัปโหลดชุด)</p>
+  1079→                      <p className="text-[10px] mb-2">ส่งข้อมูลหลายรายการพร้อมกัน เมื่อมีการเชื่อมต่อ</p>
+  1080→                      <ul className="text-[10px] space-y-0.5 text-blue-700">
+  1081→                        <li>• Protocol: HTTP POST / File Upload</li>
+  1082→                        <li>• รูปแบบ: CSV, JSON, XML, PARQUET</li>
+  1083→                        <li>• ข้อดี: เหมาะกรณี offline, ข้อมูลย้อนหลัง, ปริมาณมาก</li>
+  1084→                        <li>• ใช้กรณี: ข้อมูลที่บันทึกไว้ใน Edge Node, นำเข้าข้อมูลจากบริษัทภายนอก</li>
+  1085→                      </ul>
+  1086→                    </div>
+  1087→                  </div>
+  1088→                </div>
+  1089→              </div>
+  1090→
+  1091→              {/* Sample sections */}
+  1092→              {[
+  1093→                { key: 'realtime', label: 'ตัวอย่าง Realtime', icon: Zap, data: sampleData?.sampleRealtime },
+  1094→                { key: 'batch', label: 'ตัวอย่าง Batch', icon: Upload, data: sampleData?.sampleBatch },
+  1095→                { key: 'certification', label: 'ตัวอย่างการรับรอง', icon: Shield, data: sampleData?.sampleCertification },
+  1096→                { key: 'edge', label: 'ตัวอย่าง Edge Node Config', icon: Server, data: sampleData?.sampleEdgeConfig },
+  1097→              ].map(section => (
+  1098→                <div key={section.key} className="border rounded-lg mb-3">
+  1099→                  <button
+  1100→                    className="w-full flex items-center justify-between p-3 hover:bg-muted/50 transition-colors"
+  1101→                    onClick={() => setExpandedSample(expandedSample === section.key ? null : section.key)}
+  1102→                  >
+  1103→                    <div className="flex items-center gap-2">
+  1104→                      <section.icon className="h-4 w-4 text-blue-600" />
+  1105→                      <span className="text-sm font-medium">{section.label}</span>
+  1106→                    </div>
+  1107→                    {expandedSample === section.key ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+  1108→                  </button>
+  1109→                  {expandedSample === section.key && section.data && (
+  1110→                    <div className="border-t p-3 space-y-2">
+  1111→                      {section.data.description && (
+  1112→                        <p className="text-xs text-muted-foreground">{section.data.description}</p>
+  1113→                      )}
+  1114→                      {section.data.http_endpoint && (
+  1115→                        <div className="flex items-center gap-2 text-xs">
+  1116→                          <Badge variant="secondary" className="text-[9px] h-4 bg-blue-100 text-blue-700">{section.data.http_endpoint.startsWith('POST') ? 'POST' : 'GET'}</Badge>
+  1117→                          <code className="text-[10px] font-mono bg-slate-100 px-2 py-0.5 rounded">{section.data.http_endpoint}</code>
+  1118→                        </div>
+  1119→                      )}
+  1120→                      {section.data.websocket_event && (
+  1121→                        <div className="flex items-center gap-2 text-xs">
+  1122→                          <Badge variant="secondary" className="text-[9px] h-4 bg-purple-100 text-purple-700">WS</Badge>
+  1123→                          <code className="text-[10px] font-mono bg-slate-100 px-2 py-0.5 rounded">{section.data.websocket_event}</code>
+  1124→                        </div>
+  1125→                      )}
+  1126→                      {section.data.curl_example && (
+  1127→                        <div className="relative">
+  1128→                          <pre className="bg-slate-900 text-emerald-400 p-3 rounded-lg text-[10px] overflow-x-auto whitespace-pre-wrap">
+  1129→                            {section.data.curl_example}
+  1130→                          </pre>
+  1131→                          <Button size="sm" variant="ghost" className="absolute top-1 right-1 h-6 w-6 p-0"
+  1132→                            onClick={() => copyToClipboard(section.data.curl_example, `curl-${section.key}`)}>
+  1133→                            {copiedId === `curl-${section.key}` ? <CheckCircle2 className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
+  1134→                          </Button>
+  1135→                        </div>
+  1136→                      )}
+  1137→                      {section.data.payload && (
+  1138→                        <div className="relative">
+  1139→                          <p className="text-[10px] text-muted-foreground mb-1">Payload:</p>
+  1140→                          <pre className="bg-slate-900 text-blue-300 p-3 rounded-lg text-[10px] overflow-x-auto whitespace-pre-wrap">
+  1141→                            {JSON.stringify(section.data.payload, null, 2)}
+  1142→                          </pre>
+  1143→                          <Button size="sm" variant="ghost" className="absolute top-5 right-1 h-6 w-6 p-0"
+  1144→                            onClick={() => copyToClipboard(JSON.stringify(section.data.payload, null, 2), `payload-${section.key}`)}>
+  1145→                            {copiedId === `payload-${section.key}` ? <CheckCircle2 className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
+  1146→                          </Button>
+  1147→                        </div>
+  1148→                      )}
+  1149→                      {section.data.certification_rules && (
+  1150→                        <div className="space-y-1">
+  1151→                          <p className="text-[10px] text-muted-foreground">กฎการรับรอง:</p>
+  1152→                          {section.data.certification_rules.map((rule: any) => (
+  1153→                            <div key={rule.id} className="flex items-center gap-2 text-[10px]">
+  1154→                              <Hash className="h-3 w-3 text-purple-500" />
+  1155→                              <span className="font-medium">{rule.id}</span>
+  1156→                              <span className="text-muted-foreground">— {rule.description}</span>
+  1157→                            </div>
+  1158→                          ))}
+  1159→                        </div>
+  1160→                      )}
+  1161→                    </div>
+  1162→                  )}
+  1163→                </div>
+  1164→              ))}
+  1165→            </CardContent>
+  1166→          </Card>
+  1167→        </TabsContent>
+  1168→      </Tabs>
+  1169→    </div>
+  1170→  );
+  1171→}
+  1172→

@@ -1,0 +1,814 @@
+     1→     1→/**
+     2→     2→ * GET /api/soil-carbon/sample
+     3→     3→ * ──────────────────────────────────────────────
+     4→     4→ * ส่งข้อมูลตัวอย่าง/ข้อมูลเริ่มต้นสำหรับทดสอบ API
+     5→     5→ * รองรับพื้นที่ลาดชัน/ขั้นบันไดบนภูเขา (Terraced Farming / Sediment Trap)
+     6→     6→ *
+     7→     7→ * ข้อมูลตัวอย่าง 5 แปลงบนพื้นที่ลาดชัน:
+     8→     8→ * 1. SOIL-CMD-001: เชียงใหม่ — นาขั้นบันไดข้าวอินทรีย์ (850 ม.รทก., 25°, 5 ชั้น, 5 ฝาย)
+     9→     9→ * 2. SOIL-KKN-002: ขอนแก่น — ไร่มันสำปะหลังขั้นบันได (280 ม.รทก., 18°, 4 ชั้น)
+    10→    10→ * 3. SOIL-SPB-003: สุพรรณบุรี — สวนผลไม้ลาดชัน (120 ม.รทก., 15°, 3 ชั้น)
+    11→    11→ * 4. SOIL-SRN-004: สุรินทร์ — ปลูกข้าวกักตะกอนดิน (180 ม.รทก., 20°, 4 ชั้น)
+    12→    12→ * 5. SOIL-PKT-005: ภูเก็ต — วนเกษตรยางพาราลาดชัน (95 ม.รทก., 22°, 3 ชั้น)
+    13→    13→ *
+    14→    14→ * เมื่อ ?seed=true จะสร้างแปลง ชั้นปลูก ฝาย และข้อมูลการวัดพร้อมตะกอนดิน
+    15→    15→ */
+    16→    16→import { NextRequest, NextResponse } from 'next/server';
+    17→    17→import { db } from '@/lib/db';
+    18→    18→
+    19→    19→// ─── ข้อมูลแปลงตัวอย่าง 5 แปลง (พื้นที่ลาดชัน/ขั้นบันได) ───
+    20→    20→const SAMPLE_PLOTS = [
+    21→    21→  {
+    22→    22→    plotId: 'SOIL-CMD-001',
+    23→    23→    name: 'Chiang Mai Terraced Organic Rice',
+    24→    24→    nameTh: 'นาขั้นบันไดข้าวอินทรีย์ เชียงใหม่',
+    25→    25→    province: 'เชียงใหม่',
+    26→    26→    lat: 18.7883,
+    27→    27→    lng: 98.9853,
+    28→    28→    altitudeMasl: 850,
+    29→    29→    slopeDegree: 25,
+    30→    30→    slopeAspect: 'NE',
+    31→    31→    areaRai: 25,
+    32→    32→    areaHa: 4.0,
+    33→    33→    terraceCount: 5,
+    34→    34→    terraceWidthM: 3.5,
+    35→    35→    terraceHeightM: 1.8,
+    36→    36→    checkDamCount: 5,
+    37→    37→    checkDamType: 'STONE',
+    38→    38→    landUseType: 'terraced_farming',
+    39→    39→    soilType: 'Clay Loam',
+    40→    40→    cropType: 'Rice',
+    41→    41→    practiceType: 'sediment_trap',
+    42→    42→    baselineSOC: 28.5,
+    43→    43→    projectSOC: 35.2,
+    44→    44→    baselineSediment: 18.5,
+    45→    45→    projectSediment: 4.2,
+    46→    46→    sedimentTrapRate: 22.7,
+    47→    47→    baselineEmission: 4.8,
+    48→    48→    projectEmission: 2.1,
+    49→    49→    monitoringYear: 2,
+    50→    50→    status: 'MONITORING',
+    51→    51→    methodology: 'T-VER-SOIL-01',
+    52→    52→  },
+    53→    53→  {
+    54→    54→    plotId: 'SOIL-KKN-002',
+    55→    55→    name: 'Khon Kaen Terraced Cassava',
+    56→    56→    nameTh: 'ไร่มันสำปะหลังขั้นบันได ขอนแก่น',
+    57→    57→    province: 'ขอนแก่น',
+    58→    58→    lat: 16.4322,
+    59→    59→    lng: 102.8236,
+    60→    60→    altitudeMasl: 280,
+    61→    61→    slopeDegree: 18,
+    62→    62→    slopeAspect: 'SE',
+    63→    63→    areaRai: 50,
+    64→    64→    areaHa: 8.0,
+    65→    65→    terraceCount: 4,
+    66→    66→    terraceWidthM: 4.0,
+    67→    67→    terraceHeightM: 1.5,
+    68→    68→    checkDamCount: 3,
+    69→    69→    checkDamType: 'CONCRETE',
+    70→    70→    landUseType: 'terraced_farming',
+    71→    71→    soilType: 'Sandy Loam',
+    72→    72→    cropType: 'Cassava',
+    73→    73→    practiceType: 'sediment_trap',
+    74→    74→    baselineSOC: 18.2,
+    75→    75→    projectSOC: 24.8,
+    76→    76→    baselineSediment: 22.0,
+    77→    77→    projectSediment: 6.5,
+    78→    78→    sedimentTrapRate: 29.5,
+    79→    79→    baselineEmission: 6.5,
+    80→    80→    projectEmission: 3.2,
+    81→    81→    monitoringYear: 3,
+    82→    82→    status: 'VERIFIED',
+    83→    83→    methodology: 'T-VER-SOIL-01',
+    84→    84→  },
+    85→    85→  {
+    86→    86→    plotId: 'SOIL-SPB-003',
+    87→    87→    name: 'Suphanburi Sloping Fruit Orchard',
+    88→    88→    nameTh: 'สวนผลไม้ลาดชัน สุพรรณบุรี',
+    89→    89→    province: 'สุพรรณบุรี',
+    90→    90→    lat: 14.4746,
+    91→    91→    lng: 100.1182,
+    92→    92→    altitudeMasl: 120,
+    93→    93→    slopeDegree: 15,
+    94→    94→    slopeAspect: 'S',
+    95→    95→    areaRai: 100,
+    96→    96→    areaHa: 16.0,
+    97→    97→    terraceCount: 3,
+    98→    98→    terraceWidthM: 5.0,
+    99→    99→    terraceHeightM: 1.2,
+   100→   100→    checkDamCount: 2,
+   101→   101→    checkDamType: 'GABION',
+   102→   102→    landUseType: 'terraced_farming',
+   103→   103→    soilType: 'Clay',
+   104→   104→    cropType: 'Fruit trees',
+   105→   105→    practiceType: 'contour_planting',
+   106→   106→    baselineSOC: 22.1,
+   107→   107→    projectSOC: 32.5,
+   108→   108→    baselineSediment: 14.0,
+   109→   109→    projectSediment: 5.0,
+   110→   110→    sedimentTrapRate: 35.7,
+   111→   111→    baselineEmission: 8.2,
+   112→   112→    projectEmission: 3.8,
+   113→   113→    monitoringYear: 1,
+   114→   114→    status: 'MONITORING',
+   115→   115→    methodology: 'T-VER-SOIL-01',
+   116→   116→  },
+   117→   117→  {
+   118→   118→    plotId: 'SOIL-SRN-004',
+   119→   119→    name: 'Surin Sediment Trap Rice',
+   120→   120→    nameTh: 'ปลูกข้าวกักตะกอนดิน สุรินทร์',
+   121→   121→    province: 'สุรินทร์',
+   122→   122→    lat: 14.8818,
+   123→   123→    lng: 103.4937,
+   124→   124→    altitudeMasl: 180,
+   125→   125→    slopeDegree: 20,
+   126→   126→    slopeAspect: 'SW',
+   127→   127→    areaRai: 30,
+   128→   128→    areaHa: 4.8,
+   129→   129→    terraceCount: 4,
+   130→   130→    terraceWidthM: 3.0,
+   131→   131→    terraceHeightM: 1.6,
+   132→   132→    checkDamCount: 4,
+   133→   133→    checkDamType: 'LOG',
+   134→   134→    landUseType: 'terraced_farming',
+   135→   135→    soilType: 'Loam',
+   136→   136→    cropType: 'Rice',
+   137→   137→    practiceType: 'sediment_trap',
+   138→   138→    baselineSOC: 25.3,
+   139→   139→    projectSOC: 29.8,
+   140→   140→    baselineSediment: 20.0,
+   141→   141→    projectSediment: 5.5,
+   142→   142→    sedimentTrapRate: 27.5,
+   143→   143→    baselineEmission: 5.6,
+   144→   144→    projectEmission: 2.4,
+   145→   145→    monitoringYear: 2,
+   146→   146→    status: 'REGISTERED',
+   147→   147→    methodology: 'T-VER-SOIL-01',
+   148→   148→  },
+   149→   149→  {
+   150→   150→    plotId: 'SOIL-PKT-005',
+   151→   151→    name: 'Phuket Sloping Agroforestry Rubber',
+   152→   152→    nameTh: 'วนเกษตรยางพาราลาดชัน ภูเก็ต',
+   153→   153→    province: 'ภูเก็ต',
+   154→   154→    lat: 7.8804,
+   155→   155→    lng: 98.3923,
+   156→   156→    altitudeMasl: 95,
+   157→   157→    slopeDegree: 22,
+   158→   158→    slopeAspect: 'W',
+   159→   159→    areaRai: 40,
+   160→   160→    areaHa: 6.4,
+   161→   161→    terraceCount: 3,
+   162→   162→    terraceWidthM: 4.5,
+   163→   163→    terraceHeightM: 1.4,
+   164→   164→    checkDamCount: 3,
+   165→   165→    checkDamType: 'VEGETATION',
+   166→   166→    landUseType: 'agroforestry',
+   167→   167→    soilType: 'Sandy Clay Loam',
+   168→   168→    cropType: 'Rubber',
+   169→   169→    practiceType: 'agroforestry',
+   170→   170→    baselineSOC: 32.5,
+   171→   171→    projectSOC: 42.1,
+   172→   172→    baselineSediment: 16.0,
+   173→   173→    projectSediment: 3.8,
+   174→   174→    sedimentTrapRate: 23.8,
+   175→   175→    baselineEmission: 3.2,
+   176→   176→    projectEmission: 1.5,
+   177→   177→    monitoringYear: 4,
+   178→   178→    status: 'CERTIFIED',
+   179→   179→    methodology: 'T-VER-SOIL-01',
+   180→   180→  },
+   181→   181→];
+   182→   182→
+   183→   183→// ─── ข้อมูลชั้นปลูกสำหรับแต่ละแปลง ───
+   184→   184→const SAMPLE_TERRACES: Record<string, Array<{
+   185→   185→  layerNumber: number;
+   186→   186→  layerNameTh: string;
+   187→   187→  elevationMasl: number;
+   188→   188→  sedimentTrappedKg: number;
+   189→   189→  organicCarbonPct: number;
+   190→   190→  sedimentDepthCm: number;
+   191→   191→  waterFlowInLMin: number;
+   192→   192→  waterFlowOutLMin: number;
+   193→   193→}>> = {
+   194→   194→  'SOIL-CMD-001': [
+   195→   195→    { layerNumber: 1, layerNameTh: 'ชั้นปลูกที่ 1 (ข้าวหอมมะลิ)', elevationMasl: 850, sedimentTrappedKg: 320, organicCarbonPct: 2.8, sedimentDepthCm: 5.2, waterFlowInLMin: 15.0, waterFlowOutLMin: 8.5 },
+   196→   196→    { layerNumber: 2, layerNameTh: 'ชั้นปลูกที่ 2 (ข้าวเหนียว)', elevationMasl: 848.2, sedimentTrappedKg: 285, organicCarbonPct: 2.5, sedimentDepthCm: 4.8, waterFlowInLMin: 8.5, waterFlowOutLMin: 5.2 },
+   197→   197→    { layerNumber: 3, layerNameTh: 'ชั้นปลูกที่ 3 (ข้าวอินทรีย์)', elevationMasl: 846.4, sedimentTrappedKg: 260, organicCarbonPct: 2.3, sedimentDepthCm: 4.5, waterFlowInLMin: 5.2, waterFlowOutLMin: 3.0 },
+   198→   198→    { layerNumber: 4, layerNameTh: 'ชั้นปลูกที่ 4 (ผักบุ้ง)', elevationMasl: 844.6, sedimentTrappedKg: 240, organicCarbonPct: 2.1, sedimentDepthCm: 4.0, waterFlowInLMin: 3.0, waterFlowOutLMin: 1.8 },
+   199→   199→    { layerNumber: 5, layerNameTh: 'ชั้นปลูกที่ 5 (สมุนไพร)', elevationMasl: 842.8, sedimentTrappedKg: 210, organicCarbonPct: 1.9, sedimentDepthCm: 3.5, waterFlowInLMin: 1.8, waterFlowOutLMin: 0.8 },
+   200→   200→  ],
+   201→   201→  'SOIL-KKN-002': [
+   202→   202→    { layerNumber: 1, layerNameTh: 'ชั้นปลูกที่ 1 (มันสำปะหลัง)', elevationMasl: 280, sedimentTrappedKg: 420, organicCarbonPct: 1.8, sedimentDepthCm: 6.0, waterFlowInLMin: 22.0, waterFlowOutLMin: 14.0 },
+   203→   203→    { layerNumber: 2, layerNameTh: 'ชั้นปลูกที่ 2 (ถั่วลิสง)', elevationMasl: 278.5, sedimentTrappedKg: 380, organicCarbonPct: 1.6, sedimentDepthCm: 5.5, waterFlowInLMin: 14.0, waterFlowOutLMin: 8.5 },
+   204→   204→    { layerNumber: 3, layerNameTh: 'ชั้นปลูกที่ 3 (มันสำปะหลัง)', elevationMasl: 277.0, sedimentTrappedKg: 350, organicCarbonPct: 1.5, sedimentDepthCm: 5.0, waterFlowInLMin: 8.5, waterFlowOutLMin: 4.2 },
+   205→   205→    { layerNumber: 4, layerNameTh: 'ชั้นปลูกที่ 4 (ข้าวโพด)', elevationMasl: 275.5, sedimentTrappedKg: 310, organicCarbonPct: 1.3, sedimentDepthCm: 4.2, waterFlowInLMin: 4.2, waterFlowOutLMin: 2.0 },
+   206→   206→  ],
+   207→   207→  'SOIL-SPB-003': [
+   208→   208→    { layerNumber: 1, layerNameTh: 'ชั้นปลูกที่ 1 (มะม่วง)', elevationMasl: 120, sedimentTrappedKg: 550, organicCarbonPct: 2.5, sedimentDepthCm: 7.0, waterFlowInLMin: 30.0, waterFlowOutLMin: 22.0 },
+   209→   209→    { layerNumber: 2, layerNameTh: 'ชั้นปลูกที่ 2 (ขนุน)', elevationMasl: 118.8, sedimentTrappedKg: 480, organicCarbonPct: 2.2, sedimentDepthCm: 6.2, waterFlowInLMin: 22.0, waterFlowOutLMin: 16.5 },
+   210→   210→    { layerNumber: 3, layerNameTh: 'ชั้นปลูกที่ 3 (ทับทิม)', elevationMasl: 117.6, sedimentTrappedKg: 420, organicCarbonPct: 2.0, sedimentDepthCm: 5.5, waterFlowInLMin: 16.5, waterFlowOutLMin: 10.0 },
+   211→   211→  ],
+   212→   212→  'SOIL-SRN-004': [
+   213→   213→    { layerNumber: 1, layerNameTh: 'ชั้นปลูกที่ 1 (ข้าวหอม)', elevationMasl: 180, sedimentTrappedKg: 380, organicCarbonPct: 2.6, sedimentDepthCm: 5.8, waterFlowInLMin: 18.0, waterFlowOutLMin: 12.0 },
+   214→   214→    { layerNumber: 2, layerNameTh: 'ชั้นปลูกที่ 2 (ข้าวกล้อง)', elevationMasl: 178.4, sedimentTrappedKg: 340, organicCarbonPct: 2.3, sedimentDepthCm: 5.2, waterFlowInLMin: 12.0, waterFlowOutLMin: 7.0 },
+   215→   215→    { layerNumber: 3, layerNameTh: 'ชั้นปลูกที่ 3 (ผักอีสาน)', elevationMasl: 176.8, sedimentTrappedKg: 300, organicCarbonPct: 2.0, sedimentDepthCm: 4.5, waterFlowInLMin: 7.0, waterFlowOutLMin: 3.5 },
+   216→   216→    { layerNumber: 4, layerNameTh: 'ชั้นปลูกที่ 4 (สมุนไพรอีสาน)', elevationMasl: 175.2, sedimentTrappedKg: 270, organicCarbonPct: 1.8, sedimentDepthCm: 4.0, waterFlowInLMin: 3.5, waterFlowOutLMin: 1.5 },
+   217→   217→  ],
+   218→   218→  'SOIL-PKT-005': [
+   219→   219→    { layerNumber: 1, layerNameTh: 'ชั้นปลูกที่ 1 (ยางพารา)', elevationMasl: 95, sedimentTrappedKg: 450, organicCarbonPct: 3.2, sedimentDepthCm: 6.5, waterFlowInLMin: 25.0, waterFlowOutLMin: 16.0 },
+   220→   220→    { layerNumber: 2, layerNameTh: 'ชั้นปลูกที่ 2 (ยางพารา+ไม้ผล)', elevationMasl: 93.6, sedimentTrappedKg: 400, organicCarbonPct: 2.9, sedimentDepthCm: 5.8, waterFlowInLMin: 16.0, waterFlowOutLMin: 9.5 },
+   221→   221→    { layerNumber: 3, layerNameTh: 'ชั้นปลูกที่ 3 (ไม้ยืนต้น)', elevationMasl: 92.2, sedimentTrappedKg: 360, organicCarbonPct: 2.6, sedimentDepthCm: 5.0, waterFlowInLMin: 9.5, waterFlowOutLMin: 5.0 },
+   222→   222→  ],
+   223→   223→};
+   224→   224→
+   225→   225→// ─── ข้อมูลฝายชะลอน้ำสำหรับแต่ละแปลง ───
+   226→   226→const SAMPLE_CHECK_DAMS: Record<string, Array<{
+   227→   227→  damId: string;
+   228→   228→  damNameTh: string;
+   229→   229→  damType: string;
+   230→   230→  sedimentVolumeM3: number;
+   231→   231→  sedimentDepthCm: number;
+   232→   232→  sedimentSOCpct: number;
+   233→   233→  sedimentCarbonTc: number;
+   234→   234→  flowRateLMin: number;
+   235→   235→  flowReductionPct: number;
+   236→   236→  trapEfficiencyPct: number;
+   237→   237→  status: string;
+   238→   238→}>> = {
+   239→   239→  'SOIL-CMD-001': [
+   240→   240→    { damId: 'DAM-CMD-001-01', damNameTh: 'ฝายชะลอน้ำชั้นที่ 1', damType: 'STONE', sedimentVolumeM3: 2.8, sedimentDepthCm: 8.5, sedimentSOCpct: 2.6, sedimentCarbonTc: 0.56, flowRateLMin: 8.5, flowReductionPct: 43.3, trapEfficiencyPct: 78.0, status: 'ACTIVE' },
+   241→   241→    { damId: 'DAM-CMD-001-02', damNameTh: 'ฝายชะลอน้ำชั้นที่ 2', damType: 'STONE', sedimentVolumeM3: 2.4, sedimentDepthCm: 7.8, sedimentSOCpct: 2.3, sedimentCarbonTc: 0.45, flowRateLMin: 5.2, flowReductionPct: 38.8, trapEfficiencyPct: 75.0, status: 'ACTIVE' },
+   242→   242→    { damId: 'DAM-CMD-001-03', damNameTh: 'ฝายชะลอน้ำชั้นที่ 3', damType: 'STONE', sedimentVolumeM3: 2.1, sedimentDepthCm: 7.0, sedimentSOCpct: 2.1, sedimentCarbonTc: 0.38, flowRateLMin: 3.0, flowReductionPct: 42.3, trapEfficiencyPct: 72.0, status: 'ACTIVE' },
+   243→   243→    { damId: 'DAM-CMD-001-04', damNameTh: 'ฝายชะลอน้ำชั้นที่ 4', damType: 'STONE', sedimentVolumeM3: 1.8, sedimentDepthCm: 6.2, sedimentSOCpct: 1.9, sedimentCarbonTc: 0.30, flowRateLMin: 1.8, flowReductionPct: 40.0, trapEfficiencyPct: 70.0, status: 'ACTIVE' },
+   244→   244→    { damId: 'DAM-CMD-001-05', damNameTh: 'ฝายชะลอน้ำชั้นที่ 5', damType: 'STONE', sedimentVolumeM3: 1.5, sedimentDepthCm: 5.5, sedimentSOCpct: 1.7, sedimentCarbonTc: 0.24, flowRateLMin: 0.8, flowReductionPct: 55.6, trapEfficiencyPct: 68.0, status: 'ACTIVE' },
+   245→   245→  ],
+   246→   246→  'SOIL-KKN-002': [
+   247→   247→    { damId: 'DAM-KKN-002-01', damNameTh: 'ฝายชะลอน้ำชั้นที่ 1', damType: 'CONCRETE', sedimentVolumeM3: 4.2, sedimentDepthCm: 10.0, sedimentSOCpct: 1.7, sedimentCarbonTc: 0.58, flowRateLMin: 14.0, flowReductionPct: 36.4, trapEfficiencyPct: 82.0, status: 'ACTIVE' },
+   248→   248→    { damId: 'DAM-KKN-002-02', damNameTh: 'ฝายชะลอน้ำชั้นที่ 2', damType: 'CONCRETE', sedimentVolumeM3: 3.5, sedimentDepthCm: 8.8, sedimentSOCpct: 1.5, sedimentCarbonTc: 0.44, flowRateLMin: 8.5, flowReductionPct: 39.3, trapEfficiencyPct: 79.0, status: 'ACTIVE' },
+   249→   249→    { damId: 'DAM-KKN-002-03', damNameTh: 'ฝายชะลอน้ำชั้นที่ 3', damType: 'CONCRETE', sedimentVolumeM3: 2.8, sedimentDepthCm: 7.5, sedimentSOCpct: 1.3, sedimentCarbonTc: 0.32, flowRateLMin: 4.2, flowReductionPct: 50.6, trapEfficiencyPct: 76.0, status: 'ACTIVE' },
+   250→   250→  ],
+   251→   251→  'SOIL-SPB-003': [
+   252→   252→    { damId: 'DAM-SPB-003-01', damNameTh: 'ฝายชะลอน้ำชั้นที่ 1', damType: 'GABION', sedimentVolumeM3: 5.5, sedimentDepthCm: 12.0, sedimentSOCpct: 2.3, sedimentCarbonTc: 0.82, flowRateLMin: 22.0, flowReductionPct: 26.7, trapEfficiencyPct: 85.0, status: 'ACTIVE' },
+   253→   253→    { damId: 'DAM-SPB-003-02', damNameTh: 'ฝายชะลอน้ำชั้นที่ 2', damType: 'GABION', sedimentVolumeM3: 4.2, sedimentDepthCm: 9.5, sedimentSOCpct: 2.0, sedimentCarbonTc: 0.58, flowRateLMin: 16.5, flowReductionPct: 25.0, trapEfficiencyPct: 80.0, status: 'ACTIVE' },
+   254→   254→  ],
+   255→   255→  'SOIL-SRN-004': [
+   256→   256→    { damId: 'DAM-SRN-004-01', damNameTh: 'ฝายชะลอน้ำชั้นที่ 1', damType: 'LOG', sedimentVolumeM3: 3.2, sedimentDepthCm: 9.0, sedimentSOCpct: 2.4, sedimentCarbonTc: 0.62, flowRateLMin: 12.0, flowReductionPct: 33.3, trapEfficiencyPct: 76.0, status: 'ACTIVE' },
+   257→   257→    { damId: 'DAM-SRN-004-02', damNameTh: 'ฝายชะลอน้ำชั้นที่ 2', damType: 'LOG', sedimentVolumeM3: 2.8, sedimentDepthCm: 8.0, sedimentSOCpct: 2.1, sedimentCarbonTc: 0.50, flowRateLMin: 7.0, flowReductionPct: 41.7, trapEfficiencyPct: 73.0, status: 'ACTIVE' },
+   258→   258→    { damId: 'DAM-SRN-004-03', damNameTh: 'ฝายชะลอน้ำชั้นที่ 3', damType: 'LOG', sedimentVolumeM3: 2.2, sedimentDepthCm: 6.8, sedimentSOCpct: 1.8, sedimentCarbonTc: 0.36, flowRateLMin: 3.5, flowReductionPct: 50.0, trapEfficiencyPct: 70.0, status: 'ACTIVE' },
+   259→   259→    { damId: 'DAM-SRN-004-04', damNameTh: 'ฝายชะลอน้ำชั้นที่ 4', damType: 'LOG', sedimentVolumeM3: 1.8, sedimentDepthCm: 5.5, sedimentSOCpct: 1.6, sedimentCarbonTc: 0.26, flowRateLMin: 1.5, flowReductionPct: 57.1, trapEfficiencyPct: 67.0, status: 'ACTIVE' },
+   260→   260→  ],
+   261→   261→  'SOIL-PKT-005': [
+   262→   262→    { damId: 'DAM-PKT-005-01', damNameTh: 'ฝายชะลอน้ำชั้นที่ 1', damType: 'VEGETATION', sedimentVolumeM3: 3.8, sedimentDepthCm: 9.5, sedimentSOCpct: 3.0, sedimentCarbonTc: 0.72, flowRateLMin: 16.0, flowReductionPct: 36.0, trapEfficiencyPct: 80.0, status: 'ACTIVE' },
+   263→   263→    { damId: 'DAM-PKT-005-02', damNameTh: 'ฝายชะลอน้ำชั้นที่ 2', damType: 'VEGETATION', sedimentVolumeM3: 3.2, sedimentDepthCm: 8.2, sedimentSOCpct: 2.7, sedimentCarbonTc: 0.58, flowRateLMin: 9.5, flowReductionPct: 40.6, trapEfficiencyPct: 77.0, status: 'ACTIVE' },
+   264→   264→    { damId: 'DAM-PKT-005-03', damNameTh: 'ฝายชะลอน้ำชั้นที่ 3', damType: 'VEGETATION', sedimentVolumeM3: 2.5, sedimentDepthCm: 7.0, sedimentSOCpct: 2.4, sedimentCarbonTc: 0.42, flowRateLMin: 5.0, flowReductionPct: 47.4, trapEfficiencyPct: 74.0, status: 'ACTIVE' },
+   265→   265→  ],
+   266→   266→};
+   267→   267→
+   268→   268→// ─── สร้างข้อมูลการวัดตัวอย่างพร้อมข้อมูลตะกอนดิน ───
+   269→   269→function generateSampleMeasurements(
+   270→   270→  plotId: string,
+   271→   271→  plotData: typeof SAMPLE_PLOTS[0],
+   272→   272→  terraceIds?: string[]
+   273→   273→) {
+   274→   274→  const baseDate = new Date('2024-01-15');
+   275→   275→  const measurements = [];
+   276→   276→
+   277→   277→  // สร้างข้อมูลการวัด 3 ครั้งต่อแปลง (ทุก 4 เดือน)
+   278→   278→  for (let i = 0; i < 3; i++) {
+   279→   279→    const date = new Date(baseDate.getTime() + i * 120 * 24 * 60 * 60 * 1000);
+   280→   280→    const isAnomaly = i === 2 && plotId === 'SOIL-KKN-002'; // แปลงขอนแก่น มีข้อมูลผิดปกติในรอบสุดท้าย
+   281→   281→
+   282→   282→    // ข้อมูลตะกอนดินตามความลาดชัน
+   283→   283→    const slopeFactor = plotData.slopeDegree / 20;
+   284→   284→    const runoffVolumeL = Math.round((500 + slopeFactor * 2000 + Math.random() * 500) * 10) / 10;
+   285→   285→    const sedimentConcGpL = Math.round((5 + slopeFactor * 15 + Math.random() * 5) * 100) / 100;
+   286→   286→
+   287→   287→    measurements.push({
+   288→   288→      plotId,
+   289→   289→      measurementDate: date.toISOString(),
+   290→   290→      measurementType: i === 1 ? 'LAB' : 'FIELD',
+   291→   291→      depthCm: 30,
+   292→   292→      soilMoisture: isAnomaly ? 95 : 30 + Math.random() * 15,
+   293→   293→      soilTemperature: 25 + Math.random() * 5,
+   294→   294→      soilPH: 6.0 + Math.random() * 0.8,
+   295→   295→      bulkDensity: isAnomaly ? 3.2 : 1.1 + Math.random() * 0.3,
+   296→   296→      organicCarbonPct: plotData.baselineSOC / 30 + (i * 0.4) + Math.random() * 0.2,
+   297→   297→      totalNitrogen: 0.12 + Math.random() * 0.05,
+   298→   298→      cec: 12 + Math.random() * 8,
+   299→   299→      aboveGroundBiomass: 3 + Math.random() * 2,
+   300→   300→      belowGroundBiomass: 1.2 + Math.random() * 0.8,
+   301→   301→      co2Flux: 2 + Math.random() * 3,
+   302→   302→      ch4Flux: plotData.cropType === 'Rice' ? 5 + Math.random() * 10 : 0.5 + Math.random() * 2,
+   303→   303→      n2oFlux: 10 + Math.random() * 30,
+   304→   304→      runoffVolumeL,
+   305→   305→      sedimentConcGpL,
+   306→   306→      sedimentLoadKg: Math.round(runoffVolumeL * sedimentConcGpL / 1000 * 1000) / 1000,
+   307→   307→      erosionRateTpHa: Math.round((plotData.baselineSediment / 3 + Math.random() * 3) * 1000) / 1000,
+   308→   308→      waterFlowRateLMin: Math.round((5 + slopeFactor * 15 + Math.random() * 5) * 10) / 10,
+   309→   309→      infiltrationMmHr: Math.round((20 + Math.random() * 30) * 10) / 10,
+   310→   310→      ingestionMode: i === 2 ? 'batch' : 'realtime',
+   311→   311→      qualityFlag: isAnomaly ? 'ANOMALY' : 'VALIDATED',
+   312→   312→      sourceDevice: i === 1 ? `LAB-${plotId.split('-')[1]}-001` : `SENSOR-${plotId.split('-')[1]}-001`,
+   313→   313→      notes: isAnomaly
+   314→   314→        ? 'ค่า bulkDensity ผิดปกติ กรุณาตรวจสอบ'
+   315→   315→        : `การวัดครั้งที่ ${i + 1} (พื้นที่ลาดชัน ${plotData.slopeDegree}°)`,
+   316→   316→    });
+   317→   317→
+   318→   318→    // เพิ่มข้อมูลการวัดเฉพาะชั้นปลูก (ถ้ามี terraceIds)
+   319→   319→    if (terraceIds && terraceIds.length > 0) {
+   320→   320→      for (let t = 0; t < Math.min(terraceIds.length, 2); t++) {
+   321→   321→        measurements.push({
+   322→   322→          plotId,
+   323→   323→          terraceLayerId: terraceIds[t],
+   324→   324→          measurementDate: date.toISOString(),
+   325→   325→          measurementType: 'FIELD',
+   326→   326→          depthCm: 30,
+   327→   327→          soilMoisture: 32 + Math.random() * 12,
+   328→   328→          soilTemperature: 24 + Math.random() * 5,
+   329→   329→          soilPH: 6.2 + Math.random() * 0.6,
+   330→   330→          bulkDensity: 1.1 + Math.random() * 0.2,
+   331→   331→          organicCarbonPct: plotData.baselineSOC / 30 + (t * 0.2) + Math.random() * 0.1,
+   332→   332→          totalNitrogen: 0.10 + Math.random() * 0.04,
+   333→   333→          cec: 14 + Math.random() * 6,
+   334→   334→          aboveGroundBiomass: 2.5 + Math.random() * 1.5,
+   335→   335→          belowGroundBiomass: 1.0 + Math.random() * 0.5,
+   336→   336→          co2Flux: 2.5 + Math.random() * 2,
+   337→   337→          ch4Flux: 1 + Math.random() * 3,
+   338→   338→          n2oFlux: 12 + Math.random() * 20,
+   339→   339→          runoffVolumeL: Math.round((200 + t * 100 + Math.random() * 100) * 10) / 10,
+   340→   340→          sedimentConcGpL: Math.round((3 + plotData.slopeDegree / 10 + Math.random() * 3) * 100) / 100,
+   341→   341→          sedimentLoadKg: 0, // จะคำนวณอัตโนมัติ
+   342→   342→          erosionRateTpHa: Math.round((plotData.baselineSediment / 5 + Math.random() * 2) * 1000) / 1000,
+   343→   343→          waterFlowRateLMin: Math.round((3 + t * 2 + Math.random() * 3) * 10) / 10,
+   344→   344→          infiltrationMmHr: Math.round((25 + Math.random() * 20) * 10) / 10,
+   345→   345→          ingestionMode: 'realtime',
+   346→   346→          qualityFlag: 'VALIDATED',
+   347→   347→          sourceDevice: `SENSOR-${plotId.split('-')[1]}-T${t + 1}`,
+   348→   348→          notes: `การวัดชั้นปลูกที่ ${t + 1}`,
+   349→   349→        });
+   350→   350→      }
+   351→   351→    }
+   352→   352→  }
+   353→   353→
+   354→   354→  return measurements;
+   355→   355→}
+   356→   356→
+   357→   357→// ─── คำสั่ง curl สำหรับทดสอบ ───
+   358→   358→function generateCurlCommands() {
+   359→   359→  return {
+   360→   360→    plots: {
+   361→   361→      list: {
+   362→   362→        description: 'ดึงรายการแปลงทั้งหมด (List all terraced plots)',
+   363→   363→        command: `curl -s http://localhost:3000/api/soil-carbon/plots | jq .`,
+   364→   364→      },
+   365→   365→      listWithSlope: {
+   366→   366→        description: 'ค้นหาแปลงตามประเภทการปลูก (Filter by practiceType)',
+   367→   367→        command: `curl -s "http://localhost:3000/api/soil-carbon/plots?practiceType=sediment_trap" | jq .`,
+   368→   368→      },
+   369→   369→      createTerraced: {
+   370→   370→        description: 'สร้างแปลงขั้นบันไดใหม่ (Create a new terraced plot)',
+   371→   371→        command: `curl -s -X POST http://localhost:3000/api/soil-carbon/plots \\
+   372→   372→  -H "Content-Type: application/json" \\
+   373→   373→  -d '{
+   374→   374→    "plotId": "SOIL-TEST-001",
+   375→   375→    "name": "Test Terraced Field",
+   376→   376→    "nameTh": "แปลงขั้นบันไดทดสอบ",
+   377→   377→    "province": "ลำพูน",
+   378→   378→    "lat": 18.55,
+   379→   379→    "lng": 99.05,
+   380→   380→    "altitudeMasl": 600,
+   381→   381→    "slopeDegree": 20,
+   382→   382→    "slopeAspect": "NE",
+   383→   383→    "areaRai": 15,
+   384→   384→    "terraceCount": 4,
+   385→   385→    "terraceWidthM": 3.0,
+   386→   386→    "terraceHeightM": 1.5,
+   387→   387→    "checkDamCount": 3,
+   388→   388→    "checkDamType": "STONE",
+   389→   389→    "landUseType": "terraced_farming",
+   390→   390→    "soilType": "Loam",
+   391→   391→    "cropType": "Rice",
+   392→   392→    "practiceType": "sediment_trap",
+   393→   393→    "baselineSOC": 22.0,
+   394→   394→    "projectSOC": 30.0,
+   395→   395→    "baselineSediment": 16.0,
+   396→   396→    "projectSediment": 4.0,
+   397→   397→    "baselineEmission": 4.0,
+   398→   398→    "projectEmission": 1.8,
+   399→   399→    "methodology": "T-VER-SOIL-01"
+   400→   400→  }' | jq .`,
+   401→   401→      },
+   402→   402→    },
+   403→   403→    measurements: {
+   404→   404→      list: {
+   405→   405→        description: 'ดึงรายการข้อมูลการวัด (List measurements)',
+   406→   406→        command: `curl -s http://localhost:3000/api/soil-carbon/measurements | jq .`,
+   407→   407→      },
+   408→   408→      listByPlot: {
+   409→   409→        description: 'ดึงข้อมูลการวัดตามแปลง (Filter by plotId)',
+   410→   410→        command: `curl -s "http://localhost:3000/api/soil-carbon/measurements?plotId=SOIL-CMD-001" | jq .`,
+   411→   411→      },
+   412→   412→      listByTerrace: {
+   413→   413→        description: 'ดึงข้อมูลการวัดตามชั้นปลูก (Filter by terraceLayerId)',
+   414→   414→        command: `curl -s "http://localhost:3000/api/soil-carbon/measurements?terraceLayerId=TERRACE_ID" | jq .`,
+   415→   415→      },
+   416→   416→      createWithSediment: {
+   417→   417→        description: 'สร้างข้อมูลการวัดพร้อมข้อมูลตะกอนดิน (Create with sediment data)',
+   418→   418→        command: `curl -s -X POST http://localhost:3000/api/soil-carbon/measurements \\
+   419→   419→  -H "Content-Type: application/json" \\
+   420→   420→  -d '{
+   421→   421→    "plotId": "SOIL-CMD-001",
+   422→   422→    "measurementDate": "2024-06-15T10:30:00Z",
+   423→   423→    "measurementType": "FIELD",
+   424→   424→    "depthCm": 30,
+   425→   425→    "soilMoisture": 38.5,
+   426→   426→    "soilTemperature": 27.3,
+   427→   427→    "soilPH": 6.5,
+   428→   428→    "bulkDensity": 1.35,
+   429→   429→    "organicCarbonPct": 2.8,
+   430→   430→    "totalNitrogen": 0.15,
+   431→   431→    "cec": 18.2,
+   432→   432→    "aboveGroundBiomass": 4.2,
+   433→   433→    "belowGroundBiomass": 1.8,
+   434→   434→    "co2Flux": 3.5,
+   435→   435→    "ch4Flux": 8.2,
+   436→   436→    "n2oFlux": 25.0,
+   437→   437→    "runoffVolumeL": 2500,
+   438→   438→    "sedimentConcGpL": 12.5,
+   439→   439→    "waterFlowRateLMin": 8.5,
+   440→   440→    "infiltrationMmHr": 35.0,
+   441→   441→    "sourceDevice": "SENSOR-CMD-001",
+   442→   442→    "notes": "การวัดภาคสนามบนพื้นที่ลาดชัน"
+   443→   443→  }' | jq .`,
+   444→   444→      },
+   445→   445→    },
+   446→   446→    calculate: {
+   447→   447→      description: 'คำนวณเครดิตคาร์บอนแบบ Sediment Trap (Calculate with sediment trap methodology)',
+   448→   448→      command: `curl -s -X POST http://localhost:3000/api/soil-carbon/calculate \\
+   449→   449→  -H "Content-Type: application/json" \\
+   450→   450→  -d '{
+   451→   451→    "plotId": "SOIL-CMD-001",
+   452→   452→    "monitoringPeriodStart": "2024-01-01",
+   453→   453→    "monitoringPeriodEnd": "2024-12-31",
+   454→   454→    "includeDetailReport": true
+   455→   455→  }' | jq .`,
+   456→   456→    },
+   457→   457→    ingest: {
+   458→   458→      description: 'นำเข้าข้อมูลเซ็นเซอร์แบบกลุ่มพร้อมข้อมูลตะกอนดิน (Bulk ingest with sediment data)',
+   459→   459→      command: `curl -s -X POST http://localhost:3000/api/soil-carbon/ingest \\
+   460→   460→  -H "Content-Type: application/json" \\
+   461→   461→  -d '{
+   462→   462→    "readings": [
+   463→   463→      {
+   464→   464→        "plotId": "SOIL-CMD-001",
+   465→   465→        "measurementDate": "2024-08-01T09:00:00Z",
+   466→   466→        "bulkDensity": 1.3,
+   467→   467→        "organicCarbonPct": 2.5,
+   468→   468→        "soilMoisture": 35.0,
+   469→   469→        "soilTemperature": 28.0,
+   470→   470→        "soilPH": 6.8,
+   471→   471→        "co2Flux": 2.8,
+   472→   472→        "ch4Flux": 6.5,
+   473→   473→        "n2oFlux": 20.0,
+   474→   474→        "runoffVolumeL": 1800,
+   475→   475→        "sedimentConcGpL": 10.2,
+   476→   476→        "waterFlowRateLMin": 7.5,
+   477→   477→        "infiltrationMmHr": 32.0,
+   478→   478→        "sourceDevice": "SENSOR-CMD-001"
+   479→   479→      },
+   480→   480→      {
+   481→   481→        "plotId": "SOIL-KKN-002",
+   482→   482→        "measurementDate": "2024-08-01T10:00:00Z",
+   483→   483→        "bulkDensity": 1.15,
+   484→   484→        "organicCarbonPct": 1.8,
+   485→   485→        "soilMoisture": 28.0,
+   486→   486→        "soilTemperature": 30.5,
+   487→   487→        "soilPH": 6.2,
+   488→   488→        "co2Flux": 4.2,
+   489→   489→        "ch4Flux": 1.2,
+   490→   490→        "n2oFlux": 35.0,
+   491→   491→        "runoffVolumeL": 3500,
+   492→   492→        "sedimentConcGpL": 15.0,
+   493→   493→        "waterFlowRateLMin": 12.0,
+   494→   494→        "infiltrationMmHr": 22.0,
+   495→   495→        "sourceDevice": "SENSOR-KKN-001"
+   496→   496→      }
+   497→   497→    ]
+   498→   498→  }' | jq .`,
+   499→   499→    },
+   500→   500→    seed: {
+   501→   501→      description: 'สร้างข้อมูลตัวอย่างลงฐานข้อมูล (Seed sample data)',
+   502→   502→      command: `curl -s "http://localhost:3000/api/soil-carbon/sample?seed=true" | jq .`,
+   503→   503→    },
+   504→   504→  };
+   505→   505→}
+   506→   506→
+   507→   507→export async function GET(req: NextRequest) {
+   508→   508→  try {
+   509→   509→    const { searchParams } = req.nextUrl;
+   510→   510→    const seed = searchParams.get('seed') === 'true';
+   511→   511→    const section = searchParams.get('section') || 'all'; // all, plots, measurements, calculations, curl
+   512→   512→
+   513→   513→    // ─── ถ้าต้องการ seed ข้อมูลลงฐานข้อมูล ───
+   514→   514→    if (seed) {
+   515→   515→      const seededPlots: any[] = [];
+   516→   516→      const seededTerraces: any[] = [];
+   517→   517→      const seededCheckDams: any[] = [];
+   518→   518→      const seededMeasurements: any[] = [];
+   519→   519→
+   520→   520→      for (const plotData of SAMPLE_PLOTS) {
+   521→   521→        // ตรวจสอบว่ามีอยู่แล้วหรือไม่
+   522→   522→        const existing = await db.soilCarbonPlot.findUnique({ where: { plotId: plotData.plotId } });
+   523→   523→        if (existing) {
+   524→   524→          seededPlots.push(existing);
+   525→   525→          continue;
+   526→   526→        }
+   527→   527→
+   528→   528→        // สร้างแปลง
+   529→   529→        const plot = await db.soilCarbonPlot.create({ data: plotData });
+   530→   530→        seededPlots.push(plot);
+   531→   531→
+   532→   532→        // ─── สร้างฝายชะลอน้ำก่อน (เพื่อให้ TerraceLayer อ้างอิงได้) ───
+   533→   533→        const damIds: string[] = [];
+   534→   534→        const sampleDams = SAMPLE_CHECK_DAMS[plotData.plotId] || [];
+   535→   535→        for (const damData of sampleDams) {
+   536→   536→          const dam = await db.checkDam.create({
+   537→   537→            data: {
+   538→   538→              plotId: plot.plotId,
+   539→   539→              damId: damData.damId,
+   540→   540→              damName: `Check Dam ${damData.damId}`,
+   541→   541→              damNameTh: damData.damNameTh,
+   542→   542→              damType: damData.damType,
+   543→   543→              heightM: plotData.terraceHeightM * 0.8 || 0.5,
+   544→   544→              widthM: plotData.terraceWidthM * 0.6 || 2,
+   545→   545→              thicknessM: 0.3,
+   546→   546→              upstreamDepthM: damData.sedimentDepthCm / 100 * 0.5,
+   547→   547→              sedimentDepthCm: damData.sedimentDepthCm,
+   548→   548→              sedimentVolumeM3: damData.sedimentVolumeM3,
+   549→   549→              sedimentSOCpct: damData.sedimentSOCpct,
+   550→   550→              sedimentCarbonTc: damData.sedimentCarbonTc,
+   551→   551→              flowRateLMin: damData.flowRateLMin,
+   552→   552→              flowReductionPct: damData.flowReductionPct,
+   553→   553→              trapEfficiencyPct: damData.trapEfficiencyPct,
+   554→   554→              status: damData.status,
+   555→   555→            },
+   556→   556→          });
+   557→   557→          damIds.push(dam.id);
+   558→   558→          seededCheckDams.push(dam);
+   559→   559→        }
+   560→   560→
+   561→   561→        // ─── สร้างชั้นปลูก (TerraceLayer) ───
+   562→   562→        const terraceIds: string[] = [];
+   563→   563→        const sampleTerraces = SAMPLE_TERRACES[plotData.plotId] || [];
+   564→   564→        for (const terraceData of sampleTerraces) {
+   565→   565→          const lengthM = plotData.terraceWidthM > 0
+   566→   566→            ? Math.round((plotData.areaHa * 10000 / plotData.terraceCount / plotData.terraceWidthM) * 100) / 100
+   567→   567→            : 0;
+   568→   568→          const areaSqm = Math.round(plotData.terraceWidthM * lengthM * 100) / 100;
+   569→   569→
+   570→   570→          const terrace = await db.terraceLayer.create({
+   571→   571→            data: {
+   572→   572→              plotId: plot.plotId,
+   573→   573→              layerNumber: terraceData.layerNumber,
+   574→   574→              layerName: `Terrace Layer ${terraceData.layerNumber}`,
+   575→   575→              layerNameTh: terraceData.layerNameTh,
+   576→   576→              elevationMasl: terraceData.elevationMasl,
+   577→   577→              widthM: plotData.terraceWidthM || 0,
+   578→   578→              heightM: plotData.terraceHeightM || 0,
+   579→   579→              lengthM,
+   580→   580→              areaSqm,
+   581→   581→              cropType: plotData.cropType || '',
+   582→   582→              soilDepthCm: 30,
+   583→   583→              sedimentDepthCm: terraceData.sedimentDepthCm,
+   584→   584→              waterFlowInLMin: terraceData.waterFlowInLMin,
+   585→   585→              waterFlowOutLMin: terraceData.waterFlowOutLMin,
+   586→   586→              sedimentTrappedKg: terraceData.sedimentTrappedKg,
+   587→   587→              organicCarbonPct: terraceData.organicCarbonPct,
+   588→   588→              socStockTcHa: 0, // จะคำนวณจากข้อมูลการวัด
+   589→   589→              checkDamId: terraceData.layerNumber <= damIds.length ? damIds[terraceData.layerNumber - 1] : null,
+   590→   590→            },
+   591→   591→          });
+   592→   592→          terraceIds.push(terrace.id);
+   593→   593→          seededTerraces.push(terrace);
+   594→   594→        }
+   595→   595→
+   596→   596→        // ─── สร้างข้อมูลการวัดตัวอย่างพร้อมข้อมูลตะกอนดิน ───
+   597→   597→        const measurements = generateSampleMeasurements(plotData.plotId, plotData, terraceIds);
+   598→   598→        for (const m of measurements) {
+   599→   599→          // คำนวณ SOC Stock
+   600→   600→          const socStock = m.bulkDensity * (m.organicCarbonPct / 100) * (m.depthCm / 100);
+   601→   601→          // คำนวณ sedimentLoadKg อัตโนมัติถ้ายังไม่มี
+   602→   602→          const sedimentLoadKg = m.sedimentLoadKg || (m.runoffVolumeL * m.sedimentConcGpL / 1000);
+   603→   603→
+   604→   604→          const measurement = await db.soilCarbonMeasurement.create({
+   605→   605→            data: {
+   606→   606→              ...m,
+   607→   607→              socStock: Math.round(socStock * 1000) / 1000,
+   608→   608→              sedimentLoadKg: Math.round(sedimentLoadKg * 1000) / 1000,
+   609→   609→              integrityHash: 'seeded-sample-terraced',
+   610→   610→            },
+   611→   611→          });
+   612→   612→          seededMeasurements.push(measurement);
+   613→   613→        }
+   614→   614→      }
+   615→   615→
+   616→   616→      return NextResponse.json({
+   617→   617→        success: true,
+   618→   618→        message: `สร้างข้อมูลตัวอย่างสำเร็จ: ${seededPlots.length} แปลง, ${seededTerraces.length} ชั้นปลูก, ${seededCheckDams.length} ฝาย, ${seededMeasurements.length} รายการวัด`,
+   619→   619→        data: {
+   620→   620→          plots: seededPlots,
+   621→   621→          terraces: seededTerraces,
+   622→   622→          checkDams: seededCheckDams,
+   623→   623→          measurements: seededMeasurements,
+   624→   624→        },
+   625→   625→      });
+   626→   626→    }
+   627→   627→
+   628→   628→    // ─── ส่งข้อมูลตัวอย่าง (ไม่บันทึกลงฐานข้อมูล) ───
+   629→   629→    const result: Record<string, any> = {};
+   630→   630→
+   631→   631→    if (section === 'all' || section === 'plots') {
+   632→   632→      result.plots = {
+   633→   633→        description: 'ข้อมูลแปลงตัวอย่าง 5 แปลง (พื้นที่ลาดชัน/ขั้นบันได จังหวัดต่างๆ ในประเทศไทย)',
+   634→   634→        count: SAMPLE_PLOTS.length,
+   635→   635→        data: SAMPLE_PLOTS,
+   636→   636→        provinces: [...new Set(SAMPLE_PLOTS.map(p => p.province))],
+   637→   637→        cropTypes: [...new Set(SAMPLE_PLOTS.map(p => p.cropType))],
+   638→   638→        practiceTypes: [...new Set(SAMPLE_PLOTS.map(p => p.practiceType))],
+   639→   639→        altitudeRange: `${Math.min(...SAMPLE_PLOTS.map(p => p.altitudeMasl))} - ${Math.max(...SAMPLE_PLOTS.map(p => p.altitudeMasl))} ม.รทก.`,
+   640→   640→        slopeRange: `${Math.min(...SAMPLE_PLOTS.map(p => p.slopeDegree))}° - ${Math.max(...SAMPLE_PLOTS.map(p => p.slopeDegree))}°`,
+   641→   641→        totalTerraceCount: SAMPLE_PLOTS.reduce((s, p) => s + p.terraceCount, 0),
+   642→   642→        totalCheckDamCount: SAMPLE_PLOTS.reduce((s, p) => s + p.checkDamCount, 0),
+   643→   643→      };
+   644→   644→    }
+   645→   645→
+   646→   646→    if (section === 'all' || section === 'terraces') {
+   647→   647→      result.terraces = {
+   648→   648→        description: 'ข้อมูลชั้นปลูกตัวอย่างสำหรับแต่ละแปลง',
+   649→   649→        data: SAMPLE_TERRACES,
+   650→   650→      };
+   651→   651→    }
+   652→   652→
+   653→   653→    if (section === 'all' || section === 'checkdams') {
+   654→   654→      result.checkDams = {
+   655→   655→        description: 'ข้อมูลฝายชะลอน้ำตัวอย่างสำหรับแต่ละแปลง',
+   656→   656→        data: SAMPLE_CHECK_DAMS,
+   657→   657→      };
+   658→   658→    }
+   659→   659→
+   660→   660→    if (section === 'all' || section === 'measurements') {
+   661→   661→      const allMeasurements = SAMPLE_PLOTS.map(plot => ({
+   662→   662→        plotId: plot.plotId,
+   663→   663→        name: plot.name,
+   664→   664→        nameTh: plot.nameTh,
+   665→   665→        slopeDegree: plot.slopeDegree,
+   666→   666→        altitudeMasl: plot.altitudeMasl,
+   667→   667→        measurements: generateSampleMeasurements(plot.plotId, plot),
+   668→   668→      }));
+   669→   669→      result.measurements = {
+   670→   670→        description: 'ข้อมูลการวัดตัวอย่างพร้อมข้อมูลตะกอนดิน (3+ รายการต่อแปลง)',
+   671→   671→        totalMeasurements: allMeasurements.reduce((sum, p) => sum + p.measurements.length, 0),
+   672→   672→        data: allMeasurements,
+   673→   673→      };
+   674→   674→    }
+   675→   675→
+   676→   676→    if (section === 'all' || section === 'calculations') {
+   677→   677→      result.calculations = {
+   678→   678→        description: 'ผลการคำนวณเครดิตคาร์บอนตัวอย่าง (T-VER-SOIL-01 Sediment Trap Methodology)',
+   679→   679→        methodology: 'T-VER-SOIL-01',
+   680→   680→        bufferPct: 20,
+   681→   681→        formulas: {
+   682→   682→          step1: 'SOC Stock Change = ΔSOC × 44/12 × areaHa',
+   683→   683→          step2: 'Sediment Trapped = sedimentTrappedKg × organicCarbonPct/100 / 1000 × 44/12 (ต่อชั้นปลูก)',
+   684→   684→          step3: 'Check Dam Carbon = sedimentCarbonTc × 44/12 (ต่อฝาย)',
+   685→   685→          step4: 'Erosion Prevention = (baselineSediment − projectSediment) × avgSOCPct/100 × areaHa × 44/12',
+   686→   686→          step5: 'GHG Reduction = (baselineEmission − projectEmission) × areaHa × monitoringYears',
+   687→   687→          step6: 'Net = Gross × 0.80 (หัก Buffer 20%)',
+   688→   688→        },
+   689→   689→        data: SAMPLE_PLOTS.map(plot => {
+   690→   690→          const deltaSOC = plot.projectSOC - plot.baselineSOC;
+   691→   691→          const step1 = deltaSOC * (44 / 12) * plot.areaHa;
+   692→   692→          // Step 2: คำนวณจากข้อมูลชั้นปลูก
+   693→   693→          const terraces = SAMPLE_TERRACES[plot.plotId] || [];
+   694→   694→          const step2 = terraces.reduce((sum, t) => {
+   695→   695→            const sedimentCarbon = t.sedimentTrappedKg * (t.organicCarbonPct / 100) / 1000;
+   696→   696→            return sum + sedimentCarbon * (44 / 12);
+   697→   697→          }, 0);
+   698→   698→          // Step 3: คำนวณจากข้อมูลฝาย
+   699→   699→          const dams = SAMPLE_CHECK_DAMS[plot.plotId] || [];
+   700→   700→          const step3 = dams.reduce((sum, d) => sum + d.sedimentCarbonTc * (44 / 12), 0);
+   701→   701→          // Step 4: Erosion Prevention
+   702→   702→          const step4 = (plot.baselineSediment - plot.projectSediment) * (plot.baselineSOC / 30) / 100 * plot.areaHa * (44 / 12);
+   703→   703→          // Step 5: GHG Reduction
+   704→   704→          const step5 = (plot.baselineEmission - plot.projectEmission) * plot.areaHa * plot.monitoringYear;
+   705→   705→          const gross = step1 + step2 + step3 + step4 + step5;
+   706→   706→          const net = gross * 0.80;
+   707→   707→
+   708→   708→          return {
+   709→   709→            plotId: plot.plotId,
+   710→   710→            nameTh: plot.nameTh,
+   711→   711→            slopeDegree: plot.slopeDegree,
+   712→   712→            altitudeMasl: plot.altitudeMasl,
+   713→   713→            steps: {
+   714→   714→              step1_socStockChange: Math.round(step1 * 1000) / 1000,
+   715→   715→              step2_sedimentTrapped: Math.round(step2 * 1000) / 1000,
+   716→   716→              step3_checkDamCarbon: Math.round(step3 * 1000) / 1000,
+   717→   717→              step4_erosionPrevention: Math.round(step4 * 1000) / 1000,
+   718→   718→              step5_ghgReduction: Math.round(step5 * 1000) / 1000,
+   719→   719→            },
+   720→   720→            gross: Math.round(gross * 1000) / 1000,
+   721→   721→            buffer: Math.round(gross * 0.2 * 1000) / 1000,
+   722→   722→            net: Math.round(net * 1000) / 1000,
+   723→   723→            unit: 'tCO2e',
+   724→   724→          };
+   725→   725→        }),
+   726→   726→      };
+   727→   727→    }
+   728→   728→
+   729→   729→    if (section === 'all' || section === 'curl') {
+   730→   730→      result.curl = {
+   731→   731→        description: 'คำสั่ง curl สำหรับทดสอบ API ทั้งหมด (พื้นที่ลาดชัน/ขั้นบันได)',
+   732→   732→        base_url: 'http://localhost:3000',
+   733→   733→        endpoints: generateCurlCommands(),
+   734→   734→      };
+   735→   735→    }
+   736→   736→
+   737→   737→    // ─── ข้อมูลเพิ่มเติม: ช่วงค่าเซ็นเซอร์ ───
+   738→   738→    if (section === 'all') {
+   739→   739→      result.sensorValidationRanges = {
+   740→   740→        description: 'ช่วงค่าที่ยอมรับสำหรับการตรวจสอบข้อมูลเซ็นเซอร์ (รวมเซ็นเซอร์ตะกอนดิน)',
+   741→   741→        ranges: {
+   742→   742→          soil_moisture: { min: 0, max: 80, unit: '%', labelTh: 'ความชื้นในดิน' },
+   743→   743→          soil_temperature: { min: 0, max: 60, unit: '°C', labelTh: 'อุณหภูมิดิน' },
+   744→   744→          soil_ph: { min: 2, max: 12, unit: 'pH', labelTh: 'ค่า pH ของดิน' },
+   745→   745→          bulk_density: { min: 0.3, max: 2.5, unit: 'g/cm³', labelTh: 'ความหนาแน่นรวมของดิน' },
+   746→   746→          organic_carbon_pct: { min: 0, max: 30, unit: '%', labelTh: 'ร้อยละคาร์บอนอินทรีย์' },
+   747→   747→          total_nitrogen: { min: 0, max: 5, unit: '%', labelTh: 'ไนโตรเจนรวม' },
+   748→   748→          cec: { min: 0, max: 50, unit: 'cmol/kg', labelTh: 'ความจุแลกเปลี่ยนประจุ' },
+   749→   749→          above_ground_biomass: { min: 0, max: 50, unit: 't/ha', labelTh: 'มวลชีวภาพเหนือพื้นดิน' },
+   750→   750→          below_ground_biomass: { min: 0, max: 20, unit: 't/ha', labelTh: 'มวลชีวภาพใต้พื้นดิน' },
+   751→   751→          co2_flux: { min: -20, max: 100, unit: 'µmol/m²/s', labelTh: 'ฟลักซ์ CO₂' },
+   752→   752→          ch4_flux: { min: -10, max: 200, unit: 'mg/m²/hr', labelTh: 'ฟลักซ์ CH₄' },
+   753→   753→          n2o_flux: { min: -200, max: 2000, unit: 'µg/m²/hr', labelTh: 'ฟลักซ์ N₂O' },
+   754→   754→          sediment_concentration: { min: 0, max: 50, unit: 'g/L', labelTh: 'ความเข้มข้นตะกอน' },
+   755→   755→          runoff_volume: { min: 0, max: 100000, unit: 'L', labelTh: 'ปริมาณน้ำไหลบ่า' },
+   756→   756→          water_flow_rate: { min: 0, max: 500, unit: 'L/min', labelTh: 'อัตราการไหลของน้ำ' },
+   757→   757→          infiltration_rate: { min: 0, max: 500, unit: 'mm/hr', labelTh: 'อัตราซึมน้ำ' },
+   758→   758→          erosion_rate: { min: 0, max: 100, unit: 't/ha/yr', labelTh: 'อัตราการพังทลายดิน' },
+   759→   759→        },
+   760→   760→      };
+   761→   761→
+   762→   762→      result.methodologyInfo = {
+   763→   763→        name: 'T-VER-SOIL-01',
+   764→   764→        descriptionTh: 'วิธีการตรวจสอบและรับรองโครงการกักเก็บคาร์บอนในดิน (พื้นที่ลาดชัน/ขั้นบันได)',
+   765→   765→        keyParameters: {
+   766→   766→          bufferPct: 20,
+   767→   767→          monitoringPeriodMinYr: 1,
+   768→   768→          monitoringPeriodMaxYr: 10,
+   769→   769→          creditValidityYr: 10,
+   770→   770→          uncertaintyDeductionPct: 20,
+   771→   771→          socChangeThreshold: '0.05 tC/ha/yr',
+   772→   772→        },
+   773→   773→        calculationSteps: {
+   774→   774→          step1: 'SOC Stock Change = ΔSOC × 44/12 × areaHa',
+   775→   775→          step2: 'Sediment Trapped = sedimentTrappedKg × organicCarbonPct/100 / 1000 × 44/12',
+   776→   776→          step3: 'Check Dam Carbon = sedimentCarbonTc × 44/12',
+   777→   777→          step4: 'Erosion Prevention = (baselineSediment − projectSediment) × avgSOCPct/100 × areaHa × 44/12',
+   778→   778→          step5: 'GHG Reduction = (baselineEmission − projectEmission) × areaHa × monitoringYears',
+   779→   779→          step6: 'Net = Gross × 0.80 (Buffer 20%)',
+   780→   780→        },
+   781→   781→        gwpFactors: {
+   782→   782→          CO2: 1,
+   783→   783→          CH4: 27.9,
+   784→   784→          N2O: 273,
+   785→   785→          source: 'IPCC AR6',
+   786→   786→        },
+   787→   787→      };
+   788→   788→
+   789→   789→      result.seedInstructions = {
+   790→   790→        description: 'วิธีการสร้างข้อมูลตัวอย่างลงฐานข้อมูล (พื้นที่ลาดชันพร้อมชั้นปลูก ฝาย และข้อมูลตะกอนดิน)',
+   791→   791→        command: 'curl -s "http://localhost:3000/api/soil-carbon/sample?seed=true" | jq .',
+   792→   792→        note: 'ข้อมูลจะถูกสร้างเฉพาะที่ยังไม่มีอยู่ (จะไม่เขียนทับ)',
+   793→   793→        includes: [
+   794→   794→          '5 แปลงตัวอย่างบนพื้นที่ลาดชัน',
+   795→   795→          'ชั้นปลูก (TerraceLayer) สำหรับแต่ละแปลง พร้อมข้อมูลตะกอนดิน',
+   796→   796→          'ฝายชะลอน้ำ (CheckDam) พร้อมข้อมูลตะกอนดินที่กักไว้',
+   797→   797→          'ข้อมูลการวัด (Measurements) พร้อม runoffVolumeL, sedimentConcGpL',
+   798→   798→        ],
+   799→   799→      };
+   800→   800→    }
+   801→   801→
+   802→   802→    return NextResponse.json({
+   803→   803→      success: true,
+   804→   804→      data: result,
+   805→   805→    });
+   806→   806→  } catch (error) {
+   807→   807→    console.error('Soil carbon sample GET error:', error);
+   808→   808→    return NextResponse.json(
+   809→   809→      { success: false, error: 'ไม่สามารถดึงข้อมูลตัวอย่างได้', details: String(error) },
+   810→   810→      { status: 500 }
+   811→   811→    );
+   812→   812→  }
+   813→   813→}
+   814→   814→

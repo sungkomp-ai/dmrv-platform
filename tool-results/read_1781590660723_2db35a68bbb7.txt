@@ -1,0 +1,763 @@
+     1→// This is your Prisma schema file,
+     2→// learn more about it in the docs: https://pris.ly/d/prisma-schema
+     3→
+     4→generator client {
+     5→  provider = "prisma-client"
+     6→  output   = "../src/generated/prisma"
+     7→}
+     8→
+     9→datasource db {
+    10→  provider = "sqlite"
+    11→  // URL is configured in prisma.config.ts (Prisma 7 pattern)
+    12→}
+    13→
+    14→// ─── Core Models ──────────────────────────────────────────────────────────
+    15→
+    16→model Project {
+    17→  id          String   @id @default(cuid())
+    18→  name        String
+    19→  description String   @default("")
+    20→  methodology String   @default("T-VER") // T-VER, IPCC-2023, T-VER-FOREST
+    21→  status      String   @default("Active") // Active, Pending, Suspended, Completed
+    22→  areaHa      Float    @default(0)
+    23→  location    String   @default("")
+    24→  region      String   @default("")
+    25→  country     String   @default("Thailand")
+    26→  centerLat   Float    @default(13.75)
+    27→  centerLng   Float    @default(100.5)
+    28→  province    String   @default("")
+    29→  startDate   DateTime @default(now())
+    30→  createdAt   DateTime @default(now())
+    31→  updatedAt   DateTime @updatedAt
+    32→
+    33→  plots             Plot[]
+    34→  credits           CarbonCredit[]
+    35→  certificates      Certificate[]
+    36→  ingestionLogs     IngestionLog[]
+    37→  submissions       Submission[]
+    38→  auditLogs         AuditLog[]
+    39→  iotSensors        IoTSensor[]
+    40→  vvbReviews        VVBReview[]
+    41→  conflictCases     ConflictCase[]
+    42→  bufferPoolEntries BufferPoolEntry[]
+    43→  forwardContracts  ForwardContract[]
+    44→  deviceRegistrations DeviceRegistration[]
+    45→}
+    46→
+    47→model Plot {
+    48→  id          String   @id @default(cuid())
+    49→  plotId      String
+    50→  projectId   String
+    51→  coordinates String   @default("[]") // JSON: [[lat, lng], ...]
+    52→  ownerInfo   String   @default("")
+    53→  trackType   String   @default("forest") // forest, biochar, awd, biogas, solar
+    54→  areaHa      Float    @default(0)
+    55→  status      String   @default("REGISTERED") // REGISTERED, VERIFIED, ACTIVE, INACTIVE
+    56→  createdAt   DateTime @default(now())
+    57→  updatedAt   DateTime @updatedAt
+    58→
+    59→  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+    60→}
+    61→
+    62→model CarbonCredit {
+    63→  id        String   @id @default(cuid())
+    64→  tokenId   String   @unique
+    65→  projectId String
+    66→  amount    Float    @default(0)
+    67→  status    String   @default("Available") // Available, Traded, Retired, Buffered
+    68→  buyer     String   @default("") // Buyer name when traded/retired
+    69→  metadata  String   @default("{}")
+    70→  createdAt DateTime @default(now())
+    71→  updatedAt DateTime @updatedAt
+    72→
+    73→  project         Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+    74→  bufferPoolEntry BufferPoolEntry?
+    75→  settlement      Settlement?
+    76→}
+    77→
+    78→model Certificate {
+    79→  id                String   @id @default(cuid())
+    80→  projectId         String
+    81→  certId            String   @default("") // T-VER certificate reference ID
+    82→  trackType         String   @default("forest") // forest, biochar, awd, biogas, solar
+    83→  status            String   @default("SUBMITTED") // SUBMITTED, APPROVED, REJECTED, REVOKED
+    84→  amountTco2e       Float    @default(0) // Certified emission reductions in tCO2e
+    85→  issuedBy          String   @default("TGO")
+    86→  validator         String   @default("") // VVB or T-VER validator name
+    87→  masterCertId      String   @default("") // Master certificate ID issued on approval
+    88→  certificateNumber String   @default("")
+    89→  validFrom         DateTime @default(now())
+    90→  validUntil        DateTime @default(now())
+    91→  createdAt         DateTime @default(now())
+    92→  updatedAt         DateTime @updatedAt
+    93→
+    94→  project       Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+    95→  auditTrail    AuditTrailEntry[]
+    96→}
+    97→
+    98→model IngestionLog {
+    99→  id             String   @id @default(cuid())
+   100→  projectId      String
+   101→  sourceType     String   // satellite, iot, drone, photo, lidar, manual
+   102→  activityType   String   // monitoring, verification, measurement
+   103→  payload        String   @default("{}")
+   104→  evidenceUrl    String   @default("")
+   105→  integrityHash  String   @default("")
+   106→  classification String   @default("PUBLIC") // PUBLIC, CONFIDENTIAL
+   107→  isEncrypted    Boolean  @default(false)
+   108→  timestamp      DateTime @default(now())
+   109→
+   110→  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+   111→}
+   112→
+   113→model Submission {
+   114→  id          String    @id @default(cuid())
+   115→  projectId   String
+   116→  type        String    @default("VERIFICATION") // VERIFICATION, CERTIFICATION, MONITORING
+   117→  status      String    @default("PENDING") // PENDING, UNDER_REVIEW, APPROVED, REJECTED
+   118→  data        String    @default("{}")
+   119→  submittedBy String    @default("")
+   120→  reviewedBy  String    @default("")
+   121→  submittedAt DateTime  @default(now())
+   122→  reviewedAt  DateTime?
+   123→  createdAt   DateTime  @default(now())
+   124→  updatedAt   DateTime  @updatedAt
+   125→
+   126→  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+   127→}
+   128→
+   129→model AuditLog {
+   130→  id        String   @id @default(cuid())
+   131→  agentName String
+   132→  action    String
+   133→  projectId String?
+   134→  details   String   @default("{}")
+   135→  severity  String   @default("INFO") // INFO, WARNING, ERROR, CRITICAL
+   136→  timestamp DateTime @default(now())
+   137→
+   138→  project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+   139→}
+   140→
+   141→model Alert {
+   142→  id        String   @id @default(cuid())
+   143→  severity  String   @default("INFO") // INFO, WARNING, CRITICAL
+   144→  message   String
+   145→  resolved  Boolean  @default(false)
+   146→  timestamp DateTime @default(now())
+   147→}
+   148→
+   149→model IoTSensor {
+   150→  id          String   @id @default(cuid())
+   151→  projectId   String
+   152→  sensorId    String
+   153→  sensorType  String   @default("soil_moisture") // soil_moisture, temperature, humidity, ch4, co2, water_level, ph, wind_speed, solar_irradiance
+   154→  lat         Float    @default(0)
+   155→  lng         Float    @default(0)
+   156→  status      String   @default("online") // online, offline, maintenance
+   157→  lastReading Float    @default(0)
+   158→  unit        String   @default("")
+   159→  battery     Int      @default(100)
+   160→  lastSeen    DateTime @default(now())
+   161→  createdAt   DateTime @default(now())
+   162→  updatedAt   DateTime @updatedAt
+   163→
+   164→  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+   165→}
+   166→
+   167→// ─── Enterprise Models: Verification & Validation Hub ─────────────────────
+   168→
+   169→model VVBReview {
+   170→  id             String   @id @default(cuid())
+   171→  projectId      String
+   172→  reviewerOrg    String   @default("") // VVB organization name
+   173→  reviewerName   String   @default("")
+   174→  reviewType     String   @default("VALIDATION") // VALIDATION, VERIFICATION, PERIODIC_VERIFICATION
+   175→  status         String   @default("PENDING") // PENDING, IN_PROGRESS, APPROVED, REJECTED, REQUESTED_INFO
+   176→  evidenceRefs   String   @default("[]") // JSON: list of evidence URLs/reference IDs
+   177→  findings       String   @default("{}") // JSON: structured findings
+   178→  recommendation String   @default("") // approve, reject, request_more_info
+   179→  comments       String   @default("")
+   180→  reviewedAt     DateTime?
+   181→  createdAt      DateTime @default(now())
+   182→  updatedAt      DateTime @updatedAt
+   183→
+   184→  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+   185→}
+   186→
+   187→model ConflictCase {
+   188→  id           String    @id @default(cuid())
+   189→  projectId    String
+   190→  title        String
+   191→  description  String    @default("")
+   192→  sourceA      String    @default("{}") // JSON: first data source info
+   193→  sourceB      String    @default("{}") // JSON: second data source info
+   194→  conflictType String    @default("DATA_MISMATCH") // DATA_MISMATCH, THRESHOLD_EXCEEDED, INTEGRITY_FAIL, SPATIAL_MISMATCH
+   195→  severity     String    @default("MEDIUM") // LOW, MEDIUM, HIGH, CRITICAL
+   196→  status       String    @default("FLAGGED") // FLAGGED, IN_REVIEW, RESOLVED, ESCALATED
+   197→  resolution   String    @default("")
+   198→  resolvedBy   String    @default("")
+   199→  evidenceUrl  String    @default("")
+   200→  createdAt    DateTime  @default(now())
+   201→  resolvedAt   DateTime?
+   202→
+   203→  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+   204→}
+   205→
+   206→// ─── Enterprise Models: Trust & Transparency ──────────────────────────────
+   207→
+   208→model AuditTrailEntry {
+   209→  id            String   @id @default(cuid())
+   210→  certificateId String
+   211→  eventType     String   @default("ORIGIN") // ORIGIN, QUANTIFY, VERIFY, CERTIFY, MINT, TRADE, RETIRE, BUFFER
+   212→  previousHash  String   @default("")
+   213→  dataHash      String   @default("")
+   214→  merkleRoot    String   @default("")
+   215→  metadata      String   @default("{}") // JSON: event-specific data (de-identified)
+   216→  timestamp     DateTime @default(now())
+   217→
+   218→  certificate Certificate @relation(fields: [certificateId], references: [id], onDelete: Cascade)
+   219→}
+   220→
+   221→model DeviceRegistration {
+   222→  id              String   @id @default(cuid())
+   223→  projectId       String
+   224→  deviceId        String
+   225→  deviceType      String   @default("iot") // iot, drone, satellite, lidar, manual
+   226→  manufacturer    String   @default("")
+   227→  model           String   @default("")
+   228→  firmwareVersion String   @default("")
+   229→  publicKey       String   @default("") // Hardware-level cryptographic signing key
+   230→  signingStatus   String   @default("UNSIGNED") // UNSIGNED, SIGNED, EXPIRED, REVOKED
+   231→  connectionStatus String  @default("disconnected") // connected, disconnected, maintenance
+   232→  healthStatus    String   @default("UNKNOWN") // HEALTHY, DEGRADED, CRITICAL, UNKNOWN
+   233→  lastCalibration DateTime?
+   234→  batteryLevel    Int      @default(100)
+   235→  signalStrength  Int      @default(0) // dBm
+   236→  metadata        String   @default("{}")
+   237→  createdAt       DateTime @default(now())
+   238→  updatedAt       DateTime @updatedAt
+   239→
+   240→  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+   241→}
+   242→
+   243→// ─── Enterprise Models: Finance & Risk Management ─────────────────────────
+   244→
+   245→model BufferPoolEntry {
+   246→  id            String   @id @default(cuid())
+   247→  projectId     String
+   248→  creditId      String   @unique
+   249→  amount        Float    @default(0) // tCO2e held in buffer
+   250→  uncertaintyPct Float   @default(0) // Uncertainty percentage
+   251→  bufferPct     Float    @default(0) // Buffer deduction percentage
+   252→  riskCategory  String   @default("MEDIUM") // LOW, MEDIUM, HIGH, VERY_HIGH
+   253→  reason        String   @default("")
+   254→  releasedAt    DateTime? // When buffer credits are released
+   255→  createdAt     DateTime @default(now())
+   256→
+   257→  project Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+   258→  credit  CarbonCredit  @relation(fields: [creditId], references: [id], onDelete: Cascade)
+   259→}
+   260→
+   261→model ForwardContract {
+   262→  id            String    @id @default(cuid())
+   263→  projectId     String
+   264→  sellerName    String    @default("")
+   265→  buyerName     String    @default("")
+   266→  creditAmount  Float     @default(0) // tCO2e
+   267→  pricePerUnit  Float     @default(0) // USD per tCO2e
+   268→  totalValue    Float     @default(0) // USD
+   269→  deliveryDate  DateTime
+   270→  status        String    @default("DRAFT") // DRAFT, PENDING, APPROVED, ACTIVE, COMPLETED, CANCELLED, DEFAULTED
+   271→  terms         String    @default("{}") // JSON: contract terms
+   272→  createdAt     DateTime  @default(now())
+   273→  updatedAt     DateTime  @updatedAt
+   274→
+   275→  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+   276→}
+   277→
+   278→// ─── Enterprise Models: User Experience & Integration ─────────────────────
+   279→
+   280→model ApiKey {
+   281→  id          String    @id @default(cuid())
+   282→  name        String
+   283→  key         String    @unique
+   284→  permissions String    @default("[]") // JSON: list of permission scopes
+   285→  lastUsed    DateTime?
+   286→  status      String    @default("ACTIVE") // ACTIVE, REVOKED, EXPIRED
+   287→  createdBy   String    @default("")
+   288→  createdAt   DateTime  @default(now())
+   289→  expiresAt   DateTime?
+   290→}
+   291→
+   292→model Webhook {
+   293→  id             String    @id @default(cuid())
+   294→  url            String
+   295→  events         String    @default("[]") // JSON: list of event types
+   296→  secret         String    @default("")
+   297→  status         String    @default("ACTIVE") // ACTIVE, PAUSED, FAILED
+   298→  lastDelivery   DateTime?
+   299→  failureCount   Int       @default(0)
+   300→  lastFailure    String    @default("")
+   301→  createdBy      String    @default("")
+   302→  createdAt      DateTime  @default(now())
+   303→  updatedAt      DateTime  @updatedAt
+   304→}
+   305→
+   306→model MethodologyRule {
+   307→  id                String   @id @default(cuid())
+   308→  name              String
+   309→  methodology       String   @default("T-VER")
+   310→  trackType         String   @default("forest")
+   311→  version           String   @default("1.0")
+   312→  description       String   @default("")
+   313→  formula           String   @default("{}") // JSON: formula definition with variables
+   314→  parameters        String   @default("[]") // JSON: parameter definitions
+   315→  conditions        String   @default("[]") // JSON: validation conditions
+   316→  status            String   @default("DRAFT") // DRAFT, ACTIVE, DEPRECATED
+   317→  createdBy         String   @default("")
+   318→  aiGenerated       Boolean  @default(false) // Whether AI helped generate this rule
+   319→  aiGenerationId    String   @default("") // Reference to AI generation session
+   320→  sourceTemplate    String   @default("") // Template used for generation (e.g., VERRA-VM0042)
+   321→  calculationNodes  String   @default("[]") // JSON: visual node definitions for No-Code editor
+   322→  createdAt         DateTime @default(now())
+   323→  updatedAt         DateTime @updatedAt
+   324→}
+   325→
+   326→// ─── AI Methodology Generative Studio ────────────────────────────────────
+   327→
+   328→model AIGenerationSession {
+   329→  id              String   @id @default(cuid())
+   330→  prompt          String   // User's natural language description
+   331→  methodology     String   @default("T-VER")
+   332→  trackType       String   @default("forest")
+   333→  generatedFormula String  @default("{}") // JSON: AI-generated formula
+   334→  generatedParams String   @default("[]") // JSON: AI-generated parameters
+   335→  generatedConditions String @default("[]") // JSON: AI-generated conditions
+   336→  generatedNodes  String   @default("[]") // JSON: AI-generated calculation nodes
+   337→  aiModel         String   @default("z-ai-llm") // AI model used
+   338→  status          String   @default("GENERATING") // GENERATING, COMPLETED, FAILED, APPLIED
+   339→  ruleId          String   @default("") // Applied MethodologyRule ID if status=APPLIED
+   340→  feedback        String   @default("") // User feedback on generation
+   341→  createdBy       String   @default("")
+   342→  createdAt       DateTime @default(now())
+   343→  updatedAt       DateTime @updatedAt
+   344→}
+   345→
+   346→// ─── Cross-Chain Bridge & Registry Link ──────────────────────────────────
+   347→
+   348→model CrossChainBridge {
+   349→  id                String   @id @default(cuid())
+   350→  name              String   // Connection name
+   351→  registryType      String   // VERRA, GOLD_STANDARD, I_REC, CDM, T_VER, CUSTOM
+   352→  endpoint          String   @default("") // API endpoint URL
+   353→  apiKeyRef         String   @default("") // Reference to stored API key (encrypted)
+   354→  accountId         String   @default("") // Account ID at external registry
+   355→  accountName       String   @default("") // Account display name
+   356→  bridgeProtocol    String   @default("API") // API, POLYGON_BRIDGE, ETHEREUM_BRIDGE, COSMOS_IBC, CUSTOM
+   357→  status            String   @default("PENDING") // PENDING, CONNECTED, SYNCING, ERROR, DISCONNECTED
+   358→  lastSyncAt        DateTime? // Last successful synchronization
+   359→  syncInterval      Int      @default(3600) // Sync interval in seconds
+   360→  totalCreditsSynced Float   @default(0) // Total credits synced through this bridge
+   361→  metadata          String   @default("{}") // JSON: additional config
+   362→  createdAt         DateTime @default(now())
+   363→  updatedAt         DateTime @updatedAt
+   364→
+   365→  transactions BridgeTransaction[]
+   366→}
+   367→
+   368→// ─── Settlement Model ──────────────────────────────────────────────────────
+   369→
+   370→model Settlement {
+   371→  id        String   @id @default(cuid())
+   372→  creditId  String   @unique // Reference to CarbonCredit
+   373→  assetId   String   @default("") // Token ID of the settled asset
+   374→  amount    Float    @default(0) // Settlement amount
+   375→  status    String   @default("pending") // pending, processed, failed
+   376→  timestamp DateTime @default(now())
+   377→
+   378→  credit CarbonCredit @relation(fields: [creditId], references: [id], onDelete: Cascade)
+   379→}
+   380→
+   381→model BridgeTransaction {
+   382→  id              String   @id @default(cuid())
+   383→  bridgeId        String   // Reference to CrossChainBridge
+   384→  txType          String   // MINT, TRANSFER, RETIRE, SYNC, VERIFY
+   385→  direction       String   // OUTBOUND, INBOUND // OUTBOUND = from our platform to external, INBOUND = from external to our platform
+   386→  creditAmount    Float    @default(0) // tCO2e
+   387→  creditTokenId   String   @default("") // Our platform token ID
+   388→  externalRef     String   @default("") // External registry reference/ID
+   389→  externalStatus  String   @default("") // Status at external registry
+   390→  txHash          String   @default("") // Blockchain tx hash (if applicable)
+   391→  status          String   @default("PENDING") // PENDING, SUBMITTED, CONFIRMED, FAILED, ROLLED_BACK
+   392→  errorMessage    String   @default("")
+   393→  metadata        String   @default("{}") // JSON: additional transaction data
+   394→  initiatedBy     String   @default("")
+   395→  createdAt       DateTime @default(now())
+   396→  updatedAt       DateTime @updatedAt
+   397→
+   398→  bridge CrossChainBridge @relation(fields: [bridgeId], references: [id], onDelete: Cascade)
+   399→}
+   400→
+   401→// ─── IoT Ingestion Models ──────────────────────────────────────────────────
+   402→
+   403→model IoTEdgeNode {
+   404→  id              String   @id @default(cuid())
+   405→  nodeId          String   @unique // Unique edge node identifier (e.g., EDGE-BKK-001)
+   406→  name            String   // Display name
+   407→  nameTh          String   @default("") // Thai name
+   408→  province        String   @default("")
+   409→  lat             Float    @default(0)
+   410→  lng             Float    @default(0)
+   411→  firmwareVersion String   @default("1.0.0")
+   412→  protocol        String   @default("MQTT") // MQTT, HTTP, WebSocket, LoRaWAN
+   413→  status          String   @default("offline") // online, offline, maintenance, provisioning
+   414→  lastHeartbeat   DateTime?
+   415→  batteryLevel    Int      @default(100)
+   416→  signalStrength  Int      @default(0) // dBm
+   417→  totalReadings   Int      @default(0)
+   418→  certificationKey String  @default("") // Public key for data signing
+   419→  signingStatus   String   @default("UNSIGNED") // UNSIGNED, SIGNED, EXPIRED, REVOKED
+   420→  metadata        String   @default("{}") // JSON: additional config (sampling rate, buffer size, etc.)
+   421→  createdAt       DateTime @default(now())
+   422→  updatedAt       DateTime @updatedAt
+   423→
+   424→  sensors         IoTSensorV2[]
+   425→  readings        IoTSensorReading[]
+   426→  batchJobs       IoTBatchJob[]
+   427→  soilPlots       SoilCarbonPlot[]
+   428→  buildings       LowCarbonBuilding[]
+   429→}
+   430→
+   431→model IoTSensorV2 {
+   432→  id            String   @id @default(cuid())
+   433→  edgeNodeId    String
+   434→  sensorId      String   @unique // Sensor identifier (e.g., CH4-SENSOR-001)
+   435→  sensorType    String   // ch4, co2, temperature, humidity, soil_moisture, water_level, ph, wind_speed, solar_irradiance, dissolved_oxygen, cod, bod, nitrogen, phosphorus
+   436→  manufacturer  String   @default("")
+   437→  model         String   @default("")
+   438→  unit          String   @default("") // ppm, °C, %, mg/L, m, pH, m/s, W/m²
+   439→  minRange      Float    @default(0)
+   440→  maxRange      Float    @default(100)
+   441→  resolution    Float    @default(0.01)
+   442→  accuracy      Float    @default(0) // ±value
+   443→  samplingRate  Int      @default(60) // seconds between readings
+   444→  status        String   @default("active") // active, inactive, calibration, error
+   445→  lastReading   Float    @default(0)
+   446→  lastReadingAt DateTime?
+   447→  calibrationDate DateTime?
+   448→  metadata      String   @default("{}") // JSON: sensor-specific config
+   449→  createdAt     DateTime @default(now())
+   450→  updatedAt     DateTime @updatedAt
+   451→
+   452→  edgeNode      IoTEdgeNode     @relation(fields: [edgeNodeId], references: [id], onDelete: Cascade)
+   453→  readings      IoTSensorReading[]
+   454→}
+   455→
+   456→model IoTSensorReading {
+   457→  id              String   @id @default(cuid())
+   458→  edgeNodeId      String
+   459→  sensorId        String?  // Reference to IoTSensorV2.sensorId
+   460→  sensorType      String
+   461→  value           Float
+   462→  unit            String   @default("")
+   463→  timestamp       DateTime // Actual measurement time
+   464→  receivedAt      DateTime @default(now()) // Server receipt time
+   465→  ingestionMode   String   @default("realtime") // realtime, batch
+   466→  batchJobId      String?  // Reference to IoTBatchJob if batch mode
+   467→  qualityFlag     String   @default("RAW") // RAW, VALIDATED, CERTIFIED, REJECTED, ANOMALY
+   468→  integrityHash   String   @default("") // SHA-256 of (sensorId + value + timestamp)
+   469→  signature       String   @default("") // Edge node digital signature
+   470→  metadata        String   @default("{}") // JSON: additional reading metadata
+   471→  createdAt       DateTime @default(now())
+   472→
+   473→  edgeNode       IoTEdgeNode    @relation(fields: [edgeNodeId], references: [id], onDelete: Cascade)
+   474→  sensor         IoTSensorV2?   @relation(fields: [sensorId], references: [sensorId], onDelete: SetNull)
+   475→  batchJob       IoTBatchJob?   @relation(fields: [batchJobId], references: [id], onDelete: SetNull)
+   476→}
+   477→
+   478→model IoTBatchJob {
+   479→  id              String   @id @default(cuid())
+   480→  edgeNodeId      String
+   481→  fileName        String   @default("")
+   482→  fileType        String   @default("CSV") // CSV, JSON, XML, PARQUET
+   483→  totalRecords    Int      @default(0)
+   484→  processedRecords Int     @default(0)
+   485→  validRecords    Int      @default(0)
+   486→  rejectedRecords Int      @default(0)
+   487→  anomalyRecords  Int      @default(0)
+   488→  status          String   @default("UPLOADED") // UPLOADED, VALIDATING, PROCESSING, CERTIFYING, COMPLETED, FAILED
+   489→  certificationStatus String @default("PENDING") // PENDING, CERTIFIED, PARTIAL, REJECTED
+   490→  merkleRoot      String   @default("") // Merkle root hash of all readings in batch
+   491→  integrityReport String   @default("{}") // JSON: detailed integrity report
+   492→  startedAt       DateTime?
+   493→  completedAt     DateTime?
+   494→  errorMessage    String   @default("")
+   495→  metadata        String   @default("{}")
+   496→  createdAt       DateTime @default(now())
+   497→  updatedAt       DateTime @updatedAt
+   498→
+   499→  edgeNode       IoTEdgeNode      @relation(fields: [edgeNodeId], references: [id], onDelete: Cascade)
+   500→  readings       IoTSensorReading[]
+   501→  certificationLogs IoTCertificationLog[]
+   502→}
+   503→
+   504→model IoTCertificationLog {
+   505→  id              String   @id @default(cuid())
+   506→  batchJobId      String?  // Reference to IoTBatchJob (null for realtime certification)
+   507→  batchJob        IoTBatchJob?  @relation(fields: [batchJobId], references: [id], onDelete: SetNull)
+   508→  edgeNodeId      String   @default("")
+   509→  sensorId        String   @default("")
+   510→  readingCount    Int      @default(0)
+   511→  passedCount     Int      @default(0)
+   512→  failedCount     Int      @default(0)
+   513→  anomalyCount    Int      @default(0)
+   514→  certificationType String @default("BATCH") // BATCH, REALTIME, PERIODIC
+   515→  status          String   @default("PENDING") // PENDING, IN_PROGRESS, CERTIFIED, REJECTED
+   516→  integrityHash   String   @default("") // SHA-256 of entire certification
+   517→  merkleRoot      String   @default("") // Merkle root for batch certification
+   518→  rules           String   @default("[]") // JSON: list of certification rules applied
+   519→  report          String   @default("{}") // JSON: detailed certification report
+   520→  certifiedBy     String   @default("")
+   521→  certifiedAt     DateTime?
+   522→  createdAt       DateTime @default(now())
+   523→  updatedAt       DateTime @updatedAt
+   524→}
+   525→
+   526→// ─── Soil Carbon Sequestration Agent Models ──────────────────────────────
+   527→// เกษตรกักตะกอนดิน (Sediment Trap Agriculture) — พื้นที่สูง/ลาดชัน
+   528→// ทำแปลงปลูกเป็นชั้นๆ (Terrace) + ฝายชะลอน้ำ (Check Dam) ในแต่ละชั้น
+   529→
+   530→model SoilCarbonPlot {
+   531→  id                String   @id @default(cuid())
+   532→  plotId            String   @unique // e.g., SOIL-CMD-001
+   533→  name              String
+   534→  nameTh            String   @default("")
+   535→  province          String   @default("")
+   536→  lat               Float    @default(0)
+   537→  lng               Float    @default(0)
+   538→  altitudeMasl      Float    @default(0) // เมตรเหนือระดับน้ำทะเล (Metres Above Sea Level)
+   539→  slopeDegree       Float    @default(0) // องศาความลาดชัน (0-90°)
+   540→  slopeAspect       String   @default("N") // ทิศทางลาดชัน: N, NE, E, SE, S, SW, W, NW
+   541→  areaRai           Float    @default(0) // ไร่ (Thai unit)
+   542→  areaHa            Float    @default(0) // Hectares (1 rai = 0.16 ha)
+   543→  terraceCount      Int      @default(0) // จำนวนชั้นปลูก (Terrace layers)
+   544→  terraceWidthM     Float    @default(0) // ความกว้างรวมของแต่ละชั้น (2.0-2.7 เมตร) = คันขอบ + พื้นที่ปลูก
+   545→  plantingAreaWidthM Float   @default(0) // ความกว้างพื้นที่ปลูกพืชหลัก (1.5-2.0 เมตร)
+   546→  ridgeWidthMPlot   Float    @default(0) // ความกว้างคันขอบปลูกหญ้าแฝก (0.7-1.0 เมตร)
+   547→  terraceHeightM    Float    @default(0) // ความสูงระหว่างชั้น (เมตร)
+   548→  checkDamCount     Int      @default(0) // จำนวนฝายชะลอน้ำ (Check Dams)
+   549→  checkDamType      String   @default("STONE") // ประเภทฝาย: STONE, CONCRETE, LOG, GABION, VEGETATION
+   550→  landUseType       String   @default("terraced_farming") // terraced_farming, contour_farming, sediment_trap, agroforestry, conservation
+   551→  previousLandUse   String   @default("") // การใช้ประโยชน์ก่อนหน้า: slash_and_burn, conventional, degraded_forest, etc.
+   552→  vetiverGrassCoveragePct Float @default(0) // % พื้นที่ปลูกหญ้าแฝกบนคันขอบรวมทั้งแปลง
+   553→  soilType          String   @default("") // Clay, Loam, Sandy Loam, etc.
+   554→  cropType          String   @default("") // Rice, Cassava, Sugarcane, Rubber, Fruit trees, Coffee, etc.
+   555→  practiceType      String   @default("sediment_trap") // sediment_trap, contour_planting, terraced, strip_cropping, agroforestry
+   556→  baselineSOC       Float    @default(0) // tC/ha baseline soil organic carbon
+   557→  projectSOC        Float    @default(0) // tC/ha project scenario SOC
+   558→  baselineSediment  Float    @default(0) // t/ha/yr baseline soil erosion/sediment loss
+   559→  projectSediment   Float    @default(0) // t/ha/yr project sediment trapped
+   560→  sedimentTrapRate  Float    @default(0) // % อัตรากักตะกอนดิน
+   561→  baselineEmission  Float    @default(0) // tCO2e/ha/yr baseline emissions
+   562→  projectEmission   Float    @default(0) // tCO2e/ha/yr project emissions
+   563→  emissionReduction Float    @default(0) // tCO2e/ha/yr net reduction
+   564→  monitoringYear    Int      @default(1)
+   565→  status            String   @default("REGISTERED") // REGISTERED, MONITORING, VERIFIED, CERTIFIED, SUSPENDED
+   566→  methodology       String   @default("T-VER-SOIL-01") // T-VER-SOIL-01, IPCC-2019-Ref, VERRA-VM0042
+   567→  createdAt         DateTime @default(now())
+   568→  updatedAt         DateTime @updatedAt
+   569→
+   570→  measurements      SoilCarbonMeasurement[]
+   571→  terraces          TerraceLayer[]
+   572→  checkDams         CheckDam[]
+   573→  edgeNodeId        String?
+   574→  edgeNode          IoTEdgeNode? @relation(fields: [edgeNodeId], references: [id], onDelete: SetNull)
+   575→}
+   576→
+   577→// ชั้นปลูก (Terrace Layer) — แต่ละชั้นของแปลงขั้นบันได
+   578→model TerraceLayer {
+   579→  id                String   @id @default(cuid())
+   580→  plotId            String
+   581→  layerNumber       Int      // ลำดับชั้น (1 = ชั้นบนสุด, เพิ่มลงมาเรื่อยๆ)
+   582→  layerName         String   @default("") // เช่น "ชั้นที่ 1 - ปลูกผัก"
+   583→  layerNameTh       String   @default("") // ชื่อชั้นภาษาไทย
+   584→  elevationMasl     Float    @default(0) // ระดับความสูงของชั้นนี้ (ม.รทก.)
+   585→  widthM            Float    @default(0) // ความกว้างรวมของชั้น (2.0-2.7 เมตร) = ridgeWidthM + plantingAreaWidthM
+   586→  plantingAreaWidthM Float   @default(0) // ความกว้างพื้นที่ปลูกพืชหลัก (1.5-2.0 เมตร)
+   587→  heightM           Float    @default(0) // ความสูงจากชั้นถัดไป (เมตร)
+   588→  lengthM           Float    @default(0) // ความยาวตามแนวระดับ (เมตร)
+   589→  areaSqm           Float    @default(0) // พื้นที่ชั้นรวม (ตร.ม.)
+   590→  plantingAreaSqm   Float    @default(0) // พื้นที่ปลูกพืชหลัก (ตร.ม.)
+   591→  cropType          String   @default("") // พืชที่ปลูกในชั้นนี้
+   592→  soilDepthCm       Float    @default(0) // ความลึกดิน (ซม.)
+   593→  sedimentDepthCm   Float    @default(0) // ความหนาตะกอนดินที่สะสม (ซม.)
+   594→  waterFlowInLMin   Float    @default(0) // อัตราน้ำไหลเข้า (ลิตร/นาที)
+   595→  waterFlowOutLMin  Float    @default(0) // อัตราน้ำไหลออก (ลิตร/นาที)
+   596→  sedimentTrappedKg Float    @default(0) // ตะกอนดินที่ถูกกัก (กก.)
+   597→  organicCarbonPct  Float    @default(0) // SOC % ในตะกอนดิน
+   598→  socStockTcHa      Float    @default(0) // SOC stock (tC/ha)
+   599→  // --- ข้อมูลหญ้าแฝกบนคันขอบ (Vetiver Grass Ridge) ---
+   600→  ridgeWidthM       Float    @default(0) // ความกว้างคันขอบปลูกหญ้าแฝก (0.7-1.0 เมตร)
+   601→  vetiverGrassStatus String  @default("NONE") // NONE, PLANTED, ESTABLISHED, MATURE — สถานะหญ้าแฝก
+   602→  vetiverRootDepthCm Float   @default(0) // ความลึกรากหญ้าแฝก (ซม.) — ปกติ 200-300 ซม. (2-3 เมตร)
+   603→  vetiverPlantDensity Float  @default(0) // ความหนาแน่นปลูก (กอ/ตร.ม.) — ปกติ 5-10 กอ/ตร.ม.
+   604→  vetiverErosionPreventionPct Float @default(0) // % ป้องกันการพังทลายจากหญ้าแฝก (60-90%)
+   605→  vetiverSedimentAccumulationKg Float @default(0) // ตะกอนดินเพิ่มเติมจากหญ้าแฝก (กก.)
+   606→  vetiverCarbonSequestrationKg Float @default(0) // คาร์บอนที่หญ้าแฝกกักไว้ (กก.)
+   607→  checkDamId        String?  @unique // ฝายชะลอน้ำประจำชั้น
+   608→  checkDam          CheckDam? @relation(fields: [checkDamId], references: [id], onDelete: SetNull)
+   609→  createdAt         DateTime @default(now())
+   610→  updatedAt         DateTime @updatedAt
+   611→
+   612→  plot              SoilCarbonPlot @relation(fields: [plotId], references: [plotId], onDelete: Cascade)
+   613→  measurements      SoilCarbonMeasurement[]
+   614→}
+   615→
+   616→// ฝายชะลอน้ำ (Check Dam) — กักน้ำและตะกอนในแต่ละชั้น
+   617→model CheckDam {
+   618→  id                String   @id @default(cuid())
+   619→  plotId            String
+   620→  damId             String   // เช่น DAM-CMD-001-01
+   621→  damName           String   @default("")
+   622→  damNameTh         String   @default("") // เช่น "ฝายชะลอน้ำชั้นที่ 1"
+   623→  damType           String   @default("STONE") // STONE, CONCRETE, LOG, GABION, VEGETATION
+   624→  heightM           Float    @default(0) // ความสูงฝาย (เมตร)
+   625→  widthM            Float    @default(0) // ความกว้างฝาย (เมตร)
+   626→  thicknessM        Float    @default(0) // ความหนาฝาย (เมตร)
+   627→  upstreamDepthM    Float    @default(0) // ความลึกน้ำเหนือฝาย (เมตร)
+   628→  sedimentDepthCm   Float    @default(0) // ความหนาตะกอนดินหลังฝาย (ซม.)
+   629→  sedimentVolumeM3  Float    @default(0) // ปริมาณตะกอนดิน (ลบ.ม.)
+   630→  sedimentSOCpct    Float    @default(0) // SOC % ในตะกอนดินหลังฝาย
+   631→  sedimentCarbonTc  Float    @default(0) // คาร์บอนในตะกอน (tC)
+   632→  flowRateLMin      Float    @default(0) // อัตราไหลผ่านฝาย (ลิตร/นาที)
+   633→  flowReductionPct  Float    @default(0) // % ลดอัตราการไหล
+   634→  trapEfficiencyPct Float    @default(0) // % ประสิทธิภาพการกักตะกอน
+   635→  status            String   @default("ACTIVE") // ACTIVE, DAMAGED, MAINTENANCE, DECOMMISSIONED
+   636→  lastInspection    DateTime?
+   637→  createdAt         DateTime @default(now())
+   638→  updatedAt         DateTime @updatedAt
+   639→
+   640→  plot              SoilCarbonPlot @relation(fields: [plotId], references: [plotId], onDelete: Cascade)
+   641→  terrace           TerraceLayer?
+   642→}
+   643→
+   644→model SoilCarbonMeasurement {
+   645→  id                String   @id @default(cuid())
+   646→  plotId            String
+   647→  terraceLayerId    String?  // ชั้นปลูกที่วัด (null = วัดรวมทั้งแปลง)
+   648→  measurementDate   DateTime
+   649→  measurementType   String   @default("FIELD") // FIELD, LAB, REMOTE_SENSING, MODEL
+   650→  depthCm           Float    @default(30) // Soil sampling depth in cm
+   651→  soilMoisture      Float    @default(0) // %
+   652→  soilTemperature   Float    @default(0) // °C
+   653→  soilPH            Float    @default(7) // pH value
+   654→  bulkDensity       Float    @default(0) // g/cm³
+   655→  organicCarbonPct  Float    @default(0) // SOC %
+   656→  totalNitrogen     Float    @default(0) // N %
+   657→  cec               Float    @default(0) // Cation Exchange Capacity cmol/kg
+   658→  aboveGroundBiomass Float   @default(0) // t/ha
+   659→  belowGroundBiomass Float   @default(0) // t/ha
+   660→  socStock          Float    @default(0) // tC/ha calculated SOC stock
+   661→  co2Flux           Float    @default(0) // µmol/m²/s CO₂ flux
+   662→  ch4Flux           Float    @default(0) // mg/m²/hr CH₄ flux
+   663→  n2oFlux           Float    @default(0) // µg/m²/hr N₂O flux
+   664→  // --- ข้อมูลเพิ่มเติมสำหรับพื้นที่ลาดชัน/กักตะกอนดิน ---
+   665→  runoffVolumeL     Float    @default(0) // ปริมาณน้ำไหลบ่า (ลิตร)
+   666→  sedimentConcGpL   Float    @default(0) // ความเข้มข้นตะกอน (กรัม/ลิตร)
+   667→  sedimentLoadKg    Float    @default(0) // ปริมาณตะกอนดิน (กก.)
+   668→  erosionRateTpHa   Float    @default(0) // อัตราการพังทลายดิน (ตัน/เฮกแตร์)
+   669→  waterFlowRateLMin Float    @default(0) // อัตราการไหลของน้ำ (ลิตร/นาที)
+   670→  infiltrationMmHr  Float    @default(0) // อัตราซึมน้ำ (มม./ชม.)
+   671→  ingestionMode     String   @default("realtime") // realtime, batch
+   672→  qualityFlag       String   @default("RAW") // RAW, VALIDATED, CERTIFIED, REJECTED, ANOMALY
+   673→  integrityHash     String   @default("") // SHA-256
+   674→  sourceDevice      String   @default("") // Sensor/Lab ID
+   675→  notes             String   @default("")
+   676→  createdAt         DateTime @default(now())
+   677→
+   678→  plot              SoilCarbonPlot @relation(fields: [plotId], references: [plotId], onDelete: Cascade)
+   679→  terraceLayer      TerraceLayer?  @relation(fields: [terraceLayerId], references: [id], onDelete: SetNull)
+   680→}
+   681→
+   682→// ─── Low-Carbon Building Agent Models ────────────────────────────────────
+   683→
+   684→model LowCarbonBuilding {
+   685→  id                String   @id @default(cuid())
+   686→  buildingId        String   @unique // e.g., BLD-BKK-001
+   687→  name              String
+   688→  nameTh            String   @default("")
+   689→  province          String   @default("")
+   690→  lat               Float    @default(0)
+   691→  lng               Float    @default(0)
+   692→  buildingType      String   @default("OFFICE") // OFFICE, RESIDENTIAL, RETAIL, HOSPITAL, SCHOOL, HOTEL, MIXED_USE
+   693→  floors            Int      @default(1)
+   694→  grossFloorArea    Float    @default(0) // m²
+   695→  yearBuilt         Int      @default(2020)
+   696→  certificationStd  String   @default("TGBI") // TGBI, LEED, EDGE, TREES, GREEN MARK
+   697→  certificationLevel String  @default("UNRATED") // UNRATED, CERTIFIED, SILVER, GOLD, PLATINUM
+   698→  baselineEUI       Float    @default(0) // kWh/m²/yr baseline Energy Use Intensity
+   699→  projectEUI        Float    @default(0) // kWh/m²/yr project EUI
+   700→  baselineEmission  Float    @default(0) // tCO2e/yr baseline
+   701→  projectEmission   Float    @default(0) // tCO2e/yr project
+   702→  emissionReduction Float    @default(0) // tCO2e/yr
+   703→  renewableEnergyPct Float   @default(0) // % renewable energy
+   704→  waterReductionPct Float    @default(0) // % water reduction
+   705→  materialSavingsPct Float   @default(0) // % material carbon savings
+   706→  greenAreaRatio    Float    @default(0) // ratio of green area
+   707→  status            String   @default("REGISTERED") // REGISTERED, MONITORING, CERTIFIED, RECERTIFIED, SUSPENDED
+   708→  methodology       String   @default("T-VER-BLDG-01") // T-VER-BLDG-01, EDGE, LEED-EB
+   709→  createdAt         DateTime @default(now())
+   710→  updatedAt         DateTime @updatedAt
+   711→
+   712→  energyRecords     BuildingEnergyRecord[]
+   713→  materialRecords   BuildingMaterialRecord[]
+   714→  edgeNodeId        String?
+   715→  edgeNode          IoTEdgeNode? @relation(fields: [edgeNodeId], references: [id], onDelete: SetNull)
+   716→}
+   717→
+   718→model BuildingEnergyRecord {
+   719→  id                String   @id @default(cuid())
+   720→  buildingId        String
+   721→  recordDate        DateTime
+   722→  recordType        String   @default("HOURLY") // HOURLY, DAILY, MONTHLY, YEARLY
+   723→  electricityKwh    Float    @default(0) // Grid electricity kWh
+   724→  hvacKwh           Float    @default(0) // HVAC system kWh
+   725→  lightingKwh       Float    @default(0) // Lighting kWh
+   726→  equipmentKwh      Float    @default(0) // Plug loads & equipment kWh
+   727→  solarGeneration   Float    @default(0) // On-site solar kWh
+   728→  windGeneration    Float    @default(0) // On-site wind kWh
+   729→  gasUsage          Float    @default(0) // Natural gas m³
+   730→  waterUsage        Float    @default(0) // Water m³
+   731→  indoorTemp        Float    @default(0) // Avg indoor temperature °C
+   732→  indoorHumidity    Float    @default(0) // Avg indoor humidity %
+   733→  co2Level          Float    @default(0) // Indoor CO₂ ppm
+   734→  occupancyRate     Float    @default(0) // % occupancy
+   735→  eui               Float    @default(0) // kWh/m² calculated
+   736→  carbonEmission    Float    @default(0) // tCO2e calculated
+   737→  ingestionMode     String   @default("realtime") // realtime, batch
+   738→  qualityFlag       String   @default("RAW") // RAW, VALIDATED, CERTIFIED, REJECTED, ANOMALY
+   739→  integrityHash     String   @default("")
+   740→  sourceDevice      String   @default("")
+   741→  createdAt         DateTime @default(now())
+   742→
+   743→  building          LowCarbonBuilding @relation(fields: [buildingId], references: [buildingId], onDelete: Cascade)
+   744→}
+   745→
+   746→model BuildingMaterialRecord {
+   747→  id                String   @id @default(cuid())
+   748→  buildingId        String
+   749→  materialName      String
+   750→  materialNameTh    String   @default("")
+   751→  category          String   @default("STRUCTURAL") // STRUCTURAL, ENVELOPE, INTERIOR, MEP, RENEWABLE
+   752→  quantity          Float    @default(0)
+   753→  unit              String   @default("kg") // kg, m³, m², ton
+   754→  carbonFactor      Float    @default(0) // kgCO2e per unit
+   755→  embodiedCarbon    Float    @default(0) // total kgCO2e
+   756→  recycledContent   Float    @default(0) // % recycled content
+   757→  localSource       Boolean  @default(false) // locally sourced within 500km
+   758→  supplier          String   @default("")
+   759→  createdAt         DateTime @default(now())
+   760→
+   761→  building          LowCarbonBuilding @relation(fields: [buildingId], references: [buildingId], onDelete: Cascade)
+   762→}
+   763→
