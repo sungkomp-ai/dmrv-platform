@@ -712,6 +712,10 @@ function simTick() {
   io.emit('awd:status', getStatus());
 
   // Publish via MQTT to external broker (broker.hivemq.com)
+  // Auto-reconnect if connection dropped mid-simulation
+  if (!mqttConnected && !mqttClient) {
+    connectMQTT();
+  }
   for (const reading of newReadings) {
     publishReadingToMQTT(reading);
   }
@@ -757,6 +761,17 @@ function getStatus() {
 function startSim() {
   if (simRunning) return;
   simRunning = true;
+  // Ensure MQTT is connected to broker.hivemq.com:1883 before publishing
+  // (auto-reconnect if connection was lost or never established)
+  if (!mqttConnected) {
+    console.log('[SIM] MQTT not connected — reconnecting to broker.hivemq.com:1883 before starting simulation...');
+    if (mqttClient) {
+      try { mqttClient.end(true); } catch (e) {}
+      mqttClient = null;
+      mqttConnected = false;
+    }
+    connectMQTT();
+  }
   simTimer = setInterval(simTick, INTERVAL_MS);
   io.emit('awd:started', { speedFactor: SPEED_FACTOR });
   publishStatusToMQTT(getStatus());

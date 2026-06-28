@@ -36726,6 +36726,9 @@ function simTick() {
     readings = readings.slice(-600);
   io2.emit("awd:reading", newReadings);
   io2.emit("awd:status", getStatus());
+  if (!mqttConnected && !mqttClient) {
+    connectMQTT();
+  }
   for (const reading of newReadings) {
     publishReadingToMQTT(reading);
   }
@@ -36770,6 +36773,17 @@ function startSim() {
   if (simRunning)
     return;
   simRunning = true;
+  if (!mqttConnected) {
+    console.log("[SIM] MQTT not connected \u2014 reconnecting to broker.hivemq.com:1883 before starting simulation...");
+    if (mqttClient) {
+      try {
+        mqttClient.end(true);
+      } catch (e) {}
+      mqttClient = null;
+      mqttConnected = false;
+    }
+    connectMQTT();
+  }
   simTimer = setInterval(simTick, INTERVAL_MS);
   io2.emit("awd:started", { speedFactor: SPEED_FACTOR });
   publishStatusToMQTT(getStatus());
