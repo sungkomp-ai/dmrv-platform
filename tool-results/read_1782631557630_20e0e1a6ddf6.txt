@@ -1,0 +1,769 @@
+     1→/**
+     2→ * AWD Rice Cultivation Simulator
+     3→ * ─────────────────────────────────
+     4→ * อ้างอิงมาตรฐาน TGO/T-VER:
+     5→ *   - T-VER-P-AG-001: การลดการปล่อยก๊าซมีเทนจากการปลูกข้าวโดยวิธี AWD
+     6→ *   - TGO Guidelines for Rice Cultivation MRV (ฉบับ 2566)
+     7→ *   - GWP Values: CH₄ = 28, N₂O = 265 (IPCC AR5, ตามประกาศ TGO 2566)
+     8→ *   - หน่วยวัดหลัก: kg CH₄/ha/day (EF), tCO₂e (credit)
+     9→ *
+    10→ * 3 พื้นที่ปลูกข้าว AWD สภาพแวดล้อมต่างกัน
+    11→ * เก็บข้อมูลทุก 1 ชม. (จำลอง) เร่งความเร็ว 1800x
+    12→ * 1 วินาทีจริง = 30 นาทีจำลอง → 2 วินาทีจริง = 1 ชม.จำลอง
+    13→ *
+    14→ * พื้นที่:
+    15→ *   1. นครราชสีมา (ชลประทาน) — นาชลประทาน ข้าวหอมมะลิ 120 วัน
+    16→ *   2. สุพรรณบุรี (ฝนตก) — นาน้ำฝน ข้าวเจ้า 105 วัน
+    17→ *   3. อุบลราชธานี (แล้ง) — นาแล้ง ข้าวกข 95 วัน
+    18→ */
+    19→
+    20→import { createServer } from 'http';
+    21→import { Server } from 'socket.io';
+    22→
+    23→const PORT = 3032;
+    24→const SPEED_FACTOR = 1800; // 1800x speed
+    25→const INTERVAL_MS = 2000; // 2 วินาทีจริง = 1 ชม.จำลอง
+    26→const SIM_HOURS_PER_TICK = 1;
+    27→
+    28→// ─── TGO/T-VER Constants ─────────────────────────────────────────────
+    29→const GWP_CH4 = 28;     // IPCC AR5 (ตามประกาศ TGO 2566)
+    30→const GWP_N2O = 265;    // IPCC AR5 (ตามประกาศ TGO 2566)
+    31→// T-VER-P-AG-001 Baseline EF for continuous flooding in Thailand
+    32→const TVER_EF_CF_IRRIGATED = 1.30;  // kg CH₄/ha/day นาชลประทาน
+    33→const TVER_EF_CF_RAINFED = 1.00;    // kg CH₄/ha/day นาน้ำฝน
+    34→const TVER_EF_CF_DRY = 0.70;       // kg CH₄/ha/day นาแล้ง
+    35→// Unit conversion: mg/m²/hr → kg/ha/day
+    36→// 1 mg/m²/hr × 10000 m²/ha ÷ 1e6 mg/kg × 24 hr/day = 0.24 kg/ha/day
+    37→const MG_M2_HR_TO_KG_HA_DAY = 0.24;
+    38→// kg CH₄ → tCO₂e: kg × GWP / 1000
+    39→const KG_CH4_TO_TCO2E = GWP_CH4 / 1000;
+    40→const KG_N2O_TO_TCO2E = GWP_N2O / 1000;
+    41→
+    42→// ─── AWD Water Management Phases ─────────────────────────────────────
+    43→type AWDPhase = 'FLOODED' | 'DRAINING' | 'DRY' | 'REFLOODING';
+    44→
+    45→interface AWDField {
+    46→  id: string;
+    47→  name: string;
+    48→  province: string;
+    49→  lat: number;
+    50→  lng: number;
+    51→  areaHa: number;
+    52→  soilType: string;
+    53→  waterSource: string;
+    54→  riceVariety: string;
+    55→  totalDays: number;   // รวมฤดูกาล (วัน)
+    56→  // พิกัดขอบเขตพื้นที่ [[lat,lng],...]
+    57→  boundary: number[][];
+    58→  // สภาพแวดล้อมพื้นฐาน
+    59→  baseTempMin: number;  // °C ต่ำสุดเฉลี่ย
+    60→  baseTempMax: number;  // °C สูงสุดเฉลี่ย
+    61→  baseHumidity: number; // % เฉลี่ย
+    62→  annualRainfallMm: number;
+    63→  // AWD parameters
+    64→  floodTargetCm: number;   // ระดับน้ำท่วมเป้าหมาย (cm)
+    65→  dryThresholdCm: number;  // ระดับน้ำแห้งเกณฑ์ (cm ต่ำกว่าผิวดิน)
+    66→  floodDays: number;       // จำนวนวันท่วมต่อรอบ
+    67→  dryDays: number;         // จำนวนวันแห้งต่อรอบ
+    68→  // Simulation state
+    69→  currentDAP: number;      // Days After Planting
+    70→  currentHour: number;     // ชม. ในวันนั้น (0-23)
+    71→  waterLevelCm: number;
+    72→  currentAWDPhase: AWDPhase;
+    73→  awdPhaseDayCounter: number;
+    74→  totalAWDCycles: number;
+    75→  // Cumulative (T-VER units)
+    76→  totalCH4kg: number;      // kg CH₄ สะสม (T-VER standard unit)
+    77→  totalN2Okg: number;      // kg N₂O สะสม
+    78→  totalCH4tCO2e: number;   // tCO₂e from CH₄ (T-VER credit unit)
+    79→  totalN2OtCO2e: number;   // tCO₂e from N₂O
+    80→  totalNettCO2e: number;   // tCO₂e สุทธิ (CH₄ + N₂O - CO₂ soil offset)
+    81→  baselineEmissiontCO2e: number; // tCO₂e ถ้าปลูกแบบท่วมตลอด (baseline)
+    82→  emissionReductiontCO2e: number; // tCO₂e ที่ลดได้ (baseline - project)
+    83→  totalYieldKg: number;    // ผลผลิตข้าวเปลือก (kg) - ประมาณจาก growth
+    84→  // Season tracking
+    85→  seasonComplete: boolean;
+    86→}
+    87→
+    88→// ─── 3 พื้นที่ AWD ──────────────────────────────────────────────────
+    89→function createFields(): AWDField[] {
+    90→  return [
+    91→    {
+    92→      id: 'awd-korat',
+    93→      name: 'นครราชสีมา AWD (ชลประทาน)',
+    94→      province: 'นครราชสีมา',
+    95→      lat: 14.97,
+    96→      lng: 102.08,
+    97→      areaHa: 48,
+    98→      soilType: 'ดินร่วนปนทราย (Sandy Loam)',
+    99→      waterSource: 'ชลประทาน เขื่อนลำตะคอง',
+   100→      riceVariety: 'ข้าวหอมมะลิ 105 (KDML105)',
+   101→      totalDays: 120,
+   102→      boundary: [
+   103→        [14.985, 102.060], [14.985, 102.100],
+   104→        [14.960, 102.100], [14.960, 102.080],
+   105→        [14.955, 102.070], [14.960, 102.060],
+   106→      ],
+   107→      baseTempMin: 22,
+   108→      baseTempMax: 34,
+   109→      baseHumidity: 72,
+   110→      annualRainfallMm: 1100,
+   111→      floodTargetCm: 10,
+   112→      dryThresholdCm: -15,
+   113→      floodDays: 7,
+   114→      dryDays: 5,
+   115→      currentDAP: 0,
+   116→      currentHour: 6,
+   117→      waterLevelCm: 0,
+   118→      currentAWDPhase: 'FLOODED',
+   119→      awdPhaseDayCounter: 0,
+   120→      totalAWDCycles: 0,
+   121→      totalCH4kg: 0,
+   122→      totalN2Okg: 0,
+   123→      totalCH4tCO2e: 0,
+   124→      totalN2OtCO2e: 0,
+   125→      totalNettCO2e: 0,
+   126→      baselineEmissiontCO2e: 0,
+   127→      emissionReductiontCO2e: 0,
+   128→      totalYieldKg: 0,
+   129→      seasonComplete: false,
+   130→    },
+   131→    {
+   132→      id: 'awd-suphan',
+   133→      name: 'สุพรรณบุรี AWD (น้ำฝน)',
+   134→      province: 'สุพรรณบุรี',
+   135→      lat: 14.47,
+   136→      lng: 100.12,
+   137→      areaHa: 32,
+   138→      soilType: 'ดินเหนียว (Clay)',
+   139→      waterSource: 'น้ำฝน + ระบบสูบน้ำสำรอง',
+   140→      riceVariety: 'ข้าวเจ้า ปทุมธานี 1 (PTT1)',
+   141→      totalDays: 105,
+   142→      boundary: [
+   143→        [14.485, 100.105], [14.485, 100.140],
+   144→        [14.460, 100.140], [14.458, 100.120],
+   145→        [14.460, 100.105],
+   146→      ],
+   147→      baseTempMin: 24,
+   148→      baseTempMax: 35,
+   149→      baseHumidity: 78,
+   150→      annualRainfallMm: 1400,
+   151→      floodTargetCm: 12,
+   152→      dryThresholdCm: -12,
+   153→      floodDays: 6,
+   154→      dryDays: 4,
+   155→      currentDAP: 0,
+   156→      currentHour: 6,
+   157→      waterLevelCm: 0,
+   158→      currentAWDPhase: 'FLOODED',
+   159→      awdPhaseDayCounter: 0,
+   160→      totalAWDCycles: 0,
+   161→      totalCH4kg: 0,
+   162→      totalN2Okg: 0,
+   163→      totalCH4tCO2e: 0,
+   164→      totalN2OtCO2e: 0,
+   165→      totalNettCO2e: 0,
+   166→      baselineEmissiontCO2e: 0,
+   167→      emissionReductiontCO2e: 0,
+   168→      totalYieldKg: 0,
+   169→      seasonComplete: false,
+   170→    },
+   171→    {
+   172→      id: 'awd-ubon',
+   173→      name: 'อุบลราชธานี AWD (แล้ง)',
+   174→      province: 'อุบลราชธานี',
+   175→      lat: 15.24,
+   176→      lng: 104.85,
+   177→      areaHa: 25,
+   178→      soilType: 'ดินทราย (Sandy Soil)',
+   179→      waterSource: 'ฝนตกเท่านั้น (Rainfed)',
+   180→      riceVariety: 'ข้าวกข 43 (RD43)',
+   181→      totalDays: 95,
+   182→      boundary: [
+   183→        [15.255, 104.835], [15.255, 104.870],
+   184→        [15.230, 104.870], [15.228, 104.850],
+   185→        [15.230, 104.835],
+   186→      ],
+   187→      baseTempMin: 23,
+   188→      baseTempMax: 36,
+   189→      baseHumidity: 65,
+   190→      annualRainfallMm: 800,
+   191→      floodTargetCm: 8,
+   192→      dryThresholdCm: -18,
+   193→      floodDays: 5,
+   194→      dryDays: 6,
+   195→      currentDAP: 0,
+   196→      currentHour: 6,
+   197→      waterLevelCm: 0,
+   198→      currentAWDPhase: 'FLOODED',
+   199→      awdPhaseDayCounter: 0,
+   200→      totalAWDCycles: 0,
+   201→      totalCH4kg: 0,
+   202→      totalN2Okg: 0,
+   203→      totalCH4tCO2e: 0,
+   204→      totalN2OtCO2e: 0,
+   205→      totalNettCO2e: 0,
+   206→      baselineEmissiontCO2e: 0,
+   207→      emissionReductiontCO2e: 0,
+   208→      totalYieldKg: 0,
+   209→      seasonComplete: false,
+   210→    },
+   211→  ];
+   212→}
+   213→
+   214→// ─── Growth Stage ────────────────────────────────────────────────────
+   215→function getGrowthStage(dap: number, totalDays: number): string {
+   216→  const p = dap / totalDays;
+   217→  if (p < 0.05) return 'GERMINATION';
+   218→  if (p < 0.20) return 'TILLERING';
+   219→  if (p < 0.40) return 'STEM_ELONGATION';
+   220→  if (p < 0.55) return 'BOOTING';
+   221→  if (p < 0.65) return 'FLOWERING';
+   222→  if (p < 0.85) return 'GRAIN_FILLING';
+   223→  if (p < 1.00) return 'MATURITY';
+   224→  return 'HARVESTED';
+   225→}
+   226→
+   227→// ─── Temperature Model ───────────────────────────────────────────────
+   228→function getTemperature(field: AWDField, hour: number): number {
+   229→  // อุณหภูมิตามช่วงเวลา (รอบ 24 ชม.) sin curve
+   230→  const avgTemp = (field.baseTempMin + field.baseTempMax) / 2;
+   231→  const amplitude = (field.baseTempMax - field.baseTempMin) / 2;
+   232→  // peak at 14:00, low at 05:00
+   233→  const temp = avgTemp + amplitude * Math.sin(((hour - 5) / 24) * Math.PI * 2 - Math.PI / 2);
+   234→  // เพิ่ม noise เล็กน้อย
+   235→  return temp + (Math.sin(field.currentDAP * 0.7 + hour * 0.3) * 1.5);
+   236→}
+   237→
+   238→// ─── Rainfall Model ──────────────────────────────────────────────────
+   239→function getRainfallMm(field: AWDField, dap: number, hour: number): number {
+   240→  // ฝนตกตามฤดู: มิ.ย.-ต.ค. = ฝนชุก, พ.ย.-พ.ค. = แล้ง
+   241→  // DAP 0-30 = ต้นฤดู (ฝนเริ่ม), 30-80 = กลางฤดู (ฝนชุก), 80+ = ปลายฤดู
+   242→  const rainFactor = field.annualRainfallMm / 1400;
+   243→  let baseRainfall = 0;
+   244→  if (dap < 30) baseRainfall = 0.15;       // ต้นฤดู 15% โอกาสฝนตก
+   245→  else if (dap < 80) baseRainfall = 0.40;  // กลางฤดู 40%
+   246→  else baseRainfall = 0.20;                // ปลายฤดู 20%
+   247→
+   248→  // ฝนตกเฉพาะบางช่วงเวลา (12:00-18:00)
+   249→  const isRainyHour = hour >= 12 && hour <= 18;
+   250→  if (!isRainyHour) return 0;
+   251→
+   252→  // ใช้ deterministic pseudo-random จาก DAP + hour
+   253→  const seed = Math.sin(dap * 12.9898 + hour * 78.233) * 43758.5453;
+   254→  const rand = seed - Math.floor(seed);
+   255→  if (rand > baseRainfall * rainFactor) return 0;
+   256→
+   257→  // ปริมาณฝน 0.5-8 mm/hr
+   258→  const intensity = (rand * 7.5 + 0.5) * rainFactor;
+   259→  return Math.round(intensity * 10) / 10;
+   260→}
+   261→
+   262→// ─── CH4 Emission Model (T-VER-P-AG-001) ────────────────────────────
+   263→// CH4 ปล่อยมากตอนน้ำท่วม ลดลงมากตอนแห้ง (AWD ช่วยลด CH4)
+   264→// หน่วย: mg/m²/hr → แปลงเป็น kg CH₄/ha/day สำหรับ T-VER
+   265→function getCH4Emission(field: AWDField, hour: number): number {
+   266→  const stage = getGrowthStage(field.currentDAP, field.totalDays);
+   267→  // อัตราปล่อยพื้นฐานตามช่วงเจริญเติบโต (mg/m²/hr)
+   268→  // อ้างอิง: T-VER-P-AG-001 EF scaling by growth stage
+   269→  let baseFlux = 0;
+   270→  switch (stage) {
+   271→    case 'GERMINATION': baseFlux = 2; break;
+   272→    case 'TILLERING': baseFlux = 15; break;
+   273→    case 'STEM_ELONGATION': baseFlux = 25; break;
+   274→    case 'BOOTING': baseFlux = 30; break;
+   275→    case 'FLOWERING': baseFlux = 28; break;
+   276→    case 'GRAIN_FILLING': baseFlux = 18; break;
+   277→    case 'MATURITY': baseFlux = 8; break;
+   278→    case 'HARVESTED': baseFlux = 1; break;
+   279→  }
+   280→
+   281→  // ปัจจัยระดับน้ำ
+   282→  let waterFactor = 1.0;
+   283→  switch (field.currentAWDPhase) {
+   284→    case 'FLOODED': waterFactor = 1.0; break;
+   285→    case 'DRAINING': waterFactor = 0.6; break;
+   286→    case 'DRY': waterFactor = 0.15; break; // ลดมากตอนแห้ง
+   287→    case 'REFLOODING': waterFactor = 0.7; break;
+   288→  }
+   289→
+   290→  // อุณหภูมิ affect: สูงขึ้น = CH4 เพิ่ม
+   291→  const temp = getTemperature(field, hour);
+   292→  const tempFactor = 1 + (temp - 28) * 0.03;
+   293→
+   294→  // ดินเหนียว = ปล่อย CH4 มากกว่าดินทราย
+   295→  const soilFactor = field.soilType.includes('Clay') ? 1.3 :
+   296→                     field.soilType.includes('Sandy') ? 0.7 : 1.0;
+   297→
+   298→  return Math.max(0, baseFlux * waterFactor * tempFactor * soilFactor);
+   299→}
+   300→
+   301→// ─── N2O Emission Model (T-VER-P-AG-001) ────────────────────────────
+   302→// N2O เพิ่มตอน drain/reflood (nitrification/denitrification)
+   303→function getN2OEmission(field: AWDField): number {
+   304→  const stage = getGrowthStage(field.currentDAP, field.totalDays);
+   305→  let baseFlux = 0;
+   306→  switch (stage) {
+   307→    case 'GERMINATION': baseFlux = 0.3; break;
+   308→    case 'TILLERING': baseFlux = 1.2; break;
+   309→    case 'STEM_ELONGATION': baseFlux = 1.5; break;
+   310→    case 'BOOTING': baseFlux = 1.8; break;
+   311→    case 'FLOWERING': baseFlux = 1.5; break;
+   312→    case 'GRAIN_FILLING': baseFlux = 1.0; break;
+   313→    case 'MATURITY': baseFlux = 0.5; break;
+   314→    case 'HARVESTED': baseFlux = 0.1; break;
+   315→  }
+   316→
+   317→  // N2O spike ตอน drain และ reflood
+   318→  let phaseFactor = 1.0;
+   319→  switch (field.currentAWDPhase) {
+   320→    case 'FLOODED': phaseFactor = 0.5; break;
+   321→    case 'DRAINING': phaseFactor = 2.5; break;  // spike!
+   322→    case 'DRY': phaseFactor = 1.2; break;
+   323→    case 'REFLOODING': phaseFactor = 2.8; break; // spike!
+   324→  }
+   325→
+   326→  // ดินทราย = N2O มากกว่า (leaching)
+   327→  const soilFactor = field.soilType.includes('Sandy') ? 1.4 :
+   328→                     field.soilType.includes('Clay') ? 0.8 : 1.0;
+   329→
+   330→  return Math.max(0, baseFlux * phaseFactor * soilFactor);
+   331→}
+   332→
+   333→// ─── Water Level Update ──────────────────────────────────────────────
+   334→function updateWaterLevel(field: AWDField, rainfall: number): void {
+   335→  const hour = field.currentHour;
+   336→
+   337→  // การระเหย (ET) ขึ้นกับอุณหภูมิและช่วงเวลา
+   338→  const temp = getTemperature(field, hour);
+   339→  const dayETmm = 3 + (temp - 25) * 0.15; // mm/day
+   340→  const hourETmm = dayETmm / 24;
+   341→  // percolation ขึ้นกับชนิดดิน
+   342→  const percMmPerDay = field.soilType.includes('Sandy') ? 8 :
+   343→                       field.soilType.includes('Clay') ? 1.5 : 3.5;
+   344→  const percMmPerHr = percMmPerDay / 24;
+   345→
+   346→  // น้ำเข้า: ฝน
+   347→  const inflowMm = rainfall;
+   348→  // น้ำออก: ระเหย + ซึม
+   349→  const outflowMm = hourETmm + percMmPerHr;
+   350→
+   351→  // แปลง mm → cm
+   352→  const waterChangeCm = (inflowMm - outflowMm) / 10;
+   353→
+   354→  // ชลประทาน: เติมน้ำตอน FLOODED/REFLOODING
+   355→  let irrigationCm = 0;
+   356→  if (field.waterSource.includes('ชลประทาน') &&
+   357→      (field.currentAWDPhase === 'FLOODED' || field.currentAWDPhase === 'REFLOODING') &&
+   358→      hour === 7) { // เติมน้ำตอนเช้า
+   359→    irrigationCm = 0.5; // cm/hr เมื่อเปิดประตูน้ำ
+   360→  }
+   361→  // สูบน้ำสำรอง (สุพรรณ)
+   362→  if (field.waterSource.includes('สำรอง') &&
+   363→      field.currentAWDPhase === 'FLOODED' && field.waterLevelCm < 3 &&
+   364→      hour === 8) {
+   365→    irrigationCm = 0.3;
+   366→  }
+   367→
+   368→  field.waterLevelCm += waterChangeCm + irrigationCm;
+   369→
+   370→  // AWD Phase transitions
+   371→  field.awdPhaseDayCounter += 1 / 24; // เพิ่ม 1 ชม. เป็นเศษของวัน
+   372→
+   373→  switch (field.currentAWDPhase) {
+   374→    case 'FLOODED':
+   375→      if (field.awdPhaseDayCounter >= field.floodDays) {
+   376→        field.currentAWDPhase = 'DRAINING';
+   377→        field.awdPhaseDayCounter = 0;
+   378→      }
+   379→      // รักษาระดับน้ำถ้าต่ำเกิน
+   380→      if (field.waterLevelCm < 2 && field.waterSource.includes('ชลประทาน')) {
+   381→        field.waterLevelCm = Math.max(field.waterLevelCm, 3);
+   382→      }
+   383→      break;
+   384→
+   385→    case 'DRAINING':
+   386→      if (field.waterLevelCm <= field.dryThresholdCm) {
+   387→        field.currentAWDPhase = 'DRY';
+   388→        field.awdPhaseDayCounter = 0;
+   389→      }
+   390→      break;
+   391→
+   392→    case 'DRY':
+   393→      if (field.awdPhaseDayCounter >= field.dryDays) {
+   394→        field.currentAWDPhase = 'REFLOODING';
+   395→        field.awdPhaseDayCounter = 0;
+   396→      }
+   397→      // ฝนตกหนักอาจเติมน้ำให้เร็วขึ้น
+   398→      if (rainfall > 5 && field.waterLevelCm > 0) {
+   399→        field.currentAWDPhase = 'REFLOODING';
+   400→        field.awdPhaseDayCounter = 0;
+   401→      }
+   402→      break;
+   403→
+   404→    case 'REFLOODING':
+   405→      if (field.waterLevelCm >= field.floodTargetCm) {
+   406→        field.currentAWDPhase = 'FLOODED';
+   407→        field.awdPhaseDayCounter = 0;
+   408→        field.totalAWDCycles++;
+   409→      }
+   410→      // ชลประทานช่วยเติมน้ำ
+   411→      if (field.waterSource.includes('ชลประทาน') && field.waterLevelCm < 5) {
+   412→        field.waterLevelCm += 0.3;
+   413→      }
+   414→      break;
+   415→  }
+   416→
+   417→  // Clamp water level
+   418→  field.waterLevelCm = Math.max(-25, Math.min(20, field.waterLevelCm));
+   419→}
+   420→
+   421→// ─── Soil Moisture ───────────────────────────────────────────────────
+   422→function getSoilMoisture(field: AWDField): number {
+   423→  let base = 40;
+   424→  switch (field.currentAWDPhase) {
+   425→    case 'FLOODED': base = 85 + field.waterLevelCm; break;
+   426→    case 'DRAINING': base = 70 + field.waterLevelCm * 0.8; break;
+   427→    case 'DRY': base = 30 + field.waterLevelCm * 0.5; break;
+   428→    case 'REFLOODING': base = 50 + field.waterLevelCm; break;
+   429→  }
+   430→  // ดินทรายแห้งเร็วกว่า
+   431→  if (field.soilType.includes('Sandy')) base -= 8;
+   432→  if (field.soilType.includes('Clay')) base += 5;
+   433→  return Math.max(15, Math.min(100, base));
+   434→}
+   435→
+   436→// ─── Rice Yield Estimation ───────────────────────────────────────────
+   437→function estimateYieldKgPerHa(field: AWDField): number {
+   438→  // ประมาณผลผลิตจาก DAP
+   439→  const p = Math.min(field.currentDAP / field.totalDays, 1);
+   440→  const maxKgPerHa = field.riceVariety.includes('KDML') ? 3500 :
+   441→                     field.riceVariety.includes('RD43') ? 4200 : 4500;
+   442→  // S-curve growth
+   443→  const growthFactor = 1 / (1 + Math.exp(-10 * (p - 0.5)));
+   444→  // AWD ลดผลผลิตเล็กน้อย 0-5% แต่ประหยัดน้ำ 30%
+   445→  const awdPenalty = 0.97;
+   446→  // นาแล้งผลผลิตต่ำกว่า
+   447→  const droughtFactor = field.waterSource.includes('ฝนเท่านั้น') ? 0.75 :
+   448→                        field.waterSource.includes('ฝน') ? 0.88 : 1.0;
+   449→  return maxKgPerHa * growthFactor * awdPenalty * droughtFactor;
+   450→}
+   451→
+   452→// ─── CO2 from Soil Respiration ───────────────────────────────────────
+   453→function getCO2Flux(field: AWDField, hour: number): number {
+   454→  const temp = getTemperature(field, hour);
+   455→  const stage = getGrowthStage(field.currentDAP, field.totalDays);
+   456→  let baseFlux = 50; // mg/m²/hr พื้นฐาน
+   457→  switch (stage) {
+   458→    case 'TILLERING': baseFlux = 120; break;
+   459→    case 'STEM_ELONGATION': baseFlux = 150; break;
+   460→    case 'BOOTING': baseFlux = 160; break;
+   461→    case 'FLOWERING': baseFlux = 140; break;
+   462→    case 'GRAIN_FILLING': baseFlux = 110; break;
+   463→    default: baseFlux = 60;
+   464→  }
+   465→  // อุณหภูมิ
+   466→  const tempFactor = Math.exp(0.05 * (temp - 25));
+   467→  // ความชื้นดิน
+   468→  const moisture = getSoilMoisture(field);
+   469→  const moistureFactor = moisture > 60 ? 1.2 : moisture > 30 ? 1.0 : 0.7;
+   470→  return baseFlux * tempFactor * moistureFactor;
+   471→}
+   472→
+   473→// ─── Main Simulation ─────────────────────────────────────────────────
+   474→const httpServer = createServer();
+   475→const io = new Server(httpServer, { cors: { origin: '*' } });
+   476→
+   477→let fields: AWDField[] = createFields();
+   478→let simRunning = false;
+   479→let simTimer: ReturnType<typeof setInterval> | null = null;
+   480→let simTickCounter = 0;
+   481→let readings: any[] = []; // last 200 readings
+   482→
+   483→function simTick() {
+   484→  simTickCounter++;
+   485→  const newReadings: any[] = [];
+   486→
+   487→  for (const field of fields) {
+   488→    if (field.seasonComplete) continue;
+   489→
+   490→    // Advance time
+   491→    field.currentHour += SIM_HOURS_PER_TICK;
+   492→    if (field.currentHour >= 24) {
+   493→      field.currentHour -= 24;
+   494→      field.currentDAP++;
+   495→    }
+   496→
+   497→    // Check season end
+   498→    if (field.currentDAP >= field.totalDays) {
+   499→      field.seasonComplete = true;
+   500→      field.currentAWDPhase = 'DRY';
+   501→      field.waterLevelCm = -20;
+   502→    }
+   503→
+   504→    // Environment
+   505→    const temp = getTemperature(field, field.currentHour);
+   506→    const humidity = field.baseHumidity +
+   507→      (field.currentAWDPhase === 'DRY' ? -8 : field.currentAWDPhase === 'FLOODED' ? 5 : 0) +
+   508→      Math.sin(field.currentDAP * 0.5 + field.currentHour * 0.2) * 5;
+   509→    const rainfall = getRainfallMm(field, field.currentDAP, field.currentHour);
+   510→
+   511→    // Water
+   512→    updateWaterLevel(field, rainfall);
+   513→
+   514→    // Emissions
+   515→    const ch4Flux = getCH4Emission(field, field.currentHour);
+   516→    const n2oFlux = getN2OEmission(field);
+   517→    const co2Flux = getCO2Flux(field, field.currentHour);
+   518→
+   519→    // Soil
+   520→    const soilMoisture = getSoilMoisture(field);
+   521→    const soilPH = 5.5 + Math.sin(field.currentDAP * 0.1) * 0.3;
+   522→    const soilTempC = temp - 2 + Math.sin(field.currentDAP * 0.3) * 0.5;
+   523→
+   524→    // Growth
+   525→    const growthStage = getGrowthStage(field.currentDAP, field.totalDays);
+   526→    const yieldKgPerHa = estimateYieldKgPerHa(field);
+   527→
+   528→    // Accumulate — T-VER standard units
+   529→    const areaM2 = field.areaHa * 10000;
+   530→    // Convert flux mg/m²/hr → kg/ha for this hour
+   531→    const ch4KgPerHaThisHour = ch4Flux * MG_M2_HR_TO_KG_HA_DAY / 24; // kg CH₄/ha for 1 hr
+   532→    const n2oKgPerHaThisHour = n2oFlux * MG_M2_HR_TO_KG_HA_DAY / 24; // kg N₂O/ha for 1 hr
+   533→    // Total kg = per ha × area
+   534→    const ch4KgThisHour = ch4KgPerHaThisHour * field.areaHa;
+   535→    const n2oKgThisHour = n2oKgPerHaThisHour * field.areaHa;
+   536→
+   537→    field.totalCH4kg += ch4KgThisHour;
+   538→    field.totalN2Okg += n2oKgThisHour;
+   539→    field.totalCH4tCO2e = field.totalCH4kg * KG_CH4_TO_TCO2E;
+   540→    field.totalN2OtCO2e = field.totalN2Okg * KG_N2O_TO_TCO2E;
+   541→
+   542→    // CO₂ soil respiration offset (plant uptake ~offsets soil respiration)
+   543→    const co2KgThisHour = co2Flux * areaM2 / 1e6; // mg/m²/hr → kg
+   544→    field.totalNettCO2e = field.totalCH4tCO2e + field.totalN2OtCO2e - (co2KgThisHour / 1000 * 0.3); // 30% offset
+   545→    field.totalYieldKg = yieldKgPerHa * field.areaHa;
+   546→
+   547→    // T-VER-P-AG-001: Baseline (continuous flooding) emission calculation
+   548→    // Baseline EF depends on water source type
+   549→    const baselineEF = field.waterSource.includes('ชลประทาน') ? TVER_EF_CF_IRRIGATED :
+   550→                       field.waterSource.includes('ฝนเท่านั้น') ? TVER_EF_CF_DRY :
+   551→                       TVER_EF_CF_RAINFED;
+   552→    const baselineCH4KgPerDay = baselineEF * field.areaHa; // kg CH₄/day for whole area
+   553→    const baselineCH4KgThisHour = baselineCH4KgPerDay / 24;
+   554→    field.baselineEmissiontCO2e += baselineCH4KgThisHour * KG_CH4_TO_TCO2E;
+   555→    field.emissionReductiontCO2e = Math.max(0, field.baselineEmissiontCO2e - field.totalNettCO2e);
+   556→
+   557→    // Convert CH4 to CO2e (GWP=28 per TGO/IPCC AR5), N2O to CO2e (GWP=265)
+   558→    const ch4CO2e = ch4Flux * GWP_CH4; // mgCO2e/m²/hr
+   559→    const n2oCO2e = n2oFlux * GWP_N2O;
+   560→    const totalGHGCO2e = ch4CO2e + n2oCO2e - co2Flux; // net
+   561→    // AWD emission reduction vs continuous flooding
+   562→    const baselineCH4Flux = ch4Flux / 0.6; // continuous flooding = higher
+   563→    const emissionReductionPct = ((baselineCH4Flux - ch4Flux) / baselineCH4Flux) * 100;
+   564→
+   565→    const reading = {
+   566→      tick: simTickCounter,
+   567→      fieldId: field.id,
+   568→      fieldName: field.name,
+   569→      province: field.province,
+   570→      timestamp: new Date().toISOString(),
+   571→      simDAP: field.currentDAP,
+   572→      simHour: field.currentHour,
+   573→      growthStage,
+   574→      awdPhase: field.currentAWDPhase,
+   575→      awdCycles: field.totalAWDCycles,
+   576→      // Water
+   577→      waterLevelCm: Math.round(field.waterLevelCm * 10) / 10,
+   578→      soilMoisturePct: Math.round(soilMoisture * 10) / 10,
+   579→      rainfallMmHr: Math.round(rainfall * 10) / 10,
+   580→      // Climate
+   581→      airTempC: Math.round(temp * 10) / 10,
+   582→      soilTempC: Math.round(soilTempC * 10) / 10,
+   583→      humidityPct: Math.round(humidity * 10) / 10,
+   584→      soilPH: Math.round(soilPH * 100) / 100,
+   585→      // Emissions — T-VER standard units
+   586→      ch4FluxMgM2Hr: Math.round(ch4Flux * 100) / 100,         // mg/m²/hr (raw sensor)
+   587→      ch4EfKgHaDay: Math.round(ch4Flux * MG_M2_HR_TO_KG_HA_DAY * 1000) / 1000,  // kg CH₄/ha/day (T-VER EF)
+   588→      n2oFluxMgM2Hr: Math.round(n2oFlux * 100) / 100,
+   589→      n2oEfKgHaDay: Math.round(n2oFlux * MG_M2_HR_TO_KG_HA_DAY * 1000) / 1000,
+   590→      co2FluxMgM2Hr: Math.round(co2Flux * 10) / 10,
+   591→      ch4CO2eMgM2Hr: Math.round(ch4CO2e * 100) / 100,
+   592→      n2oCO2eMgM2Hr: Math.round(n2oCO2e * 100) / 100,
+   593→      netGHGCO2eMgM2Hr: Math.round(totalGHGCO2e * 100) / 100,
+   594→      emissionReductionPct: Math.round(emissionReductionPct * 10) / 10,
+   595→      // Cumulative — T-VER units
+   596→      cumulativeCH4kg: Math.round(field.totalCH4kg * 1000) / 1000,   // kg CH₄
+   597→      cumulativeN2Okg: Math.round(field.totalN2Okg * 1000) / 1000,   // kg N₂O
+   598→      cumulativeCH4tCO2e: Math.round(field.totalCH4tCO2e * 10000) / 10000,  // tCO₂e
+   599→      cumulativeN2OtCO2e: Math.round(field.totalN2OtCO2e * 10000) / 10000,
+   600→      cumulativeNettCO2e: Math.round(field.totalNettCO2e * 10000) / 10000,
+   601→      baselineEmissiontCO2e: Math.round(field.baselineEmissiontCO2e * 10000) / 10000,
+   602→      emissionReductiontCO2e: Math.round(field.emissionReductiontCO2e * 10000) / 10000,
+   603→      estimatedYieldKg: Math.round(field.totalYieldKg),
+   604→      seasonComplete: field.seasonComplete,
+   605→      // T-VER methodology reference
+   606→      tverMethodology: 'T-VER-P-AG-001',
+   607→      tverGwpCH4: GWP_CH4,
+   608→      tverGwpN2O: GWP_N2O,
+   609→    };
+   610→
+   611→    newReadings.push(reading);
+   612→  }
+   613→
+   614→  // Store readings
+   615→  readings.push(...newReadings);
+   616→  if (readings.length > 600) readings = readings.slice(-600);
+   617→
+   618→  // Emit
+   619→  io.emit('awd:reading', newReadings);
+   620→  io.emit('awd:status', getStatus());
+   621→}
+   622→
+   623→function getStatus() {
+   624→  return {
+   625→    running: simRunning,
+   626→    tickCounter: simTickCounter,
+   627→    speedFactor: SPEED_FACTOR,
+   628→    intervalMs: INTERVAL_MS,
+   629→    fields: fields.map(f => ({
+   630→      id: f.id,
+   631→      name: f.name,
+   632→      province: f.province,
+   633→      lat: f.lat,
+   634→      lng: f.lng,
+   635→      areaHa: f.areaHa,
+   636→      soilType: f.soilType,
+   637→      waterSource: f.waterSource,
+   638→      riceVariety: f.riceVariety,
+   639→      totalDays: f.totalDays,
+   640→      boundary: f.boundary,
+   641→      currentDAP: f.currentDAP,
+   642→      currentHour: f.currentHour,
+   643→      waterLevelCm: Math.round(f.waterLevelCm * 10) / 10,
+   644→      currentAWDPhase: f.currentAWDPhase,
+   645→      awdCycles: f.totalAWDCycles,
+   646→      growthStage: getGrowthStage(f.currentDAP, f.totalDays),
+   647→      cumulativeCH4kg: Math.round(f.totalCH4kg * 1000) / 1000,
+   648→      cumulativeN2Okg: Math.round(f.totalN2Okg * 1000) / 1000,
+   649→      cumulativeCH4tCO2e: Math.round(f.totalCH4tCO2e * 10000) / 10000,
+   650→      cumulativeN2OtCO2e: Math.round(f.totalN2OtCO2e * 10000) / 10000,
+   651→      cumulativeNettCO2e: Math.round(f.totalNettCO2e * 10000) / 10000,
+   652→      baselineEmissiontCO2e: Math.round(f.baselineEmissiontCO2e * 10000) / 10000,
+   653→      emissionReductiontCO2e: Math.round(f.emissionReductiontCO2e * 10000) / 10000,
+   654→      estimatedYieldKg: Math.round(f.totalYieldKg),
+   655→      seasonComplete: f.seasonComplete,
+   656→    })),
+   657→  };
+   658→}
+   659→
+   660→function startSim() {
+   661→  if (simRunning) return;
+   662→  simRunning = true;
+   663→  simTimer = setInterval(simTick, INTERVAL_MS);
+   664→  io.emit('awd:started', { speedFactor: SPEED_FACTOR });
+   665→}
+   666→
+   667→function stopSim() {
+   668→  if (!simRunning) return;
+   669→  simRunning = false;
+   670→  if (simTimer) { clearInterval(simTimer); simTimer = null; }
+   671→  io.emit('awd:stopped');
+   672→}
+   673→
+   674→function resetSim() {
+   675→  stopSim();
+   676→  fields = createFields();
+   677→  simTickCounter = 0;
+   678→  readings = [];
+   679→  io.emit('awd:reset');
+   680→  io.emit('awd:status', getStatus());
+   681→}
+   682→
+   683→// ─── Socket.IO ───────────────────────────────────────────────────────
+   684→io.on('connection', (socket) => {
+   685→  console.log(`[AWD] Client connected: ${socket.id}`);
+   686→
+   687→  // Send current status
+   688→  socket.emit('awd:status', getStatus());
+   689→
+   690→  // Send recent readings
+   691→  if (readings.length > 0) {
+   692→    socket.emit('awd:readings', readings.slice(-100));
+   693→  }
+   694→
+   695→  socket.on('awd:start', () => { startSim(); });
+   696→  socket.on('awd:stop', () => { stopSim(); });
+   697→  socket.on('awd:reset', () => { resetSim(); });
+   698→
+   699→  socket.on('disconnect', () => {
+   700→    console.log(`[AWD] Client disconnected: ${socket.id}`);
+   701→  });
+   702→});
+   703→
+   704→// ─── REST API ────────────────────────────────────────────────────────
+   705→httpServer.on('request', (req, res) => {
+   706→  const url = new URL(req.url || '/', `http://localhost:${PORT}`);
+   707→
+   708→  // Handle CORS preflight
+   709→  res.setHeader('Access-Control-Allow-Origin', '*');
+   710→  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+   711→  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+   712→  if (req.method === 'OPTIONS') { res.statusCode = 204; res.end(); return; }
+   713→
+   714→  res.setHeader('Content-Type', 'application/json');
+   715→
+   716→  // POST control endpoints — work even when Socket.IO is not connected
+   717→  if (req.method === 'POST' && url.pathname === '/api/start') {
+   718→    startSim();
+   719→    res.end(JSON.stringify({ success: true, running: simRunning, message: 'Simulation started' }));
+   720→  } else if (req.method === 'POST' && url.pathname === '/api/stop') {
+   721→    stopSim();
+   722→    res.end(JSON.stringify({ success: true, running: simRunning, message: 'Simulation stopped' }));
+   723→  } else if (req.method === 'POST' && url.pathname === '/api/reset') {
+   724→    resetSim();
+   725→    res.end(JSON.stringify({ success: true, running: simRunning, message: 'Simulation reset' }));
+   726→  } else if (url.pathname === '/api/status') {
+   727→    res.end(JSON.stringify(getStatus()));
+   728→  } else if (url.pathname === '/api/readings') {
+   729→    const limit = Math.min(parseInt(url.searchParams.get('limit') || '100'), 500);
+   730→    res.end(JSON.stringify(readings.slice(-limit)));
+   731→  } else if (url.pathname === '/api/summary') {
+   732→    const summary = fields.map(f => ({
+   733→      id: f.id,
+   734→      name: f.name,
+   735→      province: f.province,
+   736→      areaHa: f.areaHa,
+   737→      currentDAP: f.currentDAP,
+   738→      growthStage: getGrowthStage(f.currentDAP, f.totalDays),
+   739→      awdPhase: f.currentAWDPhase,
+   740→      waterLevelCm: Math.round(f.waterLevelCm * 10) / 10,
+   741→      awdCycles: f.totalAWDCycles,
+   742→      cumulativeCH4kg: Math.round(f.totalCH4kg * 1000) / 1000,
+   743→      cumulativeN2Okg: Math.round(f.totalN2Okg * 1000) / 1000,
+   744→      cumulativeCH4tCO2e: Math.round(f.totalCH4tCO2e * 10000) / 10000,
+   745→      cumulativeN2OtCO2e: Math.round(f.totalN2OtCO2e * 10000) / 10000,
+   746→      cumulativeNettCO2e: Math.round(f.totalNettCO2e * 10000) / 10000,
+   747→      baselineEmissiontCO2e: Math.round(f.baselineEmissiontCO2e * 10000) / 10000,
+   748→      emissionReductiontCO2e: Math.round(f.emissionReductiontCO2e * 10000) / 10000,
+   749→      estimatedYieldKg: Math.round(f.totalYieldKg),
+   750→      seasonComplete: f.seasonComplete,
+   751→    }));
+   752→    res.end(JSON.stringify({
+   753→      running: simRunning,
+   754→      tickCounter: simTickCounter,
+   755→      totalReadings: readings.length,
+   756→      fields: summary,
+   757→    }));
+   758→  } else {
+   759→    res.statusCode = 404;
+   760→    res.end(JSON.stringify({ error: 'Not found' }));
+   761→  }
+   762→});
+   763→
+   764→httpServer.listen(PORT, () => {
+   765→  console.log(`🌾 AWD Rice Simulator running on port ${PORT}`);
+   766→  console.log(`   Speed: ${SPEED_FACTOR}x (1 tick = ${SIM_HOURS_PER_TICK}hr simulated, every ${INTERVAL_MS / 1000}s real)`);
+   767→  console.log(`   Fields: ${fields.map(f => f.name).join(', ')}`);
+   768→});
+   769→

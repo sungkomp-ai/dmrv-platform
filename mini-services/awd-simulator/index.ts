@@ -19,11 +19,103 @@
 
 import { createServer } from 'http';
 import { Server } from 'socket.io';
+import mqtt from 'mqtt';
 
 const PORT = 3032;
 const SPEED_FACTOR = 1800; // 1800x speed
 const INTERVAL_MS = 2000; // 2 วินาทีจริง = 1 ชม.จำลอง
 const SIM_HOURS_PER_TICK = 1;
+
+// ─── MQTT External Broker ────────────────────────────────────────────
+// ส่งค่าจำลอง AWD ไปยัง MQTT Broker ภายนอกที่ http://35.213.186.240/
+// รองรับทั้ง TCP (1883) และ WebSocket (9001/8083) ผ่าน env variable
+const MQTT_BROKER_URL = process.env.MQTT_BROKER_URL || 'mqtt://35.213.186.240:1883';
+const MQTT_TOPIC_READINGS = process.env.MQTT_TOPIC_READINGS || 'dmrv/awd/readings';
+const MQTT_TOPIC_STATUS = process.env.MQTT_TOPIC_STATUS || 'dmrv/awd/status';
+const MQTT_TOPIC_FIELD_PREFIX = process.env.MQTT_TOPIC_FIELD_PREFIX || 'dmrv/awd/field';
+const MQTT_CLIENT_ID = `awd-sim-${Math.random().toString(16).slice(2, 10)}`;
+
+let mqttClient: mqtt.MqttClient | null = null;
+let mqttConnected = false;
+let mqttPublishCount = 0;
+let mqttErrorCount = 0;
+
+function connectMQTT() {
+  console.log(`[MQTT] Connecting to ${MQTT_BROKER_URL} (clientId=${MQTT_CLIENT_ID})...`);
+  mqttClient = mqtt.connect(MQTT_BROKER_URL, {
+    clientId: MQTT_CLIENT_ID,
+    clean: true,
+    reconnectPeriod: 5000,     // retry every 5s
+    connectTimeout: 10000,     // 10s timeout
+    keepalive: 60,
+  });
+
+  mqttClient.on('connect', () => {
+    mqttConnected = true;
+    console.log(`[MQTT] ✅ Connected to ${MQTT_BROKER_URL}`);
+    console.log(`[MQTT] Topics:`);
+    console.log(`       - ${MQTT_TOPIC_READINGS}        (all readings batch)`);
+    console.log(`       - ${MQTT_TOPIC_STATUS}           (simulation status)`);
+    console.log(`       - ${MQTT_TOPIC_FIELD_PREFIX}/<fieldId>  (per-field reading)`);
+  });
+
+  mqttClient.on('reconnect', () => {
+    console.log(`[MQTT] Reconnecting to ${MQTT_BROKER_URL}...`);
+  });
+
+  mqttClient.on('error', (err) => {
+    mqttErrorCount++;
+    if (mqttErrorCount <= 5 || mqttErrorCount % 20 === 0) {
+      console.error(`[MQTT] ❌ Error (#${mqttErrorCount}):`, err.message);
+    }
+  });
+
+  mqttClient.on('close', () => {
+    if (mqttConnected) {
+      console.warn(`[MQTT] ⚠️ Connection closed`);
+    }
+    mqttConnected = false;
+  });
+
+  mqttClient.on('offline', () => {
+    mqttConnected = false;
+  });
+}
+
+function publishReadingToMQTT(reading: any) {
+  if (!mqttClient || !mqttConnected) return;
+  try {
+    const payload = JSON.stringify(reading);
+    // 1) ส่งไปยัง topic รวม (batch topic ใช้ single message ก็ได้ — แต่ละ reading แยก)
+    mqttClient.publish(MQTT_TOPIC_READINGS, payload, { qos: 0, retain: false }, (err) => {
+      if (err) {
+        mqttErrorCount++;
+        if (mqttErrorCount <= 5 || mqttErrorCount % 50 === 0) {
+          console.error(`[MQTT] publish error (${MQTT_TOPIC_READINGS}):`, err.message);
+        }
+      }
+    });
+    // 2) ส่งไปยัง topic เฉพาะแปลง
+    const fieldTopic = `${MQTT_TOPIC_FIELD_PREFIX}/${reading.fieldId}`;
+    mqttClient.publish(fieldTopic, payload, { qos: 0, retain: false }, (err) => {
+      if (err) {
+        // silent — already logged on main topic
+      }
+    });
+    mqttPublishCount++;
+  } catch (e: any) {
+    // ignore — don't crash simulation
+  }
+}
+
+function publishStatusToMQTT(status: any) {
+  if (!mqttClient || !mqttConnected) return;
+  try {
+    mqttClient.publish(MQTT_TOPIC_STATUS, JSON.stringify(status), { qos: 0, retain: true });
+  } catch (e: any) {
+    // ignore
+  }
+}
 
 // ─── TGO/T-VER Constants ─────────────────────────────────────────────
 const GWP_CH4 = 28;     // IPCC AR5 (ตามประกาศ TGO 2566)
@@ -615,9 +707,14 @@ function simTick() {
   readings.push(...newReadings);
   if (readings.length > 600) readings = readings.slice(-600);
 
-  // Emit
+  // Emit via Socket.IO (local dashboard)
   io.emit('awd:reading', newReadings);
   io.emit('awd:status', getStatus());
+
+  // Publish via MQTT to external broker (35.213.186.240)
+  for (const reading of newReadings) {
+    publishReadingToMQTT(reading);
+  }
 }
 
 function getStatus() {
@@ -662,6 +759,7 @@ function startSim() {
   simRunning = true;
   simTimer = setInterval(simTick, INTERVAL_MS);
   io.emit('awd:started', { speedFactor: SPEED_FACTOR });
+  publishStatusToMQTT(getStatus());
 }
 
 function stopSim() {
@@ -669,6 +767,7 @@ function stopSim() {
   simRunning = false;
   if (simTimer) { clearInterval(simTimer); simTimer = null; }
   io.emit('awd:stopped');
+  publishStatusToMQTT(getStatus());
 }
 
 function resetSim() {
@@ -678,6 +777,7 @@ function resetSim() {
   readings = [];
   io.emit('awd:reset');
   io.emit('awd:status', getStatus());
+  publishStatusToMQTT(getStatus());
 }
 
 // ─── Socket.IO ───────────────────────────────────────────────────────
@@ -725,6 +825,29 @@ httpServer.on('request', (req, res) => {
     res.end(JSON.stringify({ success: true, running: simRunning, message: 'Simulation reset' }));
   } else if (url.pathname === '/api/status') {
     res.end(JSON.stringify(getStatus()));
+  } else if (url.pathname === '/api/mqtt-status') {
+    res.end(JSON.stringify({
+      broker: MQTT_BROKER_URL,
+      connected: mqttConnected,
+      clientId: MQTT_CLIENT_ID,
+      topics: {
+        readings: MQTT_TOPIC_READINGS,
+        status: MQTT_TOPIC_STATUS,
+        fieldPrefix: MQTT_TOPIC_FIELD_PREFIX,
+      },
+      stats: {
+        published: mqttPublishCount,
+        errors: mqttErrorCount,
+      },
+    }));
+  } else if (url.pathname === '/api/mqtt-reconnect') {
+    if (mqttClient) {
+      try { mqttClient.end(true); } catch (e) {}
+      mqttClient = null;
+      mqttConnected = false;
+    }
+    setTimeout(() => connectMQTT(), 500);
+    res.end(JSON.stringify({ success: true, message: 'Reconnecting to MQTT broker' }));
   } else if (url.pathname === '/api/readings') {
     const limit = Math.min(parseInt(url.searchParams.get('limit') || '100'), 500);
     res.end(JSON.stringify(readings.slice(-limit)));
@@ -765,4 +888,34 @@ httpServer.listen(PORT, () => {
   console.log(`🌾 AWD Rice Simulator running on port ${PORT}`);
   console.log(`   Speed: ${SPEED_FACTOR}x (1 tick = ${SIM_HOURS_PER_TICK}hr simulated, every ${INTERVAL_MS / 1000}s real)`);
   console.log(`   Fields: ${fields.map(f => f.name).join(', ')}`);
+  console.log(`   📡 MQTT Broker: ${MQTT_BROKER_URL}`);
+  console.log(`      Topics:`);
+  console.log(`        - ${MQTT_TOPIC_READINGS}        (per-tick readings, qos=0)`);
+  console.log(`        - ${MQTT_TOPIC_STATUS}           (status, retain=true)`);
+  console.log(`        - ${MQTT_TOPIC_FIELD_PREFIX}/<fieldId>  (per-field readings)`);
+  // เริ่มการเชื่อมต่อ MQTT ไปยัง 35.213.186.240
+  connectMQTT();
+});
+
+// ตรวจสอบสถานะ MQTT ทุก 30 วินาที — log stats
+setInterval(() => {
+  if (mqttPublishCount > 0 || mqttErrorCount > 0) {
+    console.log(`[MQTT] Stats: published=${mqttPublishCount}, errors=${mqttErrorCount}, connected=${mqttConnected}`);
+  }
+}, 30000);
+
+// ปิดการเชื่อมต่อ MQTT เมื่อ process ปิด
+process.on('SIGINT', () => {
+  console.log('[AWD] Shutting down...');
+  if (mqttClient) {
+    try { mqttClient.end(true); } catch (e) {}
+  }
+  process.exit(0);
+});
+process.on('SIGTERM', () => {
+  console.log('[AWD] Terminated');
+  if (mqttClient) {
+    try { mqttClient.end(true); } catch (e) {}
+  }
+  process.exit(0);
 });
