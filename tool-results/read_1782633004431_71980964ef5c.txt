@@ -1,0 +1,2002 @@
+     1→// @bun
+     2→var __create = Object.create;
+     3→var __getProtoOf = Object.getPrototypeOf;
+     4→var __defProp = Object.defineProperty;
+     5→var __getOwnPropNames = Object.getOwnPropertyNames;
+     6→var __hasOwnProp = Object.prototype.hasOwnProperty;
+     7→function __accessProp(key) {
+     8→  return this[key];
+     9→}
+    10→var __toESMCache_node;
+    11→var __toESMCache_esm;
+    12→var __toESM = (mod, isNodeMode, target) => {
+    13→  var canCache = mod != null && typeof mod === "object";
+    14→  if (canCache) {
+    15→    var cache = isNodeMode ? __toESMCache_node ??= new WeakMap : __toESMCache_esm ??= new WeakMap;
+    16→    var cached = cache.get(mod);
+    17→    if (cached)
+    18→      return cached;
+    19→  }
+    20→  target = mod != null ? __create(__getProtoOf(mod)) : {};
+    21→  const to = isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", { value: mod, enumerable: true }) : target;
+    22→  for (let key of __getOwnPropNames(mod))
+    23→    if (!__hasOwnProp.call(to, key))
+    24→      __defProp(to, key, {
+    25→        get: __accessProp.bind(mod, key),
+    26→        enumerable: true
+    27→      });
+    28→  if (canCache)
+    29→    cache.set(mod, to);
+    30→  return to;
+    31→};
+    32→var __commonJS = (cb, mod) => () => (mod || cb((mod = { exports: {} }).exports, mod), mod.exports);
+    33→var __require = import.meta.require;
+    34→
+    35→// node_modules/negotiator/lib/charset.js
+    36→var require_charset = __commonJS((exports, module) => {
+    37→  module.exports = preferredCharsets;
+    38→  module.exports.preferredCharsets = preferredCharsets;
+    39→  var simpleCharsetRegExp = /^\s*([^\s;]+)\s*(?:;(.*))?$/;
+    40→  function parseAcceptCharset(accept) {
+    41→    var accepts = accept.split(",");
+    42→    for (var i = 0, j = 0;i < accepts.length; i++) {
+    43→      var charset = parseCharset(accepts[i].trim(), i);
+    44→      if (charset) {
+    45→        accepts[j++] = charset;
+    46→      }
+    47→    }
+    48→    accepts.length = j;
+    49→    return accepts;
+    50→  }
+    51→  function parseCharset(str, i) {
+    52→    var match = simpleCharsetRegExp.exec(str);
+    53→    if (!match)
+    54→      return null;
+    55→    var charset = match[1];
+    56→    var q = 1;
+    57→    if (match[2]) {
+    58→      var params = match[2].split(";");
+    59→      for (var j = 0;j < params.length; j++) {
+    60→        var p = params[j].trim().split("=");
+    61→        if (p[0] === "q") {
+    62→          q = parseFloat(p[1]);
+    63→          break;
+    64→        }
+    65→      }
+    66→    }
+    67→    return {
+    68→      charset,
+    69→      q,
+    70→      i
+    71→    };
+    72→  }
+    73→  function getCharsetPriority(charset, accepted, index) {
+    74→    var priority = { o: -1, q: 0, s: 0 };
+    75→    for (var i = 0;i < accepted.length; i++) {
+    76→      var spec = specify(charset, accepted[i], index);
+    77→      if (spec && (priority.s - spec.s || priority.q - spec.q || priority.o - spec.o) < 0) {
+    78→        priority = spec;
+    79→      }
+    80→    }
+    81→    return priority;
+    82→  }
+    83→  function specify(charset, spec, index) {
+    84→    var s = 0;
+    85→    if (spec.charset.toLowerCase() === charset.toLowerCase()) {
+    86→      s |= 1;
+    87→    } else if (spec.charset !== "*") {
+    88→      return null;
+    89→    }
+    90→    return {
+    91→      i: index,
+    92→      o: spec.i,
+    93→      q: spec.q,
+    94→      s
+    95→    };
+    96→  }
+    97→  function preferredCharsets(accept, provided) {
+    98→    var accepts = parseAcceptCharset(accept === undefined ? "*" : accept || "");
+    99→    if (!provided) {
+   100→      return accepts.filter(isQuality).sort(compareSpecs).map(getFullCharset);
+   101→    }
+   102→    var priorities = provided.map(function getPriority(type, index) {
+   103→      return getCharsetPriority(type, accepts, index);
+   104→    });
+   105→    return priorities.filter(isQuality).sort(compareSpecs).map(function getCharset(priority) {
+   106→      return provided[priorities.indexOf(priority)];
+   107→    });
+   108→  }
+   109→  function compareSpecs(a, b) {
+   110→    return b.q - a.q || b.s - a.s || a.o - b.o || a.i - b.i || 0;
+   111→  }
+   112→  function getFullCharset(spec) {
+   113→    return spec.charset;
+   114→  }
+   115→  function isQuality(spec) {
+   116→    return spec.q > 0;
+   117→  }
+   118→});
+   119→
+   120→// node_modules/negotiator/lib/encoding.js
+   121→var require_encoding = __commonJS((exports, module) => {
+   122→  module.exports = preferredEncodings;
+   123→  module.exports.preferredEncodings = preferredEncodings;
+   124→  var simpleEncodingRegExp = /^\s*([^\s;]+)\s*(?:;(.*))?$/;
+   125→  function parseAcceptEncoding(accept) {
+   126→    var accepts = accept.split(",");
+   127→    var hasIdentity = false;
+   128→    var minQuality = 1;
+   129→    for (var i = 0, j = 0;i < accepts.length; i++) {
+   130→      var encoding = parseEncoding(accepts[i].trim(), i);
+   131→      if (encoding) {
+   132→        accepts[j++] = encoding;
+   133→        hasIdentity = hasIdentity || specify("identity", encoding);
+   134→        minQuality = Math.min(minQuality, encoding.q || 1);
+   135→      }
+   136→    }
+   137→    if (!hasIdentity) {
+   138→      accepts[j++] = {
+   139→        encoding: "identity",
+   140→        q: minQuality,
+   141→        i
+   142→      };
+   143→    }
+   144→    accepts.length = j;
+   145→    return accepts;
+   146→  }
+   147→  function parseEncoding(str, i) {
+   148→    var match = simpleEncodingRegExp.exec(str);
+   149→    if (!match)
+   150→      return null;
+   151→    var encoding = match[1];
+   152→    var q = 1;
+   153→    if (match[2]) {
+   154→      var params = match[2].split(";");
+   155→      for (var j = 0;j < params.length; j++) {
+   156→        var p = params[j].trim().split("=");
+   157→        if (p[0] === "q") {
+   158→          q = parseFloat(p[1]);
+   159→          break;
+   160→        }
+   161→      }
+   162→    }
+   163→    return {
+   164→      encoding,
+   165→      q,
+   166→      i
+   167→    };
+   168→  }
+   169→  function getEncodingPriority(encoding, accepted, index) {
+   170→    var priority = { o: -1, q: 0, s: 0 };
+   171→    for (var i = 0;i < accepted.length; i++) {
+   172→      var spec = specify(encoding, accepted[i], index);
+   173→      if (spec && (priority.s - spec.s || priority.q - spec.q || priority.o - spec.o) < 0) {
+   174→        priority = spec;
+   175→      }
+   176→    }
+   177→    return priority;
+   178→  }
+   179→  function specify(encoding, spec, index) {
+   180→    var s = 0;
+   181→    if (spec.encoding.toLowerCase() === encoding.toLowerCase()) {
+   182→      s |= 1;
+   183→    } else if (spec.encoding !== "*") {
+   184→      return null;
+   185→    }
+   186→    return {
+   187→      i: index,
+   188→      o: spec.i,
+   189→      q: spec.q,
+   190→      s
+   191→    };
+   192→  }
+   193→  function preferredEncodings(accept, provided) {
+   194→    var accepts = parseAcceptEncoding(accept || "");
+   195→    if (!provided) {
+   196→      return accepts.filter(isQuality).sort(compareSpecs).map(getFullEncoding);
+   197→    }
+   198→    var priorities = provided.map(function getPriority(type, index) {
+   199→      return getEncodingPriority(type, accepts, index);
+   200→    });
+   201→    return priorities.filter(isQuality).sort(compareSpecs).map(function getEncoding(priority) {
+   202→      return provided[priorities.indexOf(priority)];
+   203→    });
+   204→  }
+   205→  function compareSpecs(a, b) {
+   206→    return b.q - a.q || b.s - a.s || a.o - b.o || a.i - b.i || 0;
+   207→  }
+   208→  function getFullEncoding(spec) {
+   209→    return spec.encoding;
+   210→  }
+   211→  function isQuality(spec) {
+   212→    return spec.q > 0;
+   213→  }
+   214→});
+   215→
+   216→// node_modules/negotiator/lib/language.js
+   217→var require_language = __commonJS((exports, module) => {
+   218→  module.exports = preferredLanguages;
+   219→  module.exports.preferredLanguages = preferredLanguages;
+   220→  var simpleLanguageRegExp = /^\s*([^\s\-;]+)(?:-([^\s;]+))?\s*(?:;(.*))?$/;
+   221→  function parseAcceptLanguage(accept) {
+   222→    var accepts = accept.split(",");
+   223→    for (var i = 0, j = 0;i < accepts.length; i++) {
+   224→      var language = parseLanguage(accepts[i].trim(), i);
+   225→      if (language) {
+   226→        accepts[j++] = language;
+   227→      }
+   228→    }
+   229→    accepts.length = j;
+   230→    return accepts;
+   231→  }
+   232→  function parseLanguage(str, i) {
+   233→    var match = simpleLanguageRegExp.exec(str);
+   234→    if (!match)
+   235→      return null;
+   236→    var prefix = match[1];
+   237→    var suffix = match[2];
+   238→    var full = prefix;
+   239→    if (suffix)
+   240→      full += "-" + suffix;
+   241→    var q = 1;
+   242→    if (match[3]) {
+   243→      var params = match[3].split(";");
+   244→      for (var j = 0;j < params.length; j++) {
+   245→        var p = params[j].split("=");
+   246→        if (p[0] === "q")
+   247→          q = parseFloat(p[1]);
+   248→      }
+   249→    }
+   250→    return {
+   251→      prefix,
+   252→      suffix,
+   253→      q,
+   254→      i,
+   255→      full
+   256→    };
+   257→  }
+   258→  function getLanguagePriority(language, accepted, index) {
+   259→    var priority = { o: -1, q: 0, s: 0 };
+   260→    for (var i = 0;i < accepted.length; i++) {
+   261→      var spec = specify(language, accepted[i], index);
+   262→      if (spec && (priority.s - spec.s || priority.q - spec.q || priority.o - spec.o) < 0) {
+   263→        priority = spec;
+   264→      }
+   265→    }
+   266→    return priority;
+   267→  }
+   268→  function specify(language, spec, index) {
+   269→    var p = parseLanguage(language);
+   270→    if (!p)
+   271→      return null;
+   272→    var s = 0;
+   273→    if (spec.full.toLowerCase() === p.full.toLowerCase()) {
+   274→      s |= 4;
+   275→    } else if (spec.prefix.toLowerCase() === p.full.toLowerCase()) {
+   276→      s |= 2;
+   277→    } else if (spec.full.toLowerCase() === p.prefix.toLowerCase()) {
+   278→      s |= 1;
+   279→    } else if (spec.full !== "*") {
+   280→      return null;
+   281→    }
+   282→    return {
+   283→      i: index,
+   284→      o: spec.i,
+   285→      q: spec.q,
+   286→      s
+   287→    };
+   288→  }
+   289→  function preferredLanguages(accept, provided) {
+   290→    var accepts = parseAcceptLanguage(accept === undefined ? "*" : accept || "");
+   291→    if (!provided) {
+   292→      return accepts.filter(isQuality).sort(compareSpecs).map(getFullLanguage);
+   293→    }
+   294→    var priorities = provided.map(function getPriority(type, index) {
+   295→      return getLanguagePriority(type, accepts, index);
+   296→    });
+   297→    return priorities.filter(isQuality).sort(compareSpecs).map(function getLanguage(priority) {
+   298→      return provided[priorities.indexOf(priority)];
+   299→    });
+   300→  }
+   301→  function compareSpecs(a, b) {
+   302→    return b.q - a.q || b.s - a.s || a.o - b.o || a.i - b.i || 0;
+   303→  }
+   304→  function getFullLanguage(spec) {
+   305→    return spec.full;
+   306→  }
+   307→  function isQuality(spec) {
+   308→    return spec.q > 0;
+   309→  }
+   310→});
+   311→
+   312→// node_modules/negotiator/lib/mediaType.js
+   313→var require_mediaType = __commonJS((exports, module) => {
+   314→  module.exports = preferredMediaTypes;
+   315→  module.exports.preferredMediaTypes = preferredMediaTypes;
+   316→  var simpleMediaTypeRegExp = /^\s*([^\s\/;]+)\/([^;\s]+)\s*(?:;(.*))?$/;
+   317→  function parseAccept(accept) {
+   318→    var accepts = splitMediaTypes(accept);
+   319→    for (var i = 0, j = 0;i < accepts.length; i++) {
+   320→      var mediaType = parseMediaType(accepts[i].trim(), i);
+   321→      if (mediaType) {
+   322→        accepts[j++] = mediaType;
+   323→      }
+   324→    }
+   325→    accepts.length = j;
+   326→    return accepts;
+   327→  }
+   328→  function parseMediaType(str, i) {
+   329→    var match = simpleMediaTypeRegExp.exec(str);
+   330→    if (!match)
+   331→      return null;
+   332→    var params = Object.create(null);
+   333→    var q = 1;
+   334→    var subtype = match[2];
+   335→    var type = match[1];
+   336→    if (match[3]) {
+   337→      var kvps = splitParameters(match[3]).map(splitKeyValuePair);
+   338→      for (var j = 0;j < kvps.length; j++) {
+   339→        var pair = kvps[j];
+   340→        var key = pair[0].toLowerCase();
+   341→        var val = pair[1];
+   342→        var value = val && val[0] === '"' && val[val.length - 1] === '"' ? val.substr(1, val.length - 2) : val;
+   343→        if (key === "q") {
+   344→          q = parseFloat(value);
+   345→          break;
+   346→        }
+   347→        params[key] = value;
+   348→      }
+   349→    }
+   350→    return {
+   351→      type,
+   352→      subtype,
+   353→      params,
+   354→      q,
+   355→      i
+   356→    };
+   357→  }
+   358→  function getMediaTypePriority(type, accepted, index) {
+   359→    var priority = { o: -1, q: 0, s: 0 };
+   360→    for (var i = 0;i < accepted.length; i++) {
+   361→      var spec = specify(type, accepted[i], index);
+   362→      if (spec && (priority.s - spec.s || priority.q - spec.q || priority.o - spec.o) < 0) {
+   363→        priority = spec;
+   364→      }
+   365→    }
+   366→    return priority;
+   367→  }
+   368→  function specify(type, spec, index) {
+   369→    var p = parseMediaType(type);
+   370→    var s = 0;
+   371→    if (!p) {
+   372→      return null;
+   373→    }
+   374→    if (spec.type.toLowerCase() == p.type.toLowerCase()) {
+   375→      s |= 4;
+   376→    } else if (spec.type != "*") {
+   377→      return null;
+   378→    }
+   379→    if (spec.subtype.toLowerCase() == p.subtype.toLowerCase()) {
+   380→      s |= 2;
+   381→    } else if (spec.subtype != "*") {
+   382→      return null;
+   383→    }
+   384→    var keys = Object.keys(spec.params);
+   385→    if (keys.length > 0) {
+   386→      if (keys.every(function(k) {
+   387→        return spec.params[k] == "*" || (spec.params[k] || "").toLowerCase() == (p.params[k] || "").toLowerCase();
+   388→      })) {
+   389→        s |= 1;
+   390→      } else {
+   391→        return null;
+   392→      }
+   393→    }
+   394→    return {
+   395→      i: index,
+   396→      o: spec.i,
+   397→      q: spec.q,
+   398→      s
+   399→    };
+   400→  }
+   401→  function preferredMediaTypes(accept, provided) {
+   402→    var accepts = parseAccept(accept === undefined ? "*/*" : accept || "");
+   403→    if (!provided) {
+   404→      return accepts.filter(isQuality).sort(compareSpecs).map(getFullType);
+   405→    }
+   406→    var priorities = provided.map(function getPriority(type, index) {
+   407→      return getMediaTypePriority(type, accepts, index);
+   408→    });
+   409→    return priorities.filter(isQuality).sort(compareSpecs).map(function getType(priority) {
+   410→      return provided[priorities.indexOf(priority)];
+   411→    });
+   412→  }
+   413→  function compareSpecs(a, b) {
+   414→    return b.q - a.q || b.s - a.s || a.o - b.o || a.i - b.i || 0;
+   415→  }
+   416→  function getFullType(spec) {
+   417→    return spec.type + "/" + spec.subtype;
+   418→  }
+   419→  function isQuality(spec) {
+   420→    return spec.q > 0;
+   421→  }
+   422→  function quoteCount(string) {
+   423→    var count = 0;
+   424→    var index = 0;
+   425→    while ((index = string.indexOf('"', index)) !== -1) {
+   426→      count++;
+   427→      index++;
+   428→    }
+   429→    return count;
+   430→  }
+   431→  function splitKeyValuePair(str) {
+   432→    var index = str.indexOf("=");
+   433→    var key;
+   434→    var val;
+   435→    if (index === -1) {
+   436→      key = str;
+   437→    } else {
+   438→      key = str.substr(0, index);
+   439→      val = str.substr(index + 1);
+   440→    }
+   441→    return [key, val];
+   442→  }
+   443→  function splitMediaTypes(accept) {
+   444→    var accepts = accept.split(",");
+   445→    for (var i = 1, j = 0;i < accepts.length; i++) {
+   446→      if (quoteCount(accepts[j]) % 2 == 0) {
+   447→        accepts[++j] = accepts[i];
+   448→      } else {
+   449→        accepts[j] += "," + accepts[i];
+   450→      }
+   451→    }
+   452→    accepts.length = j + 1;
+   453→    return accepts;
+   454→  }
+   455→  function splitParameters(str) {
+   456→    var parameters = str.split(";");
+   457→    for (var i = 1, j = 0;i < parameters.length; i++) {
+   458→      if (quoteCount(parameters[j]) % 2 == 0) {
+   459→        parameters[++j] = parameters[i];
+   460→      } else {
+   461→        parameters[j] += ";" + parameters[i];
+   462→      }
+   463→    }
+   464→    parameters.length = j + 1;
+   465→    for (var i = 0;i < parameters.length; i++) {
+   466→      parameters[i] = parameters[i].trim();
+   467→    }
+   468→    return parameters;
+   469→  }
+   470→});
+   471→
+   472→// node_modules/negotiator/index.js
+   473→var require_negotiator = __commonJS((exports, module) => {
+   474→  /*!
+   475→   * negotiator
+   476→   * Copyright(c) 2012 Federico Romero
+   477→   * Copyright(c) 2012-2014 Isaac Z. Schlueter
+   478→   * Copyright(c) 2015 Douglas Christopher Wilson
+   479→   * MIT Licensed
+   480→   */
+   481→  var preferredCharsets = require_charset();
+   482→  var preferredEncodings = require_encoding();
+   483→  var preferredLanguages = require_language();
+   484→  var preferredMediaTypes = require_mediaType();
+   485→  module.exports = Negotiator;
+   486→  module.exports.Negotiator = Negotiator;
+   487→  function Negotiator(request) {
+   488→    if (!(this instanceof Negotiator)) {
+   489→      return new Negotiator(request);
+   490→    }
+   491→    this.request = request;
+   492→  }
+   493→  Negotiator.prototype.charset = function charset(available) {
+   494→    var set = this.charsets(available);
+   495→    return set && set[0];
+   496→  };
+   497→  Negotiator.prototype.charsets = function charsets(available) {
+   498→    return preferredCharsets(this.request.headers["accept-charset"], available);
+   499→  };
+   500→  Negotiator.prototype.encoding = function encoding(available) {
+   501→    var set = this.encodings(available);
+   502→    return set && set[0];
+   503→  };
+   504→  Negotiator.prototype.encodings = function encodings(available) {
+   505→    return preferredEncodings(this.request.headers["accept-encoding"], available);
+   506→  };
+   507→  Negotiator.prototype.language = function language(available) {
+   508→    var set = this.languages(available);
+   509→    return set && set[0];
+   510→  };
+   511→  Negotiator.prototype.languages = function languages(available) {
+   512→    return preferredLanguages(this.request.headers["accept-language"], available);
+   513→  };
+   514→  Negotiator.prototype.mediaType = function mediaType(available) {
+   515→    var set = this.mediaTypes(available);
+   516→    return set && set[0];
+   517→  };
+   518→  Negotiator.prototype.mediaTypes = function mediaTypes(available) {
+   519→    return preferredMediaTypes(this.request.headers.accept, available);
+   520→  };
+   521→  Negotiator.prototype.preferredCharset = Negotiator.prototype.charset;
+   522→  Negotiator.prototype.preferredCharsets = Negotiator.prototype.charsets;
+   523→  Negotiator.prototype.preferredEncoding = Negotiator.prototype.encoding;
+   524→  Negotiator.prototype.preferredEncodings = Negotiator.prototype.encodings;
+   525→  Negotiator.prototype.preferredLanguage = Negotiator.prototype.language;
+   526→  Negotiator.prototype.preferredLanguages = Negotiator.prototype.languages;
+   527→  Negotiator.prototype.preferredMediaType = Negotiator.prototype.mediaType;
+   528→  Negotiator.prototype.preferredMediaTypes = Negotiator.prototype.mediaTypes;
+   529→});
+   530→
+   531→// node_modules/mime-db/db.json
+   532→var require_db = __commonJS((exports, module) => {
+   533→  module.exports = {
+   534→    "application/1d-interleaved-parityfec": {
+   535→      source: "iana"
+   536→    },
+   537→    "application/3gpdash-qoe-report+xml": {
+   538→      source: "iana",
+   539→      charset: "UTF-8",
+   540→      compressible: true
+   541→    },
+   542→    "application/3gpp-ims+xml": {
+   543→      source: "iana",
+   544→      compressible: true
+   545→    },
+   546→    "application/3gpphal+json": {
+   547→      source: "iana",
+   548→      compressible: true
+   549→    },
+   550→    "application/3gpphalforms+json": {
+   551→      source: "iana",
+   552→      compressible: true
+   553→    },
+   554→    "application/a2l": {
+   555→      source: "iana"
+   556→    },
+   557→    "application/ace+cbor": {
+   558→      source: "iana"
+   559→    },
+   560→    "application/activemessage": {
+   561→      source: "iana"
+   562→    },
+   563→    "application/activity+json": {
+   564→      source: "iana",
+   565→      compressible: true
+   566→    },
+   567→    "application/alto-costmap+json": {
+   568→      source: "iana",
+   569→      compressible: true
+   570→    },
+   571→    "application/alto-costmapfilter+json": {
+   572→      source: "iana",
+   573→      compressible: true
+   574→    },
+   575→    "application/alto-directory+json": {
+   576→      source: "iana",
+   577→      compressible: true
+   578→    },
+   579→    "application/alto-endpointcost+json": {
+   580→      source: "iana",
+   581→      compressible: true
+   582→    },
+   583→    "application/alto-endpointcostparams+json": {
+   584→      source: "iana",
+   585→      compressible: true
+   586→    },
+   587→    "application/alto-endpointprop+json": {
+   588→      source: "iana",
+   589→      compressible: true
+   590→    },
+   591→    "application/alto-endpointpropparams+json": {
+   592→      source: "iana",
+   593→      compressible: true
+   594→    },
+   595→    "application/alto-error+json": {
+   596→      source: "iana",
+   597→      compressible: true
+   598→    },
+   599→    "application/alto-networkmap+json": {
+   600→      source: "iana",
+   601→      compressible: true
+   602→    },
+   603→    "application/alto-networkmapfilter+json": {
+   604→      source: "iana",
+   605→      compressible: true
+   606→    },
+   607→    "application/alto-updatestreamcontrol+json": {
+   608→      source: "iana",
+   609→      compressible: true
+   610→    },
+   611→    "application/alto-updatestreamparams+json": {
+   612→      source: "iana",
+   613→      compressible: true
+   614→    },
+   615→    "application/aml": {
+   616→      source: "iana"
+   617→    },
+   618→    "application/andrew-inset": {
+   619→      source: "iana",
+   620→      extensions: ["ez"]
+   621→    },
+   622→    "application/applefile": {
+   623→      source: "iana"
+   624→    },
+   625→    "application/applixware": {
+   626→      source: "apache",
+   627→      extensions: ["aw"]
+   628→    },
+   629→    "application/at+jwt": {
+   630→      source: "iana"
+   631→    },
+   632→    "application/atf": {
+   633→      source: "iana"
+   634→    },
+   635→    "application/atfx": {
+   636→      source: "iana"
+   637→    },
+   638→    "application/atom+xml": {
+   639→      source: "iana",
+   640→      compressible: true,
+   641→      extensions: ["atom"]
+   642→    },
+   643→    "application/atomcat+xml": {
+   644→      source: "iana",
+   645→      compressible: true,
+   646→      extensions: ["atomcat"]
+   647→    },
+   648→    "application/atomdeleted+xml": {
+   649→      source: "iana",
+   650→      compressible: true,
+   651→      extensions: ["atomdeleted"]
+   652→    },
+   653→    "application/atomicmail": {
+   654→      source: "iana"
+   655→    },
+   656→    "application/atomsvc+xml": {
+   657→      source: "iana",
+   658→      compressible: true,
+   659→      extensions: ["atomsvc"]
+   660→    },
+   661→    "application/atsc-dwd+xml": {
+   662→      source: "iana",
+   663→      compressible: true,
+   664→      extensions: ["dwd"]
+   665→    },
+   666→    "application/atsc-dynamic-event-message": {
+   667→      source: "iana"
+   668→    },
+   669→    "application/atsc-held+xml": {
+   670→      source: "iana",
+   671→      compressible: true,
+   672→      extensions: ["held"]
+   673→    },
+   674→    "application/atsc-rdt+json": {
+   675→      source: "iana",
+   676→      compressible: true
+   677→    },
+   678→    "application/atsc-rsat+xml": {
+   679→      source: "iana",
+   680→      compressible: true,
+   681→      extensions: ["rsat"]
+   682→    },
+   683→    "application/atxml": {
+   684→      source: "iana"
+   685→    },
+   686→    "application/auth-policy+xml": {
+   687→      source: "iana",
+   688→      compressible: true
+   689→    },
+   690→    "application/bacnet-xdd+zip": {
+   691→      source: "iana",
+   692→      compressible: false
+   693→    },
+   694→    "application/batch-smtp": {
+   695→      source: "iana"
+   696→    },
+   697→    "application/bdoc": {
+   698→      compressible: false,
+   699→      extensions: ["bdoc"]
+   700→    },
+   701→    "application/beep+xml": {
+   702→      source: "iana",
+   703→      charset: "UTF-8",
+   704→      compressible: true
+   705→    },
+   706→    "application/calendar+json": {
+   707→      source: "iana",
+   708→      compressible: true
+   709→    },
+   710→    "application/calendar+xml": {
+   711→      source: "iana",
+   712→      compressible: true,
+   713→      extensions: ["xcs"]
+   714→    },
+   715→    "application/call-completion": {
+   716→      source: "iana"
+   717→    },
+   718→    "application/cals-1840": {
+   719→      source: "iana"
+   720→    },
+   721→    "application/captive+json": {
+   722→      source: "iana",
+   723→      compressible: true
+   724→    },
+   725→    "application/cbor": {
+   726→      source: "iana"
+   727→    },
+   728→    "application/cbor-seq": {
+   729→      source: "iana"
+   730→    },
+   731→    "application/cccex": {
+   732→      source: "iana"
+   733→    },
+   734→    "application/ccmp+xml": {
+   735→      source: "iana",
+   736→      compressible: true
+   737→    },
+   738→    "application/ccxml+xml": {
+   739→      source: "iana",
+   740→      compressible: true,
+   741→      extensions: ["ccxml"]
+   742→    },
+   743→    "application/cdfx+xml": {
+   744→      source: "iana",
+   745→      compressible: true,
+   746→      extensions: ["cdfx"]
+   747→    },
+   748→    "application/cdmi-capability": {
+   749→      source: "iana",
+   750→      extensions: ["cdmia"]
+   751→    },
+   752→    "application/cdmi-container": {
+   753→      source: "iana",
+   754→      extensions: ["cdmic"]
+   755→    },
+   756→    "application/cdmi-domain": {
+   757→      source: "iana",
+   758→      extensions: ["cdmid"]
+   759→    },
+   760→    "application/cdmi-object": {
+   761→      source: "iana",
+   762→      extensions: ["cdmio"]
+   763→    },
+   764→    "application/cdmi-queue": {
+   765→      source: "iana",
+   766→      extensions: ["cdmiq"]
+   767→    },
+   768→    "application/cdni": {
+   769→      source: "iana"
+   770→    },
+   771→    "application/cea": {
+   772→      source: "iana"
+   773→    },
+   774→    "application/cea-2018+xml": {
+   775→      source: "iana",
+   776→      compressible: true
+   777→    },
+   778→    "application/cellml+xml": {
+   779→      source: "iana",
+   780→      compressible: true
+   781→    },
+   782→    "application/cfw": {
+   783→      source: "iana"
+   784→    },
+   785→    "application/city+json": {
+   786→      source: "iana",
+   787→      compressible: true
+   788→    },
+   789→    "application/clr": {
+   790→      source: "iana"
+   791→    },
+   792→    "application/clue+xml": {
+   793→      source: "iana",
+   794→      compressible: true
+   795→    },
+   796→    "application/clue_info+xml": {
+   797→      source: "iana",
+   798→      compressible: true
+   799→    },
+   800→    "application/cms": {
+   801→      source: "iana"
+   802→    },
+   803→    "application/cnrp+xml": {
+   804→      source: "iana",
+   805→      compressible: true
+   806→    },
+   807→    "application/coap-group+json": {
+   808→      source: "iana",
+   809→      compressible: true
+   810→    },
+   811→    "application/coap-payload": {
+   812→      source: "iana"
+   813→    },
+   814→    "application/commonground": {
+   815→      source: "iana"
+   816→    },
+   817→    "application/conference-info+xml": {
+   818→      source: "iana",
+   819→      compressible: true
+   820→    },
+   821→    "application/cose": {
+   822→      source: "iana"
+   823→    },
+   824→    "application/cose-key": {
+   825→      source: "iana"
+   826→    },
+   827→    "application/cose-key-set": {
+   828→      source: "iana"
+   829→    },
+   830→    "application/cpl+xml": {
+   831→      source: "iana",
+   832→      compressible: true,
+   833→      extensions: ["cpl"]
+   834→    },
+   835→    "application/csrattrs": {
+   836→      source: "iana"
+   837→    },
+   838→    "application/csta+xml": {
+   839→      source: "iana",
+   840→      compressible: true
+   841→    },
+   842→    "application/cstadata+xml": {
+   843→      source: "iana",
+   844→      compressible: true
+   845→    },
+   846→    "application/csvm+json": {
+   847→      source: "iana",
+   848→      compressible: true
+   849→    },
+   850→    "application/cu-seeme": {
+   851→      source: "apache",
+   852→      extensions: ["cu"]
+   853→    },
+   854→    "application/cwt": {
+   855→      source: "iana"
+   856→    },
+   857→    "application/cybercash": {
+   858→      source: "iana"
+   859→    },
+   860→    "application/dart": {
+   861→      compressible: true
+   862→    },
+   863→    "application/dash+xml": {
+   864→      source: "iana",
+   865→      compressible: true,
+   866→      extensions: ["mpd"]
+   867→    },
+   868→    "application/dash-patch+xml": {
+   869→      source: "iana",
+   870→      compressible: true,
+   871→      extensions: ["mpp"]
+   872→    },
+   873→    "application/dashdelta": {
+   874→      source: "iana"
+   875→    },
+   876→    "application/davmount+xml": {
+   877→      source: "iana",
+   878→      compressible: true,
+   879→      extensions: ["davmount"]
+   880→    },
+   881→    "application/dca-rft": {
+   882→      source: "iana"
+   883→    },
+   884→    "application/dcd": {
+   885→      source: "iana"
+   886→    },
+   887→    "application/dec-dx": {
+   888→      source: "iana"
+   889→    },
+   890→    "application/dialog-info+xml": {
+   891→      source: "iana",
+   892→      compressible: true
+   893→    },
+   894→    "application/dicom": {
+   895→      source: "iana"
+   896→    },
+   897→    "application/dicom+json": {
+   898→      source: "iana",
+   899→      compressible: true
+   900→    },
+   901→    "application/dicom+xml": {
+   902→      source: "iana",
+   903→      compressible: true
+   904→    },
+   905→    "application/dii": {
+   906→      source: "iana"
+   907→    },
+   908→    "application/dit": {
+   909→      source: "iana"
+   910→    },
+   911→    "application/dns": {
+   912→      source: "iana"
+   913→    },
+   914→    "application/dns+json": {
+   915→      source: "iana",
+   916→      compressible: true
+   917→    },
+   918→    "application/dns-message": {
+   919→      source: "iana"
+   920→    },
+   921→    "application/docbook+xml": {
+   922→      source: "apache",
+   923→      compressible: true,
+   924→      extensions: ["dbk"]
+   925→    },
+   926→    "application/dots+cbor": {
+   927→      source: "iana"
+   928→    },
+   929→    "application/dskpp+xml": {
+   930→      source: "iana",
+   931→      compressible: true
+   932→    },
+   933→    "application/dssc+der": {
+   934→      source: "iana",
+   935→      extensions: ["dssc"]
+   936→    },
+   937→    "application/dssc+xml": {
+   938→      source: "iana",
+   939→      compressible: true,
+   940→      extensions: ["xdssc"]
+   941→    },
+   942→    "application/dvcs": {
+   943→      source: "iana"
+   944→    },
+   945→    "application/ecmascript": {
+   946→      source: "iana",
+   947→      compressible: true,
+   948→      extensions: ["es", "ecma"]
+   949→    },
+   950→    "application/edi-consent": {
+   951→      source: "iana"
+   952→    },
+   953→    "application/edi-x12": {
+   954→      source: "iana",
+   955→      compressible: false
+   956→    },
+   957→    "application/edifact": {
+   958→      source: "iana",
+   959→      compressible: false
+   960→    },
+   961→    "application/efi": {
+   962→      source: "iana"
+   963→    },
+   964→    "application/elm+json": {
+   965→      source: "iana",
+   966→      charset: "UTF-8",
+   967→      compressible: true
+   968→    },
+   969→    "application/elm+xml": {
+   970→      source: "iana",
+   971→      compressible: true
+   972→    },
+   973→    "application/emergencycalldata.cap+xml": {
+   974→      source: "iana",
+   975→      charset: "UTF-8",
+   976→      compressible: true
+   977→    },
+   978→    "application/emergencycalldata.comment+xml": {
+   979→      source: "iana",
+   980→      compressible: true
+   981→    },
+   982→    "application/emergencycalldata.control+xml": {
+   983→      source: "iana",
+   984→      compressible: true
+   985→    },
+   986→    "application/emergencycalldata.deviceinfo+xml": {
+   987→      source: "iana",
+   988→      compressible: true
+   989→    },
+   990→    "application/emergencycalldata.ecall.msd": {
+   991→      source: "iana"
+   992→    },
+   993→    "application/emergencycalldata.providerinfo+xml": {
+   994→      source: "iana",
+   995→      compressible: true
+   996→    },
+   997→    "application/emergencycalldata.serviceinfo+xml": {
+   998→      source: "iana",
+   999→      compressible: true
+  1000→    },
+  1001→    "application/emergencycalldata.subscriberinfo+xml": {
+  1002→      source: "iana",
+  1003→      compressible: true
+  1004→    },
+  1005→    "application/emergencycalldata.veds+xml": {
+  1006→      source: "iana",
+  1007→      compressible: true
+  1008→    },
+  1009→    "application/emma+xml": {
+  1010→      source: "iana",
+  1011→      compressible: true,
+  1012→      extensions: ["emma"]
+  1013→    },
+  1014→    "application/emotionml+xml": {
+  1015→      source: "iana",
+  1016→      compressible: true,
+  1017→      extensions: ["emotionml"]
+  1018→    },
+  1019→    "application/encaprtp": {
+  1020→      source: "iana"
+  1021→    },
+  1022→    "application/epp+xml": {
+  1023→      source: "iana",
+  1024→      compressible: true
+  1025→    },
+  1026→    "application/epub+zip": {
+  1027→      source: "iana",
+  1028→      compressible: false,
+  1029→      extensions: ["epub"]
+  1030→    },
+  1031→    "application/eshop": {
+  1032→      source: "iana"
+  1033→    },
+  1034→    "application/exi": {
+  1035→      source: "iana",
+  1036→      extensions: ["exi"]
+  1037→    },
+  1038→    "application/expect-ct-report+json": {
+  1039→      source: "iana",
+  1040→      compressible: true
+  1041→    },
+  1042→    "application/express": {
+  1043→      source: "iana",
+  1044→      extensions: ["exp"]
+  1045→    },
+  1046→    "application/fastinfoset": {
+  1047→      source: "iana"
+  1048→    },
+  1049→    "application/fastsoap": {
+  1050→      source: "iana"
+  1051→    },
+  1052→    "application/fdt+xml": {
+  1053→      source: "iana",
+  1054→      compressible: true,
+  1055→      extensions: ["fdt"]
+  1056→    },
+  1057→    "application/fhir+json": {
+  1058→      source: "iana",
+  1059→      charset: "UTF-8",
+  1060→      compressible: true
+  1061→    },
+  1062→    "application/fhir+xml": {
+  1063→      source: "iana",
+  1064→      charset: "UTF-8",
+  1065→      compressible: true
+  1066→    },
+  1067→    "application/fido.trusted-apps+json": {
+  1068→      compressible: true
+  1069→    },
+  1070→    "application/fits": {
+  1071→      source: "iana"
+  1072→    },
+  1073→    "application/flexfec": {
+  1074→      source: "iana"
+  1075→    },
+  1076→    "application/font-sfnt": {
+  1077→      source: "iana"
+  1078→    },
+  1079→    "application/font-tdpfr": {
+  1080→      source: "iana",
+  1081→      extensions: ["pfr"]
+  1082→    },
+  1083→    "application/font-woff": {
+  1084→      source: "iana",
+  1085→      compressible: false
+  1086→    },
+  1087→    "application/framework-attributes+xml": {
+  1088→      source: "iana",
+  1089→      compressible: true
+  1090→    },
+  1091→    "application/geo+json": {
+  1092→      source: "iana",
+  1093→      compressible: true,
+  1094→      extensions: ["geojson"]
+  1095→    },
+  1096→    "application/geo+json-seq": {
+  1097→      source: "iana"
+  1098→    },
+  1099→    "application/geopackage+sqlite3": {
+  1100→      source: "iana"
+  1101→    },
+  1102→    "application/geoxacml+xml": {
+  1103→      source: "iana",
+  1104→      compressible: true
+  1105→    },
+  1106→    "application/gltf-buffer": {
+  1107→      source: "iana"
+  1108→    },
+  1109→    "application/gml+xml": {
+  1110→      source: "iana",
+  1111→      compressible: true,
+  1112→      extensions: ["gml"]
+  1113→    },
+  1114→    "application/gpx+xml": {
+  1115→      source: "apache",
+  1116→      compressible: true,
+  1117→      extensions: ["gpx"]
+  1118→    },
+  1119→    "application/gxf": {
+  1120→      source: "apache",
+  1121→      extensions: ["gxf"]
+  1122→    },
+  1123→    "application/gzip": {
+  1124→      source: "iana",
+  1125→      compressible: false,
+  1126→      extensions: ["gz"]
+  1127→    },
+  1128→    "application/h224": {
+  1129→      source: "iana"
+  1130→    },
+  1131→    "application/held+xml": {
+  1132→      source: "iana",
+  1133→      compressible: true
+  1134→    },
+  1135→    "application/hjson": {
+  1136→      extensions: ["hjson"]
+  1137→    },
+  1138→    "application/http": {
+  1139→      source: "iana"
+  1140→    },
+  1141→    "application/hyperstudio": {
+  1142→      source: "iana",
+  1143→      extensions: ["stk"]
+  1144→    },
+  1145→    "application/ibe-key-request+xml": {
+  1146→      source: "iana",
+  1147→      compressible: true
+  1148→    },
+  1149→    "application/ibe-pkg-reply+xml": {
+  1150→      source: "iana",
+  1151→      compressible: true
+  1152→    },
+  1153→    "application/ibe-pp-data": {
+  1154→      source: "iana"
+  1155→    },
+  1156→    "application/iges": {
+  1157→      source: "iana"
+  1158→    },
+  1159→    "application/im-iscomposing+xml": {
+  1160→      source: "iana",
+  1161→      charset: "UTF-8",
+  1162→      compressible: true
+  1163→    },
+  1164→    "application/index": {
+  1165→      source: "iana"
+  1166→    },
+  1167→    "application/index.cmd": {
+  1168→      source: "iana"
+  1169→    },
+  1170→    "application/index.obj": {
+  1171→      source: "iana"
+  1172→    },
+  1173→    "application/index.response": {
+  1174→      source: "iana"
+  1175→    },
+  1176→    "application/index.vnd": {
+  1177→      source: "iana"
+  1178→    },
+  1179→    "application/inkml+xml": {
+  1180→      source: "iana",
+  1181→      compressible: true,
+  1182→      extensions: ["ink", "inkml"]
+  1183→    },
+  1184→    "application/iotp": {
+  1185→      source: "iana"
+  1186→    },
+  1187→    "application/ipfix": {
+  1188→      source: "iana",
+  1189→      extensions: ["ipfix"]
+  1190→    },
+  1191→    "application/ipp": {
+  1192→      source: "iana"
+  1193→    },
+  1194→    "application/isup": {
+  1195→      source: "iana"
+  1196→    },
+  1197→    "application/its+xml": {
+  1198→      source: "iana",
+  1199→      compressible: true,
+  1200→      extensions: ["its"]
+  1201→    },
+  1202→    "application/java-archive": {
+  1203→      source: "apache",
+  1204→      compressible: false,
+  1205→      extensions: ["jar", "war", "ear"]
+  1206→    },
+  1207→    "application/java-serialized-object": {
+  1208→      source: "apache",
+  1209→      compressible: false,
+  1210→      extensions: ["ser"]
+  1211→    },
+  1212→    "application/java-vm": {
+  1213→      source: "apache",
+  1214→      compressible: false,
+  1215→      extensions: ["class"]
+  1216→    },
+  1217→    "application/javascript": {
+  1218→      source: "iana",
+  1219→      charset: "UTF-8",
+  1220→      compressible: true,
+  1221→      extensions: ["js", "mjs"]
+  1222→    },
+  1223→    "application/jf2feed+json": {
+  1224→      source: "iana",
+  1225→      compressible: true
+  1226→    },
+  1227→    "application/jose": {
+  1228→      source: "iana"
+  1229→    },
+  1230→    "application/jose+json": {
+  1231→      source: "iana",
+  1232→      compressible: true
+  1233→    },
+  1234→    "application/jrd+json": {
+  1235→      source: "iana",
+  1236→      compressible: true
+  1237→    },
+  1238→    "application/jscalendar+json": {
+  1239→      source: "iana",
+  1240→      compressible: true
+  1241→    },
+  1242→    "application/json": {
+  1243→      source: "iana",
+  1244→      charset: "UTF-8",
+  1245→      compressible: true,
+  1246→      extensions: ["json", "map"]
+  1247→    },
+  1248→    "application/json-patch+json": {
+  1249→      source: "iana",
+  1250→      compressible: true
+  1251→    },
+  1252→    "application/json-seq": {
+  1253→      source: "iana"
+  1254→    },
+  1255→    "application/json5": {
+  1256→      extensions: ["json5"]
+  1257→    },
+  1258→    "application/jsonml+json": {
+  1259→      source: "apache",
+  1260→      compressible: true,
+  1261→      extensions: ["jsonml"]
+  1262→    },
+  1263→    "application/jwk+json": {
+  1264→      source: "iana",
+  1265→      compressible: true
+  1266→    },
+  1267→    "application/jwk-set+json": {
+  1268→      source: "iana",
+  1269→      compressible: true
+  1270→    },
+  1271→    "application/jwt": {
+  1272→      source: "iana"
+  1273→    },
+  1274→    "application/kpml-request+xml": {
+  1275→      source: "iana",
+  1276→      compressible: true
+  1277→    },
+  1278→    "application/kpml-response+xml": {
+  1279→      source: "iana",
+  1280→      compressible: true
+  1281→    },
+  1282→    "application/ld+json": {
+  1283→      source: "iana",
+  1284→      compressible: true,
+  1285→      extensions: ["jsonld"]
+  1286→    },
+  1287→    "application/lgr+xml": {
+  1288→      source: "iana",
+  1289→      compressible: true,
+  1290→      extensions: ["lgr"]
+  1291→    },
+  1292→    "application/link-format": {
+  1293→      source: "iana"
+  1294→    },
+  1295→    "application/load-control+xml": {
+  1296→      source: "iana",
+  1297→      compressible: true
+  1298→    },
+  1299→    "application/lost+xml": {
+  1300→      source: "iana",
+  1301→      compressible: true,
+  1302→      extensions: ["lostxml"]
+  1303→    },
+  1304→    "application/lostsync+xml": {
+  1305→      source: "iana",
+  1306→      compressible: true
+  1307→    },
+  1308→    "application/lpf+zip": {
+  1309→      source: "iana",
+  1310→      compressible: false
+  1311→    },
+  1312→    "application/lxf": {
+  1313→      source: "iana"
+  1314→    },
+  1315→    "application/mac-binhex40": {
+  1316→      source: "iana",
+  1317→      extensions: ["hqx"]
+  1318→    },
+  1319→    "application/mac-compactpro": {
+  1320→      source: "apache",
+  1321→      extensions: ["cpt"]
+  1322→    },
+  1323→    "application/macwriteii": {
+  1324→      source: "iana"
+  1325→    },
+  1326→    "application/mads+xml": {
+  1327→      source: "iana",
+  1328→      compressible: true,
+  1329→      extensions: ["mads"]
+  1330→    },
+  1331→    "application/manifest+json": {
+  1332→      source: "iana",
+  1333→      charset: "UTF-8",
+  1334→      compressible: true,
+  1335→      extensions: ["webmanifest"]
+  1336→    },
+  1337→    "application/marc": {
+  1338→      source: "iana",
+  1339→      extensions: ["mrc"]
+  1340→    },
+  1341→    "application/marcxml+xml": {
+  1342→      source: "iana",
+  1343→      compressible: true,
+  1344→      extensions: ["mrcx"]
+  1345→    },
+  1346→    "application/mathematica": {
+  1347→      source: "iana",
+  1348→      extensions: ["ma", "nb", "mb"]
+  1349→    },
+  1350→    "application/mathml+xml": {
+  1351→      source: "iana",
+  1352→      compressible: true,
+  1353→      extensions: ["mathml"]
+  1354→    },
+  1355→    "application/mathml-content+xml": {
+  1356→      source: "iana",
+  1357→      compressible: true
+  1358→    },
+  1359→    "application/mathml-presentation+xml": {
+  1360→      source: "iana",
+  1361→      compressible: true
+  1362→    },
+  1363→    "application/mbms-associated-procedure-description+xml": {
+  1364→      source: "iana",
+  1365→      compressible: true
+  1366→    },
+  1367→    "application/mbms-deregister+xml": {
+  1368→      source: "iana",
+  1369→      compressible: true
+  1370→    },
+  1371→    "application/mbms-envelope+xml": {
+  1372→      source: "iana",
+  1373→      compressible: true
+  1374→    },
+  1375→    "application/mbms-msk+xml": {
+  1376→      source: "iana",
+  1377→      compressible: true
+  1378→    },
+  1379→    "application/mbms-msk-response+xml": {
+  1380→      source: "iana",
+  1381→      compressible: true
+  1382→    },
+  1383→    "application/mbms-protection-description+xml": {
+  1384→      source: "iana",
+  1385→      compressible: true
+  1386→    },
+  1387→    "application/mbms-reception-report+xml": {
+  1388→      source: "iana",
+  1389→      compressible: true
+  1390→    },
+  1391→    "application/mbms-register+xml": {
+  1392→      source: "iana",
+  1393→      compressible: true
+  1394→    },
+  1395→    "application/mbms-register-response+xml": {
+  1396→      source: "iana",
+  1397→      compressible: true
+  1398→    },
+  1399→    "application/mbms-schedule+xml": {
+  1400→      source: "iana",
+  1401→      compressible: true
+  1402→    },
+  1403→    "application/mbms-user-service-description+xml": {
+  1404→      source: "iana",
+  1405→      compressible: true
+  1406→    },
+  1407→    "application/mbox": {
+  1408→      source: "iana",
+  1409→      extensions: ["mbox"]
+  1410→    },
+  1411→    "application/media-policy-dataset+xml": {
+  1412→      source: "iana",
+  1413→      compressible: true,
+  1414→      extensions: ["mpf"]
+  1415→    },
+  1416→    "application/media_control+xml": {
+  1417→      source: "iana",
+  1418→      compressible: true
+  1419→    },
+  1420→    "application/mediaservercontrol+xml": {
+  1421→      source: "iana",
+  1422→      compressible: true,
+  1423→      extensions: ["mscml"]
+  1424→    },
+  1425→    "application/merge-patch+json": {
+  1426→      source: "iana",
+  1427→      compressible: true
+  1428→    },
+  1429→    "application/metalink+xml": {
+  1430→      source: "apache",
+  1431→      compressible: true,
+  1432→      extensions: ["metalink"]
+  1433→    },
+  1434→    "application/metalink4+xml": {
+  1435→      source: "iana",
+  1436→      compressible: true,
+  1437→      extensions: ["meta4"]
+  1438→    },
+  1439→    "application/mets+xml": {
+  1440→      source: "iana",
+  1441→      compressible: true,
+  1442→      extensions: ["mets"]
+  1443→    },
+  1444→    "application/mf4": {
+  1445→      source: "iana"
+  1446→    },
+  1447→    "application/mikey": {
+  1448→      source: "iana"
+  1449→    },
+  1450→    "application/mipc": {
+  1451→      source: "iana"
+  1452→    },
+  1453→    "application/missing-blocks+cbor-seq": {
+  1454→      source: "iana"
+  1455→    },
+  1456→    "application/mmt-aei+xml": {
+  1457→      source: "iana",
+  1458→      compressible: true,
+  1459→      extensions: ["maei"]
+  1460→    },
+  1461→    "application/mmt-usd+xml": {
+  1462→      source: "iana",
+  1463→      compressible: true,
+  1464→      extensions: ["musd"]
+  1465→    },
+  1466→    "application/mods+xml": {
+  1467→      source: "iana",
+  1468→      compressible: true,
+  1469→      extensions: ["mods"]
+  1470→    },
+  1471→    "application/moss-keys": {
+  1472→      source: "iana"
+  1473→    },
+  1474→    "application/moss-signature": {
+  1475→      source: "iana"
+  1476→    },
+  1477→    "application/mosskey-data": {
+  1478→      source: "iana"
+  1479→    },
+  1480→    "application/mosskey-request": {
+  1481→      source: "iana"
+  1482→    },
+  1483→    "application/mp21": {
+  1484→      source: "iana",
+  1485→      extensions: ["m21", "mp21"]
+  1486→    },
+  1487→    "application/mp4": {
+  1488→      source: "iana",
+  1489→      extensions: ["mp4s", "m4p"]
+  1490→    },
+  1491→    "application/mpeg4-generic": {
+  1492→      source: "iana"
+  1493→    },
+  1494→    "application/mpeg4-iod": {
+  1495→      source: "iana"
+  1496→    },
+  1497→    "application/mpeg4-iod-xmt": {
+  1498→      source: "iana"
+  1499→    },
+  1500→    "application/mrb-consumer+xml": {
+  1501→      source: "iana",
+  1502→      compressible: true
+  1503→    },
+  1504→    "application/mrb-publish+xml": {
+  1505→      source: "iana",
+  1506→      compressible: true
+  1507→    },
+  1508→    "application/msc-ivr+xml": {
+  1509→      source: "iana",
+  1510→      charset: "UTF-8",
+  1511→      compressible: true
+  1512→    },
+  1513→    "application/msc-mixer+xml": {
+  1514→      source: "iana",
+  1515→      charset: "UTF-8",
+  1516→      compressible: true
+  1517→    },
+  1518→    "application/msword": {
+  1519→      source: "iana",
+  1520→      compressible: false,
+  1521→      extensions: ["doc", "dot"]
+  1522→    },
+  1523→    "application/mud+json": {
+  1524→      source: "iana",
+  1525→      compressible: true
+  1526→    },
+  1527→    "application/multipart-core": {
+  1528→      source: "iana"
+  1529→    },
+  1530→    "application/mxf": {
+  1531→      source: "iana",
+  1532→      extensions: ["mxf"]
+  1533→    },
+  1534→    "application/n-quads": {
+  1535→      source: "iana",
+  1536→      extensions: ["nq"]
+  1537→    },
+  1538→    "application/n-triples": {
+  1539→      source: "iana",
+  1540→      extensions: ["nt"]
+  1541→    },
+  1542→    "application/nasdata": {
+  1543→      source: "iana"
+  1544→    },
+  1545→    "application/news-checkgroups": {
+  1546→      source: "iana",
+  1547→      charset: "US-ASCII"
+  1548→    },
+  1549→    "application/news-groupinfo": {
+  1550→      source: "iana",
+  1551→      charset: "US-ASCII"
+  1552→    },
+  1553→    "application/news-transmission": {
+  1554→      source: "iana"
+  1555→    },
+  1556→    "application/nlsml+xml": {
+  1557→      source: "iana",
+  1558→      compressible: true
+  1559→    },
+  1560→    "application/node": {
+  1561→      source: "iana",
+  1562→      extensions: ["cjs"]
+  1563→    },
+  1564→    "application/nss": {
+  1565→      source: "iana"
+  1566→    },
+  1567→    "application/oauth-authz-req+jwt": {
+  1568→      source: "iana"
+  1569→    },
+  1570→    "application/oblivious-dns-message": {
+  1571→      source: "iana"
+  1572→    },
+  1573→    "application/ocsp-request": {
+  1574→      source: "iana"
+  1575→    },
+  1576→    "application/ocsp-response": {
+  1577→      source: "iana"
+  1578→    },
+  1579→    "application/octet-stream": {
+  1580→      source: "iana",
+  1581→      compressible: false,
+  1582→      extensions: ["bin", "dms", "lrf", "mar", "so", "dist", "distz", "pkg", "bpk", "dump", "elc", "deploy", "exe", "dll", "deb", "dmg", "iso", "img", "msi", "msp", "msm", "buffer"]
+  1583→    },
+  1584→    "application/oda": {
+  1585→      source: "iana",
+  1586→      extensions: ["oda"]
+  1587→    },
+  1588→    "application/odm+xml": {
+  1589→      source: "iana",
+  1590→      compressible: true
+  1591→    },
+  1592→    "application/odx": {
+  1593→      source: "iana"
+  1594→    },
+  1595→    "application/oebps-package+xml": {
+  1596→      source: "iana",
+  1597→      compressible: true,
+  1598→      extensions: ["opf"]
+  1599→    },
+  1600→    "application/ogg": {
+  1601→      source: "iana",
+  1602→      compressible: false,
+  1603→      extensions: ["ogx"]
+  1604→    },
+  1605→    "application/omdoc+xml": {
+  1606→      source: "apache",
+  1607→      compressible: true,
+  1608→      extensions: ["omdoc"]
+  1609→    },
+  1610→    "application/onenote": {
+  1611→      source: "apache",
+  1612→      extensions: ["onetoc", "onetoc2", "onetmp", "onepkg"]
+  1613→    },
+  1614→    "application/opc-nodeset+xml": {
+  1615→      source: "iana",
+  1616→      compressible: true
+  1617→    },
+  1618→    "application/oscore": {
+  1619→      source: "iana"
+  1620→    },
+  1621→    "application/oxps": {
+  1622→      source: "iana",
+  1623→      extensions: ["oxps"]
+  1624→    },
+  1625→    "application/p21": {
+  1626→      source: "iana"
+  1627→    },
+  1628→    "application/p21+zip": {
+  1629→      source: "iana",
+  1630→      compressible: false
+  1631→    },
+  1632→    "application/p2p-overlay+xml": {
+  1633→      source: "iana",
+  1634→      compressible: true,
+  1635→      extensions: ["relo"]
+  1636→    },
+  1637→    "application/parityfec": {
+  1638→      source: "iana"
+  1639→    },
+  1640→    "application/passport": {
+  1641→      source: "iana"
+  1642→    },
+  1643→    "application/patch-ops-error+xml": {
+  1644→      source: "iana",
+  1645→      compressible: true,
+  1646→      extensions: ["xer"]
+  1647→    },
+  1648→    "application/pdf": {
+  1649→      source: "iana",
+  1650→      compressible: false,
+  1651→      extensions: ["pdf"]
+  1652→    },
+  1653→    "application/pdx": {
+  1654→      source: "iana"
+  1655→    },
+  1656→    "application/pem-certificate-chain": {
+  1657→      source: "iana"
+  1658→    },
+  1659→    "application/pgp-encrypted": {
+  1660→      source: "iana",
+  1661→      compressible: false,
+  1662→      extensions: ["pgp"]
+  1663→    },
+  1664→    "application/pgp-keys": {
+  1665→      source: "iana",
+  1666→      extensions: ["asc"]
+  1667→    },
+  1668→    "application/pgp-signature": {
+  1669→      source: "iana",
+  1670→      extensions: ["asc", "sig"]
+  1671→    },
+  1672→    "application/pics-rules": {
+  1673→      source: "apache",
+  1674→      extensions: ["prf"]
+  1675→    },
+  1676→    "application/pidf+xml": {
+  1677→      source: "iana",
+  1678→      charset: "UTF-8",
+  1679→      compressible: true
+  1680→    },
+  1681→    "application/pidf-diff+xml": {
+  1682→      source: "iana",
+  1683→      charset: "UTF-8",
+  1684→      compressible: true
+  1685→    },
+  1686→    "application/pkcs10": {
+  1687→      source: "iana",
+  1688→      extensions: ["p10"]
+  1689→    },
+  1690→    "application/pkcs12": {
+  1691→      source: "iana"
+  1692→    },
+  1693→    "application/pkcs7-mime": {
+  1694→      source: "iana",
+  1695→      extensions: ["p7m", "p7c"]
+  1696→    },
+  1697→    "application/pkcs7-signature": {
+  1698→      source: "iana",
+  1699→      extensions: ["p7s"]
+  1700→    },
+  1701→    "application/pkcs8": {
+  1702→      source: "iana",
+  1703→      extensions: ["p8"]
+  1704→    },
+  1705→    "application/pkcs8-encrypted": {
+  1706→      source: "iana"
+  1707→    },
+  1708→    "application/pkix-attr-cert": {
+  1709→      source: "iana",
+  1710→      extensions: ["ac"]
+  1711→    },
+  1712→    "application/pkix-cert": {
+  1713→      source: "iana",
+  1714→      extensions: ["cer"]
+  1715→    },
+  1716→    "application/pkix-crl": {
+  1717→      source: "iana",
+  1718→      extensions: ["crl"]
+  1719→    },
+  1720→    "application/pkix-pkipath": {
+  1721→      source: "iana",
+  1722→      extensions: ["pkipath"]
+  1723→    },
+  1724→    "application/pkixcmp": {
+  1725→      source: "iana",
+  1726→      extensions: ["pki"]
+  1727→    },
+  1728→    "application/pls+xml": {
+  1729→      source: "iana",
+  1730→      compressible: true,
+  1731→      extensions: ["pls"]
+  1732→    },
+  1733→    "application/poc-settings+xml": {
+  1734→      source: "iana",
+  1735→      charset: "UTF-8",
+  1736→      compressible: true
+  1737→    },
+  1738→    "application/postscript": {
+  1739→      source: "iana",
+  1740→      compressible: true,
+  1741→      extensions: ["ai", "eps", "ps"]
+  1742→    },
+  1743→    "application/ppsp-tracker+json": {
+  1744→      source: "iana",
+  1745→      compressible: true
+  1746→    },
+  1747→    "application/problem+json": {
+  1748→      source: "iana",
+  1749→      compressible: true
+  1750→    },
+  1751→    "application/problem+xml": {
+  1752→      source: "iana",
+  1753→      compressible: true
+  1754→    },
+  1755→    "application/provenance+xml": {
+  1756→      source: "iana",
+  1757→      compressible: true,
+  1758→      extensions: ["provx"]
+  1759→    },
+  1760→    "application/prs.alvestrand.titrax-sheet": {
+  1761→      source: "iana"
+  1762→    },
+  1763→    "application/prs.cww": {
+  1764→      source: "iana",
+  1765→      extensions: ["cww"]
+  1766→    },
+  1767→    "application/prs.cyn": {
+  1768→      source: "iana",
+  1769→      charset: "7-BIT"
+  1770→    },
+  1771→    "application/prs.hpub+zip": {
+  1772→      source: "iana",
+  1773→      compressible: false
+  1774→    },
+  1775→    "application/prs.nprend": {
+  1776→      source: "iana"
+  1777→    },
+  1778→    "application/prs.plucker": {
+  1779→      source: "iana"
+  1780→    },
+  1781→    "application/prs.rdf-xml-crypt": {
+  1782→      source: "iana"
+  1783→    },
+  1784→    "application/prs.xsf+xml": {
+  1785→      source: "iana",
+  1786→      compressible: true
+  1787→    },
+  1788→    "application/pskc+xml": {
+  1789→      source: "iana",
+  1790→      compressible: true,
+  1791→      extensions: ["pskcxml"]
+  1792→    },
+  1793→    "application/pvd+json": {
+  1794→      source: "iana",
+  1795→      compressible: true
+  1796→    },
+  1797→    "application/qsig": {
+  1798→      source: "iana"
+  1799→    },
+  1800→    "application/raml+yaml": {
+  1801→      compressible: true,
+  1802→      extensions: ["raml"]
+  1803→    },
+  1804→    "application/raptorfec": {
+  1805→      source: "iana"
+  1806→    },
+  1807→    "application/rdap+json": {
+  1808→      source: "iana",
+  1809→      compressible: true
+  1810→    },
+  1811→    "application/rdf+xml": {
+  1812→      source: "iana",
+  1813→      compressible: true,
+  1814→      extensions: ["rdf", "owl"]
+  1815→    },
+  1816→    "application/reginfo+xml": {
+  1817→      source: "iana",
+  1818→      compressible: true,
+  1819→      extensions: ["rif"]
+  1820→    },
+  1821→    "application/relax-ng-compact-syntax": {
+  1822→      source: "iana",
+  1823→      extensions: ["rnc"]
+  1824→    },
+  1825→    "application/remote-printing": {
+  1826→      source: "iana"
+  1827→    },
+  1828→    "application/reputon+json": {
+  1829→      source: "iana",
+  1830→      compressible: true
+  1831→    },
+  1832→    "application/resource-lists+xml": {
+  1833→      source: "iana",
+  1834→      compressible: true,
+  1835→      extensions: ["rl"]
+  1836→    },
+  1837→    "application/resource-lists-diff+xml": {
+  1838→      source: "iana",
+  1839→      compressible: true,
+  1840→      extensions: ["rld"]
+  1841→    },
+  1842→    "application/rfc+xml": {
+  1843→      source: "iana",
+  1844→      compressible: true
+  1845→    },
+  1846→    "application/riscos": {
+  1847→      source: "iana"
+  1848→    },
+  1849→    "application/rlmi+xml": {
+  1850→      source: "iana",
+  1851→      compressible: true
+  1852→    },
+  1853→    "application/rls-services+xml": {
+  1854→      source: "iana",
+  1855→      compressible: true,
+  1856→      extensions: ["rs"]
+  1857→    },
+  1858→    "application/route-apd+xml": {
+  1859→      source: "iana",
+  1860→      compressible: true,
+  1861→      extensions: ["rapd"]
+  1862→    },
+  1863→    "application/route-s-tsid+xml": {
+  1864→      source: "iana",
+  1865→      compressible: true,
+  1866→      extensions: ["sls"]
+  1867→    },
+  1868→    "application/route-usd+xml": {
+  1869→      source: "iana",
+  1870→      compressible: true,
+  1871→      extensions: ["rusd"]
+  1872→    },
+  1873→    "application/rpki-ghostbusters": {
+  1874→      source: "iana",
+  1875→      extensions: ["gbr"]
+  1876→    },
+  1877→    "application/rpki-manifest": {
+  1878→      source: "iana",
+  1879→      extensions: ["mft"]
+  1880→    },
+  1881→    "application/rpki-publication": {
+  1882→      source: "iana"
+  1883→    },
+  1884→    "application/rpki-roa": {
+  1885→      source: "iana",
+  1886→      extensions: ["roa"]
+  1887→    },
+  1888→    "application/rpki-updown": {
+  1889→      source: "iana"
+  1890→    },
+  1891→    "application/rsd+xml": {
+  1892→      source: "apache",
+  1893→      compressible: true,
+  1894→      extensions: ["rsd"]
+  1895→    },
+  1896→    "application/rss+xml": {
+  1897→      source: "apache",
+  1898→      compressible: true,
+  1899→      extensions: ["rss"]
+  1900→    },
+  1901→    "application/rtf": {
+  1902→      source: "iana",
+  1903→      compressible: true,
+  1904→      extensions: ["rtf"]
+  1905→    },
+  1906→    "application/rtploopback": {
+  1907→      source: "iana"
+  1908→    },
+  1909→    "application/rtx": {
+  1910→      source: "iana"
+  1911→    },
+  1912→    "application/samlassertion+xml": {
+  1913→      source: "iana",
+  1914→      compressible: true
+  1915→    },
+  1916→    "application/samlmetadata+xml": {
+  1917→      source: "iana",
+  1918→      compressible: true
+  1919→    },
+  1920→    "application/sarif+json": {
+  1921→      source: "iana",
+  1922→      compressible: true
+  1923→    },
+  1924→    "application/sarif-external-properties+json": {
+  1925→      source: "iana",
+  1926→      compressible: true
+  1927→    },
+  1928→    "application/sbe": {
+  1929→      source: "iana"
+  1930→    },
+  1931→    "application/sbml+xml": {
+  1932→      source: "iana",
+  1933→      compressible: true,
+  1934→      extensions: ["sbml"]
+  1935→    },
+  1936→    "application/scaip+xml": {
+  1937→      source: "iana",
+  1938→      compressible: true
+  1939→    },
+  1940→    "application/scim+json": {
+  1941→      source: "iana",
+  1942→      compressible: true
+  1943→    },
+  1944→    "application/scvp-cv-request": {
+  1945→      source: "iana",
+  1946→      extensions: ["scq"]
+  1947→    },
+  1948→    "application/scvp-cv-response": {
+  1949→      source: "iana",
+  1950→      extensions: ["scs"]
+  1951→    },
+  1952→    "application/scvp-vp-request": {
+  1953→      source: "iana",
+  1954→      extensions: ["spq"]
+  1955→    },
+  1956→    "application/scvp-vp-response": {
+  1957→      source: "iana",
+  1958→      extensions: ["spp"]
+  1959→    },
+  1960→    "application/sdp": {
+  1961→      source: "iana",
+  1962→      extensions: ["sdp"]
+  1963→    },
+  1964→    "application/secevent+jwt": {
+  1965→      source: "iana"
+  1966→    },
+  1967→    "application/senml+cbor": {
+  1968→      source: "iana"
+  1969→    },
+  1970→    "application/senml+json": {
+  1971→      source: "iana",
+  1972→      compressible: true
+  1973→    },
+  1974→    "application/senml+xml": {
+  1975→      source: "iana",
+  1976→      compressible: true,
+  1977→      extensions: ["senmlx"]
+  1978→    },
+  1979→    "application/senml-etch+cbor": {
+  1980→      source: "iana"
+  1981→    },
+  1982→    "application/senml-etch+json": {
+  1983→      source: "iana",
+  1984→      compressible: true
+  1985→    },
+  1986→    "application/senml-exi": {
+  1987→      source: "iana"
+  1988→    },
+  1989→    "application/sensml+cbor": {
+  1990→      source: "iana"
+  1991→    },
+  1992→    "application/sensml+json": {
+  1993→      source: "iana",
+  1994→      compressible: true
+  1995→    },
+  1996→    "application/sensml+xml": {
+  1997→      source: "iana",
+  1998→      compressible: true,
+  1999→      extensions: ["sensmlx"]
+  2000→    },
+
+[showing lines 1-2000 of 36932; use offset=2001 with limit to continue reading]

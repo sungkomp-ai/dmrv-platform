@@ -27,12 +27,12 @@ const INTERVAL_MS = 2000; // 2 วินาทีจริง = 1 ชม.จำ�
 const SIM_HOURS_PER_TICK = 1;
 
 // ─── MQTT External Broker ────────────────────────────────────────────
-// ส่งค่าจำลอง AWD ไปยัง MQTT Broker ภายนอกที่ http://35.213.186.240/
-// รองรับทั้ง TCP (1883) และ WebSocket (9001/8083) ผ่าน env variable
-const MQTT_BROKER_URL = process.env.MQTT_BROKER_URL || 'mqtt://35.213.186.240:1883';
-const MQTT_TOPIC_READINGS = process.env.MQTT_TOPIC_READINGS || 'dmrv/awd/readings';
-const MQTT_TOPIC_STATUS = process.env.MQTT_TOPIC_STATUS || 'dmrv/awd/status';
-const MQTT_TOPIC_FIELD_PREFIX = process.env.MQTT_TOPIC_FIELD_PREFIX || 'dmrv/awd/field';
+// ส่งค่าจำลอง AWD ไปยัง MQTT Broker สาธารณะ broker.hivemq.com:1883
+// รองรับทั้ง TCP (1883) และ WebSocket (8000/8081) ผ่าน env variable
+const MQTT_BROKER_URL = process.env.MQTT_BROKER_URL || 'mqtt://broker.hivemq.com:1883';
+const MQTT_TOPIC_READINGS = process.env.MQTT_TOPIC_READINGS || 'awd/readings';
+const MQTT_TOPIC_STATUS = process.env.MQTT_TOPIC_STATUS || 'awd/status';
+const MQTT_TOPIC_FIELD_PREFIX = process.env.MQTT_TOPIC_FIELD_PREFIX || 'awd/field';
 const MQTT_CLIENT_ID = `awd-sim-${Math.random().toString(16).slice(2, 10)}`;
 
 let mqttClient: mqtt.MqttClient | null = null;
@@ -711,7 +711,7 @@ function simTick() {
   io.emit('awd:reading', newReadings);
   io.emit('awd:status', getStatus());
 
-  // Publish via MQTT to external broker (35.213.186.240)
+  // Publish via MQTT to external broker (broker.hivemq.com)
   for (const reading of newReadings) {
     publishReadingToMQTT(reading);
   }
