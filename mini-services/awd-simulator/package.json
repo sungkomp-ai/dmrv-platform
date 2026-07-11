@@ -1,7 +1,7 @@
 {
   "name": "awd-simulator",
   "version": "1.1.0",
-  "description": "Real-time AWD Rice Cultivation simulation with IoT data streaming (T-VER P-AG-001) + MQTT publisher to broker.hivemq.com",
+  "description": "Real-time AWD Rice Cultivation simulation with IoT data streaming (T-VER P-AG-001) + MQTT publisher to 35.213.186.240",
   "scripts": {
     "dev": "bun --hot index.js"
   },

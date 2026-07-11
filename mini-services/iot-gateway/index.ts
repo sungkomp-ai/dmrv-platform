@@ -11,6 +11,7 @@
 import { createServer } from 'http';
 import { Server as SocketIOServer } from 'socket.io';
 import * as cors from 'cors';
+import * as crypto from 'crypto';
 
 const PORT = 3035;
 
@@ -251,6 +252,99 @@ function generateSensorValue(sensorType: string, sensor: SensorConfig, tick: num
   // Clamp to sensor range
   value = Math.max(sensor.minRange, Math.min(sensor.maxRange, value));
   return Math.round(value * 100) / 100;
+}
+
+// ─── Edge Device Authentication ──────────────────────────────────────
+// Edge devices authenticate with the gateway using a pre-shared API key.
+// Gateway issues a signed token (HMAC-SHA256) used for subsequent data ingestion.
+interface EdgeCredential {
+  deviceId: string;
+  apiKeyHash: string;       // SHA-256 of pre-shared API key
+  name: string;
+  province: string;
+  lat: number;
+  lng: number;
+}
+interface AuthToken {
+  token: string;
+  deviceId: string;
+  issuedAt: number;
+  expiresAt: number;        // epoch ms
+}
+
+// Shared secret for HMAC signing (in production, use env variable)
+const GATEWAY_SECRET = process.env.GATEWAY_SECRET || 'dmrv-gateway-secret-2024-tver';
+
+// Pre-registered edge credentials (API keys shown for demo; in production store only hash)
+const EDGE_CREDENTIALS: EdgeCredential[] = [
+  { deviceId: 'EDGE-AWD-001', apiKeyHash: sha256('awd-edge-key-2024-korat'),  name: 'AWD Edge Node - นครราชสีมา', province: 'นครราชสีมา', lat: 14.97,  lng: 102.08 },
+  { deviceId: 'EDGE-AWD-002', apiKeyHash: sha256('awd-edge-key-2024-suphan'), name: 'AWD Edge Node - สุพรรณบุรี',    province: 'สุพรรณบุรี',    lat: 14.47,  lng: 100.12 },
+  { deviceId: 'EDGE-AWD-003', apiKeyHash: sha256('awd-edge-key-2024-ubon'),   name: 'AWD Edge Node - อุบลราชธานี',   province: 'อุบลราชธานี',   lat: 15.12,  lng: 104.85 },
+];
+
+// Active tokens stored in memory (token -> AuthToken)
+const ACTIVE_TOKENS: Map<string, AuthToken> = new Map();
+const TOKEN_TTL_MS = 24 * 60 * 60 * 1000;  // 24 hours
+
+function sha256(input: string): string {
+  return crypto.createHash('sha256').update(input, 'utf8').digest('hex');
+}
+
+function hmacSha256(key: string, message: string): string {
+  return crypto.createHmac('sha256', key).update(message, 'utf8').digest('hex');
+}
+
+// Issue a token to a verified edge device
+function issueToken(deviceId: string): AuthToken {
+  const issuedAt = Date.now();
+  const expiresAt = issuedAt + TOKEN_TTL_MS;
+  // Token = base payload + HMAC signature
+  const payload = `${deviceId}:${issuedAt}:${expiresAt}`;
+  const signature = hmacSha256(GATEWAY_SECRET, payload);
+  const token = `${payload}.${signature}`;
+  const authToken: AuthToken = { token, deviceId, issuedAt, expiresAt };
+  ACTIVE_TOKENS.set(token, authToken);
+  return authToken;
+}
+
+// Verify a token; returns deviceId if valid, null otherwise
+function verifyToken(token: string): string | null {
+  const parts = token.split('.');
+  if (parts.length !== 2) return null;
+  const [payload, signature] = parts;
+  const expectedSig = hmacSha256(GATEWAY_SECRET, payload);
+  // Constant-time compare
+  if (signature.length !== expectedSig.length) return null;
+  let diff = 0;
+  for (let i = 0; i < signature.length; i++) {
+    diff |= signature.charCodeAt(i) ^ expectedSig.charCodeAt(i);
+  }
+  if (diff !== 0) return null;
+  const [deviceId, issuedAtStr, expiresAtStr] = payload.split(':');
+  const expiresAt = parseInt(expiresAtStr, 10);
+  if (Date.now() > expiresAt) {
+    ACTIVE_TOKENS.delete(token);
+    return null;
+  }
+  return deviceId;
+}
+
+// Verify an integrity hash + signature submitted by an edge device
+// Returns { valid, deviceId, error? }
+function verifyEdgePayload(token: string, payloadJson: string, integrityHash: string, signature: string): { valid: boolean; deviceId?: string; error?: string } {
+  const deviceId = verifyToken(token);
+  if (!deviceId) return { valid: false, error: 'Invalid or expired token' };
+  // Verify integrity hash (SHA-256 of payload)
+  const expectedHash = sha256(payloadJson);
+  if (expectedHash !== integrityHash) {
+    return { valid: false, deviceId, error: `Integrity hash mismatch (expected ${expectedHash.slice(0,12)}..., got ${integrityHash.slice(0,12)}...)` };
+  }
+  // Verify signature (HMAC-SHA256 of integrityHash with token as key)
+  const expectedSig = hmacSha256(token, integrityHash);
+  if (signature !== expectedSig) {
+    return { valid: false, deviceId, error: 'Signature verification failed' };
+  }
+  return { valid: true, deviceId };
 }
 
 // ─── Create Server ────────────────────────────────────────────────────
@@ -758,6 +852,109 @@ httpServer.on('request', async (req, res) => {
 
     res.writeHead(200, { 'Content-Type': 'application/json', ...CORS_HEADERS });
     res.end(JSON.stringify({ sampleRealtime, sampleBatch, sampleEdgeConfig }));
+    return;
+  }
+
+  // ─── Edge Auth: POST /api/edge/auth ───────────────────────────────
+  // Edge device authenticates with deviceId + apiKey, receives a signed token
+  if (url.pathname === '/api/edge/auth' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', () => {
+      try {
+        const { deviceId, apiKey } = JSON.parse(body);
+        if (!deviceId || !apiKey) {
+          res.writeHead(400, { 'Content-Type': 'application/json', ...CORS_HEADERS });
+          res.end(JSON.stringify({ error: 'Missing deviceId or apiKey' }));
+          return;
+        }
+        const cred = EDGE_CREDENTIALS.find(c => c.deviceId === deviceId);
+        if (!cred) {
+          res.writeHead(404, { 'Content-Type': 'application/json', ...CORS_HEADERS });
+          res.end(JSON.stringify({ error: `Edge device ${deviceId} not registered` }));
+          return;
+        }
+        const apiKeyHash = sha256(apiKey);
+        if (apiKeyHash !== cred.apiKeyHash) {
+          res.writeHead(401, { 'Content-Type': 'application/json', ...CORS_HEADERS });
+          res.end(JSON.stringify({ error: 'Invalid API key' }));
+          return;
+        }
+        const authToken = issueToken(deviceId);
+        console.log(`[Auth] ✅ Edge device authenticated: ${deviceId}`);
+        res.writeHead(200, { 'Content-Type': 'application/json', ...CORS_HEADERS });
+        res.end(JSON.stringify({
+          success: true,
+          deviceId,
+          name: cred.name,
+          province: cred.province,
+          token: authToken.token,
+          issuedAt: authToken.issuedAt,
+          expiresAt: authToken.expiresAt,
+          ttlSeconds: Math.floor((authToken.expiresAt - authToken.issuedAt) / 1000),
+          hashAlgorithm: 'SHA-256',
+          signatureAlgorithm: 'HMAC-SHA256',
+        }));
+      } catch (e: any) {
+        res.writeHead(400, { 'Content-Type': 'application/json', ...CORS_HEADERS });
+        res.end(JSON.stringify({ error: e.message }));
+      }
+    });
+    return;
+  }
+
+  // ─── Edge Verify: POST /api/edge/verify ───────────────────────────
+  // Verifies a payload's integrity hash + signature submitted by an edge device
+  if (url.pathname === '/api/edge/verify' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', () => {
+      try {
+        const { token, payload, integrityHash, signature } = JSON.parse(body);
+        if (!token || !payload || !integrityHash || !signature) {
+          res.writeHead(400, { 'Content-Type': 'application/json', ...CORS_HEADERS });
+          res.end(JSON.stringify({ error: 'Missing required fields: token, payload, integrityHash, signature' }));
+          return;
+        }
+        const result = verifyEdgePayload(token, JSON.stringify(payload), integrityHash, signature);
+        if (result.valid) {
+          res.writeHead(200, { 'Content-Type': 'application/json', ...CORS_HEADERS });
+          res.end(JSON.stringify({
+            valid: true,
+            deviceId: result.deviceId,
+            message: 'Payload integrity and signature verified',
+            verifiedAt: new Date().toISOString(),
+          }));
+        } else {
+          res.writeHead(401, { 'Content-Type': 'application/json', ...CORS_HEADERS });
+          res.end(JSON.stringify({
+            valid: false,
+            deviceId: result.deviceId,
+            error: result.error,
+          }));
+        }
+      } catch (e: any) {
+        res.writeHead(400, { 'Content-Type': 'application/json', ...CORS_HEADERS });
+        res.end(JSON.stringify({ error: e.message }));
+      }
+    });
+    return;
+  }
+
+  // ─── Edge Credentials List: GET /api/edge/credentials ────────────
+  // Demo endpoint — returns deviceId + apiKey pairs that simulators can use to authenticate
+  if (url.pathname === '/api/edge/credentials' && req.method === 'GET') {
+    res.writeHead(200, { 'Content-Type': 'application/json', ...CORS_HEADERS });
+    res.end(JSON.stringify({
+      description: 'Pre-registered AWD edge credentials for demo (deviceId + apiKey pairs)',
+      authEndpoint: 'POST /api/edge/auth',
+      verifyEndpoint: 'POST /api/edge/verify',
+      credentials: [
+        { deviceId: 'EDGE-AWD-001', apiKey: 'awd-edge-key-2024-korat',  name: 'AWD Edge Node - นครราชสีมา', province: 'นครราชสีมา' },
+        { deviceId: 'EDGE-AWD-002', apiKey: 'awd-edge-key-2024-suphan', name: 'AWD Edge Node - สุพรรณบุรี',    province: 'สุพรรณบุรี' },
+        { deviceId: 'EDGE-AWD-003', apiKey: 'awd-edge-key-2024-ubon',   name: 'AWD Edge Node - อุบลราชธานี',   province: 'อุบลราชธานี' },
+      ],
+    }));
     return;
   }
 

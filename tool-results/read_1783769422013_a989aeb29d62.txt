@@ -1,0 +1,777 @@
+     1→     1→/**
+     2→     2→ * IoT Gateway Mini-Service — Port 3035
+     3→     3→ * ─────────────────────────────────────────────────────────
+     4→     4→ * ให้บริการ:
+     5→     5→ *   1. WebSocket (socket.io) → รับ-ส่งข้อมูล Realtime จาก Edge Node
+     6→     6→ *   2. HTTP REST           → รับข้อมูล Batch (CSV/JSON) จาก Edge Node
+     7→     7→ *   3. Simulated sensors   → จำลองข้อมูล sensor เพื่อสาธิตระบบ
+     8→     8→ *   4. Certification       → ตรวจสอบ integrity hash ของข้อมูล
+     9→     9→ */
+    10→    10→
+    11→    11→import { createServer } from 'http';
+    12→    12→import { Server as SocketIOServer } from 'socket.io';
+    13→    13→import * as cors from 'cors';
+    14→    14→
+    15→    15→const PORT = 3035;
+    16→    16→
+    17→    17→// ─── In-Memory State ──────────────────────────────────────────────────
+    18→    18→interface SensorReading {
+    19→    19→  id: string;
+    20→    20→  edgeNodeId: string;
+    21→    21→  sensorId: string;
+    22→    22→  sensorType: string;
+    23→    23→  value: number;
+    24→    24→  unit: string;
+    25→    25→  timestamp: string;
+    26→    26→  receivedAt: string;
+    27→    27→  ingestionMode: 'realtime' | 'batch';
+    28→    28→  qualityFlag: 'RAW' | 'VALIDATED' | 'CERTIFIED' | 'REJECTED' | 'ANOMALY';
+    29→    29→  integrityHash: string;
+    30→    30→  signature: string;
+    31→    31→}
+    32→    32→
+    33→    33→interface EdgeNodeState {
+    34→    34→  nodeId: string;
+    35→    35→  name: string;
+    36→    36→  nameTh: string;
+    37→    37→  province: string;
+    38→    38→  lat: number;
+    39→    39→  lng: number;
+    40→    40→  status: 'online' | 'offline' | 'maintenance';
+    41→    41→  protocol: string;
+    42→    42→  batteryLevel: number;
+    43→    43→  signalStrength: number;
+    44→    44→  sensors: SensorConfig[];
+    45→    45→  totalReadings: number;
+    46→    46→  lastHeartbeat: string;
+    47→    47→}
+    48→    48→
+    49→    49→interface SensorConfig {
+    50→    50→  sensorId: string;
+    51→    51→  sensorType: string;
+    52→    52→  unit: string;
+    53→    53→  minRange: number;
+    54→    54→  maxRange: number;
+    55→    55→  samplingRate: number; // วินาที
+    56→    56→  status: 'active' | 'inactive';
+    57→    57→}
+    58→    58→
+    59→    59→interface BatchJobState {
+    60→    60→  id: string;
+    61→    61→  edgeNodeId: string;
+    62→    62→  fileName: string;
+    63→    63→  fileType: string;
+    64→    64→  totalRecords: number;
+    65→    65→  processedRecords: number;
+    66→    66→  validRecords: number;
+    67→    67→  rejectedRecords: number;
+    68→    68→  anomalyRecords: number;
+    69→    69→  status: 'UPLOADED' | 'VALIDATING' | 'PROCESSING' | 'CERTIFYING' | 'COMPLETED' | 'FAILED';
+    70→    70→  certificationStatus: 'PENDING' | 'CERTIFIED' | 'PARTIAL' | 'REJECTED';
+    71→    71→  merkleRoot: string;
+    72→    72→  createdAt: string;
+    73→    73→  completedAt?: string;
+    74→    74→}
+    75→    75→
+    76→    76→// ─── Edge Node Configs (จำลอง) ──────────────────────────────────────
+    77→    77→const EDGE_NODES: EdgeNodeState[] = [
+    78→    78→  {
+    79→    79→    nodeId: 'EDGE-BKK-001',
+    80→    80→    name: 'Bangkok Landfill Monitor',
+    81→    81→    nameTh: 'สถานีติดตามขยะกรุงเทพ',
+    82→    82→    province: 'กรุงเทพมหานคร',
+    83→    83→    lat: 13.7563,
+    84→    84→    lng: 100.5018,
+    85→    85→    status: 'online',
+    86→    86→    protocol: 'MQTT',
+    87→    87→    batteryLevel: 92,
+    88→    88→    signalStrength: -45,
+    89→    89→    totalReadings: 0,
+    90→    90→    lastHeartbeat: new Date().toISOString(),
+    91→    91→    sensors: [
+    92→    92→      { sensorId: 'CH4-BKK-001', sensorType: 'ch4', unit: 'ppm', minRange: 0, maxRange: 5000, samplingRate: 60, status: 'active' },
+    93→    93→      { sensorId: 'CO2-BKK-001', sensorType: 'co2', unit: 'ppm', minRange: 0, maxRange: 5000, samplingRate: 60, status: 'active' },
+    94→    94→      { sensorId: 'TEMP-BKK-001', sensorType: 'temperature', unit: '°C', minRange: -10, maxRange: 60, samplingRate: 300, status: 'active' },
+    95→    95→      { sensorId: 'HUM-BKK-001', sensorType: 'humidity', unit: '%', minRange: 0, maxRange: 100, samplingRate: 300, status: 'active' },
+    96→    96→      { sensorId: 'DO-BKK-001', sensorType: 'dissolved_oxygen', unit: 'mg/L', minRange: 0, maxRange: 20, samplingRate: 600, status: 'active' },
+    97→    97→    ],
+    98→    98→  },
+    99→    99→  {
+   100→   100→    nodeId: 'EDGE-CNX-001',
+   101→   101→    name: 'Chiang Mai Rice Paddy Station',
+   102→   102→    nameTh: 'สถานีนาข้าวเชียงใหม่',
+   103→   103→    province: 'เชียงใหม่',
+   104→   104→    lat: 18.7883,
+   105→   105→    lng: 98.9853,
+   106→   106→    status: 'online',
+   107→   107→    protocol: 'LoRaWAN',
+   108→   108→    batteryLevel: 78,
+   109→   109→    signalStrength: -62,
+   110→   110→    totalReadings: 0,
+   111→   111→    lastHeartbeat: new Date().toISOString(),
+   112→   112→    sensors: [
+   113→   113→      { sensorId: 'CH4-CNX-001', sensorType: 'ch4', unit: 'ppm', minRange: 0, maxRange: 2000, samplingRate: 30, status: 'active' },
+   114→   114→      { sensorId: 'TEMP-CNX-001', sensorType: 'temperature', unit: '°C', minRange: -10, maxRange: 50, samplingRate: 300, status: 'active' },
+   115→   115→      { sensorId: 'SM-CNX-001', sensorType: 'soil_moisture', unit: '%', minRange: 0, maxRange: 100, samplingRate: 600, status: 'active' },
+   116→   116→      { sensorId: 'WL-CNX-001', sensorType: 'water_level', unit: 'cm', minRange: 0, maxRange: 50, samplingRate: 300, status: 'active' },
+   117→   117→      { sensorId: 'PH-CNX-001', sensorType: 'ph', unit: 'pH', minRange: 0, maxRange: 14, samplingRate: 900, status: 'active' },
+   118→   118→    ],
+   119→   119→  },
+   120→   120→  {
+   121→   121→    nodeId: 'EDGE-KKN-001',
+   122→   122→    name: 'Khon Kaen Biogas Plant Monitor',
+   123→   123→    nameTh: 'สถานีติดตามโรงไบโอก๊าซขอนแก่น',
+   124→   124→    province: 'ขอนแก่น',
+   125→   125→    lat: 16.4322,
+   126→   126→    lng: 102.8236,
+   127→   127→    status: 'online',
+   128→   128→    protocol: 'MQTT',
+   129→   129→    batteryLevel: 85,
+   130→   130→    signalStrength: -55,
+   131→   131→    totalReadings: 0,
+   132→   132→    lastHeartbeat: new Date().toISOString(),
+   133→   133→    sensors: [
+   134→   134→      { sensorId: 'CH4-KKN-001', sensorType: 'ch4', unit: 'ppm', minRange: 0, maxRange: 10000, samplingRate: 30, status: 'active' },
+   135→   135→      { sensorId: 'CO2-KKN-001', sensorType: 'co2', unit: 'ppm', minRange: 0, maxRange: 5000, samplingRate: 30, status: 'active' },
+   136→   136→      { sensorId: 'TEMP-KKN-001', sensorType: 'temperature', unit: '°C', minRange: 0, maxRange: 80, samplingRate: 300, status: 'active' },
+   137→   137→      { sensorId: 'PH-KKN-001', sensorType: 'ph', unit: 'pH', minRange: 0, maxRange: 14, samplingRate: 600, status: 'active' },
+   138→   138→      { sensorId: 'COD-KKN-001', sensorType: 'cod', unit: 'mg/L', minRange: 0, maxRange: 1000, samplingRate: 1800, status: 'active' },
+   139→   139→      { sensorId: 'BOD-KKN-001', sensorType: 'bod', unit: 'mg/L', minRange: 0, maxRange: 500, samplingRate: 1800, status: 'active' },
+   140→   140→    ],
+   141→   141→  },
+   142→   142→  {
+   143→   143→    nodeId: 'EDGE-PKT-001',
+   144→   144→    name: 'Phuket Solar & Coastal Monitor',
+   145→   145→    nameTh: 'สถานีติดตามโซลาร์และชายฝั่งภูเก็ต',
+   146→   146→    province: 'ภูเก็ต',
+   147→   147→    lat: 7.8804,
+   148→   148→    lng: 98.3923,
+   149→   149→    status: 'offline',
+   150→   150→    protocol: 'HTTP',
+   151→   151→    batteryLevel: 45,
+   152→   152→    signalStrength: -78,
+   153→   153→    totalReadings: 0,
+   154→   154→    lastHeartbeat: new Date(Date.now() - 3600000).toISOString(),
+   155→   155→    sensors: [
+   156→   156→      { sensorId: 'SOLAR-PKT-001', sensorType: 'solar_irradiance', unit: 'W/m²', minRange: 0, maxRange: 1200, samplingRate: 300, status: 'active' },
+   157→   157→      { sensorId: 'WS-PKT-001', sensorType: 'wind_speed', unit: 'm/s', minRange: 0, maxRange: 50, samplingRate: 300, status: 'active' },
+   158→   158→      { sensorId: 'TEMP-PKT-001', sensorType: 'temperature', unit: '°C', minRange: 10, maxRange: 50, samplingRate: 600, status: 'active' },
+   159→   159→      { sensorId: 'HUM-PKT-001', sensorType: 'humidity', unit: '%', minRange: 0, maxRange: 100, samplingRate: 600, status: 'inactive' },
+   160→   160→    ],
+   161→   161→  },
+   162→   162→  {
+   163→   163→    nodeId: 'EDGE-SKT-001',
+   164→   164→    name: 'Surat Thani Mangrove Station',
+   165→   165→    nameTh: 'สถานีป่าชายเลมสุราษฎร์ธานี',
+   166→   166→    province: 'สุราษฎร์ธานี',
+   167→   167→    lat: 9.1382,
+   168→   168→    lng: 99.3217,
+   169→   169→    status: 'online',
+   170→   170→    protocol: 'WebSocket',
+   171→   171→    batteryLevel: 67,
+   172→   172→    signalStrength: -58,
+   173→   173→    totalReadings: 0,
+   174→   174→    lastHeartbeat: new Date().toISOString(),
+   175→   175→    sensors: [
+   176→   176→      { sensorId: 'CH4-SKT-001', sensorType: 'ch4', unit: 'ppm', minRange: 0, maxRange: 3000, samplingRate: 60, status: 'active' },
+   177→   177→      { sensorId: 'CO2-SKT-001', sensorType: 'co2', unit: 'ppm', minRange: 0, maxRange: 5000, samplingRate: 60, status: 'active' },
+   178→   178→      { sensorId: 'DO-SKT-001', sensorType: 'dissolved_oxygen', unit: 'mg/L', minRange: 0, maxRange: 20, samplingRate: 600, status: 'active' },
+   179→   179→      { sensorId: 'N-SKT-001', sensorType: 'nitrogen', unit: 'mg/L', minRange: 0, maxRange: 50, samplingRate: 1800, status: 'active' },
+   180→   180→      { sensorId: 'P-SKT-001', sensorType: 'phosphorus', unit: 'mg/L', minRange: 0, maxRange: 20, samplingRate: 1800, status: 'active' },
+   181→   181→    ],
+   182→   182→  },
+   183→   183→];
+   184→   184→
+   185→   185→// ─── Runtime State ─────────────────────────────────────────────────────
+   186→   186→let readings: SensorReading[] = [];
+   187→   187→let batchJobs: BatchJobState[] = [];
+   188→   188→let simRunning = false;
+   189→   189→let simInterval: Timer | null = null;
+   190→   190→let tickCounter = 0;
+   191→   191→let realtimeClients: Set<string> = new Set();
+   192→   192→
+   193→   193→// ─── Helper: Generate Integrity Hash ──────────────────────────────────
+   194→   194→function generateHash(sensorId: string, value: number, timestamp: string): string {
+   195→   195→  // Simplified SHA-like hash for demo
+   196→   196→  const raw = `${sensorId}:${value}:${timestamp}`;
+   197→   197→  let hash = 0;
+   198→   198→  for (let i = 0; i < raw.length; i++) {
+   199→   199→    const char = raw.charCodeAt(i);
+   200→   200→    hash = ((hash << 5) - hash) + char;
+   201→   201→    hash = hash & hash;
+   202→   202→  }
+   203→   203→  return `sha256-${Math.abs(hash).toString(16).padStart(16, '0')}`;
+   204→   204→}
+   205→   205→
+   206→   206→function generateSignature(nodeId: string, hash: string): string {
+   207→   207→  const raw = `${nodeId}:${hash}`;
+   208→   208→  let sig = 0;
+   209→   209→  for (let i = 0; i < raw.length; i++) {
+   210→   210→    const char = raw.charCodeAt(i);
+   211→   211→    sig = ((sig << 5) - sig) + char;
+   212→   212→    sig = sig & sig;
+   213→   213→  }
+   214→   214→  return `sig-${Math.abs(sig).toString(16).padStart(16, '0')}`;
+   215→   215→}
+   216→   216→
+   217→   217→function validateReading(sensor: SensorConfig, value: number): 'VALIDATED' | 'ANOMALY' | 'REJECTED' {
+   218→   218→  if (value < sensor.minRange || value > sensor.maxRange) return 'REJECTED';
+   219→   219→  // Anomaly detection: if value is in top/bottom 5% of range
+   220→   220→  const range = sensor.maxRange - sensor.minRange;
+   221→   221→  const lowerBound = sensor.minRange + range * 0.02;
+   222→   222→  const upperBound = sensor.maxRange - range * 0.02;
+   223→   223→  if (value < lowerBound || value > upperBound) return 'ANOMALY';
+   224→   224→  return 'VALIDATED';
+   225→   225→}
+   226→   226→
+   227→   227→// ─── Simulated Sensor Value Generation ────────────────────────────────
+   228→   228→const BASE_VALUES: Record<string, { base: number; variance: number; seasonal?: boolean }> = {
+   229→   229→  ch4: { base: 850, variance: 200, seasonal: true },
+   230→   230→  co2: { base: 420, variance: 50, seasonal: true },
+   231→   231→  temperature: { base: 30, variance: 5, seasonal: true },
+   232→   232→  humidity: { base: 75, variance: 15, seasonal: true },
+   233→   233→  soil_moisture: { base: 45, variance: 20, seasonal: true },
+   234→   234→  water_level: { base: 15, variance: 8, seasonal: true },
+   235→   235→  ph: { base: 7.2, variance: 0.8 },
+   236→   236→  dissolved_oxygen: { base: 6.5, variance: 2 },
+   237→   237→  cod: { base: 120, variance: 40 },
+   238→   238→  bod: { base: 45, variance: 20 },
+   239→   239→  nitrogen: { base: 8, variance: 4 },
+   240→   240→  phosphorus: { base: 3, variance: 1.5 },
+   241→   241→  wind_speed: { base: 3.5, variance: 2 },
+   242→   242→  solar_irradiance: { base: 600, variance: 300, seasonal: true },
+   243→   243→};
+   244→   244→
+   245→   245→function generateSensorValue(sensorType: string, sensor: SensorConfig, tick: number): number {
+   246→   246→  const config = BASE_VALUES[sensorType] || { base: 50, variance: 10 };
+   247→   247→  const hour = (tick % 24);
+   248→   248→  const seasonalFactor = config.seasonal ? Math.sin((hour / 24) * Math.PI * 2) * 0.2 : 0;
+   249→   249→  const noise = (Math.random() - 0.5) * config.variance;
+   250→   250→  let value = config.base * (1 + seasonalFactor) + noise;
+   251→   251→  // Clamp to sensor range
+   252→   252→  value = Math.max(sensor.minRange, Math.min(sensor.maxRange, value));
+   253→   253→  return Math.round(value * 100) / 100;
+   254→   254→}
+   255→   255→
+   256→   256→// ─── Create Server ────────────────────────────────────────────────────
+   257→   257→const httpServer = createServer();
+   258→   258→const io = new SocketIOServer(httpServer, {
+   259→   259→  cors: { origin: '*', methods: ['GET', 'POST'] },
+   260→   260→});
+   261→   261→
+   262→   262→// ─── WebSocket Connection Handler ─────────────────────────────────────
+   263→   263→io.on('connection', (socket) => {
+   264→   264→  console.log(`[IoT Gateway] Client connected: ${socket.id}`);
+   265→   265→  realtimeClients.add(socket.id);
+   266→   266→
+   267→   267→  // ส่งสถานะปัจจุบันให้ client ใหม่
+   268→   268→  socket.emit('iot:status', {
+   269→   269→    running: simRunning,
+   270→   270→    tick: tickCounter,
+   271→   271→    edgeNodes: EDGE_NODES.map(n => ({
+   272→   272→      ...n,
+   273→   273→      sensors: n.sensors.map(s => ({
+   274→   274→        ...s,
+   275→   275→        lastReading: 0,
+   276→   276→        lastReadingAt: null,
+   277→   277→      })),
+   278→   278→    })),
+   279→   279→    totalReadings: readings.length,
+   280→   280→    batchJobs: batchJobs.length,
+   281→   281→    connectedClients: realtimeClients.size,
+   282→   282→  });
+   283→   283→
+   284→   284→  // ส่งข้อมูล 50 รายการล่าสุด
+   285→   285→  socket.emit('iot:readings', readings.slice(-50));
+   286→   286→
+   287→   287→  // ─── Realtime Ingestion: รับข้อมูลจาก Edge Node ────────────────
+   288→   288→  socket.on('iot:ingest:realtime', (data: {
+   289→   289→    edgeNodeId: string;
+   290→   290→    sensorId: string;
+   291→   291→    sensorType: string;
+   292→   292→    value: number;
+   293→   293→    unit: string;
+   294→   294→    timestamp: string;
+   295→   295→  }) => {
+   296→   296→    const edgeNode = EDGE_NODES.find(n => n.nodeId === data.edgeNodeId);
+   297→   297→    if (!edgeNode) {
+   298→   298→      socket.emit('iot:error', { message: `Edge node ${data.edgeNodeId} not found` });
+   299→   299→      return;
+   300→   300→    }
+   301→   301→
+   302→   302→    const sensor = edgeNode.sensors.find(s => s.sensorId === data.sensorId);
+   303→   303→    const qualityFlag = sensor ? validateReading(sensor, data.value) : 'RAW';
+   304→   304→    const integrityHash = generateHash(data.sensorId, data.value, data.timestamp);
+   305→   305→    const signature = generateSignature(data.edgeNodeId, integrityHash);
+   306→   306→
+   307→   307→    const reading: SensorReading = {
+   308→   308→      id: `RD-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+   309→   309→      edgeNodeId: data.edgeNodeId,
+   310→   310→      sensorId: data.sensorId,
+   311→   311→      sensorType: data.sensorType,
+   312→   312→      value: data.value,
+   313→   313→      unit: data.unit,
+   314→   314→      timestamp: data.timestamp,
+   315→   315→      receivedAt: new Date().toISOString(),
+   316→   316→      ingestionMode: 'realtime',
+   317→   317→      qualityFlag,
+   318→   318→      integrityHash,
+   319→   319→      signature,
+   320→   320→    };
+   321→   321→
+   322→   322→    readings.push(reading);
+   323→   323→    edgeNode.totalReadings++;
+   324→   324→
+   325→   325→    // Broadcast ไปยัง client ทุกคน
+   326→   326→    io.emit('iot:reading', reading);
+   327→   327→  });
+   328→   328→
+   329→   329→  // ─── Batch Ingestion: รับข้อมูลเป็นชุด ──────────────────────────
+   330→   330→  socket.on('iot:ingest:batch', (data: {
+   331→   331→    edgeNodeId: string;
+   332→   332→    fileName: string;
+   333→   333→    fileType: string;
+   334→   334→    records: Array<{
+   335→   335→      sensorId: string;
+   336→   336→      sensorType: string;
+   337→   337→      value: number;
+   338→   338→      unit: string;
+   339→   339→      timestamp: string;
+   340→   340→    }>;
+   341→   341→  }) => {
+   342→   342→    const edgeNode = EDGE_NODES.find(n => n.nodeId === data.edgeNodeId);
+   343→   343→    if (!edgeNode) {
+   344→   344→      socket.emit('iot:error', { message: `Edge node ${data.edgeNodeId} not found` });
+   345→   345→      return;
+   346→   346→    }
+   347→   347→
+   348→   348→    const batchJob: BatchJobState = {
+   349→   349→      id: `BATCH-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+   350→   350→      edgeNodeId: data.edgeNodeId,
+   351→   351→      fileName: data.fileName,
+   352→   352→      fileType: data.fileType,
+   353→   353→      totalRecords: data.records.length,
+   354→   354→      processedRecords: 0,
+   355→   355→      validRecords: 0,
+   356→   356→      rejectedRecords: 0,
+   357→   357→      anomalyRecords: 0,
+   358→   358→      status: 'PROCESSING',
+   359→   359→      certificationStatus: 'PENDING',
+   360→   360→      merkleRoot: '',
+   361→   361→      createdAt: new Date().toISOString(),
+   362→   362→    };
+   363→   363→
+   364→   364→    batchJobs.push(batchJob);
+   365→   365→    io.emit('iot:batch:started', batchJob);
+   366→   366→
+   367→   367→    // ประมวลผล batch
+   368→   368→    const batchReadings: SensorReading[] = [];
+   369→   369→    for (const record of data.records) {
+   370→   370→      const sensor = edgeNode.sensors.find(s => s.sensorId === record.sensorId);
+   371→   371→      const qualityFlag = sensor ? validateReading(sensor, record.value) : 'RAW';
+   372→   372→      const integrityHash = generateHash(record.sensorId, record.value, record.timestamp);
+   373→   373→      const signature = generateSignature(data.edgeNodeId, integrityHash);
+   374→   374→
+   375→   375→      const reading: SensorReading = {
+   376→   376→        id: `RD-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+   377→   377→        edgeNodeId: data.edgeNodeId,
+   378→   378→        sensorId: record.sensorId,
+   379→   379→        sensorType: record.sensorType,
+   380→   380→        value: record.value,
+   381→   381→        unit: record.unit,
+   382→   382→        timestamp: record.timestamp,
+   383→   383→        receivedAt: new Date().toISOString(),
+   384→   384→        ingestionMode: 'batch',
+   385→   385→        qualityFlag,
+   386→   386→        integrityHash,
+   387→   387→        signature,
+   388→   388→      };
+   389→   389→
+   390→   390→      batchReadings.push(reading);
+   391→   391→      batchJob.processedRecords++;
+   392→   392→
+   393→   393→      if (qualityFlag === 'VALIDATED') batchJob.validRecords++;
+   394→   394→      else if (qualityFlag === 'ANOMALY') { batchJob.anomalyRecords++; batchJob.validRecords++; }
+   395→   395→      else if (qualityFlag === 'REJECTED') batchJob.rejectedRecords++;
+   396→   396→    }
+   397→   397→
+   398→   398→    readings.push(...batchReadings);
+   399→   399→    edgeNode.totalReadings += batchReadings.length;
+   400→   400→
+   401→   401→    // Certify batch
+   402→   402→    batchJob.status = 'CERTIFYING';
+   403→   403→    batchJob.certificationStatus = batchJob.rejectedRecords === 0 ? 'CERTIFIED' : (batchJob.validRecords > batchJob.rejectedRecords ? 'PARTIAL' : 'REJECTED');
+   404→   404→    batchJob.merkleRoot = generateHash(batchJob.id, batchJob.validRecords, batchJob.createdAt);
+   405→   405→    batchJob.status = 'COMPLETED';
+   406→   406→    batchJob.completedAt = new Date().toISOString();
+   407→   407→
+   408→   408→    io.emit('iot:batch:completed', batchJob);
+   409→   409→    io.emit('iot:readings', batchReadings);
+   410→   410→  });
+   411→   411→
+   412→   412→  // ─── Control: เริ่ม/หยุด การจำลอง ───────────────────────────────
+   413→   413→  socket.on('iot:sim:start', () => {
+   414→   414→    if (simRunning) return;
+   415→   415→    simRunning = true;
+   416→   416→    console.log('[IoT Gateway] Simulation started');
+   417→   417→    io.emit('iot:sim:started');
+   418→   418→    startSimulation();
+   419→   419→  });
+   420→   420→
+   421→   421→  socket.on('iot:sim:stop', () => {
+   422→   422→    simRunning = false;
+   423→   423→    if (simInterval) { clearInterval(simInterval); simInterval = null; }
+   424→   424→    console.log('[IoT Gateway] Simulation stopped');
+   425→   425→    io.emit('iot:sim:stopped');
+   426→   426→  });
+   427→   427→
+   428→   428→  socket.on('iot:sim:reset', () => {
+   429→   429→    simRunning = false;
+   430→   430→    if (simInterval) { clearInterval(simInterval); simInterval = null; }
+   431→   431→    readings = [];
+   432→   432→    batchJobs = [];
+   433→   433→    tickCounter = 0;
+   434→   434→    EDGE_NODES.forEach(n => n.totalReadings = 0);
+   435→   435→    console.log('[IoT Gateway] Simulation reset');
+   436→   436→    io.emit('iot:sim:reset');
+   437→   437→    io.emit('iot:readings', []);
+   438→   438→  });
+   439→   439→
+   440→   440→  // ─── Edge Node: Heartbeat ─────────────────────────────────────────
+   441→   441→  socket.on('iot:edge:heartbeat', (data: { nodeId: string }) => {
+   442→   442→    const edgeNode = EDGE_NODES.find(n => n.nodeId === data.nodeId);
+   443→   443→    if (edgeNode) {
+   444→   444→      edgeNode.lastHeartbeat = new Date().toISOString();
+   445→   445→      edgeNode.status = 'online';
+   446→   446→    }
+   447→   447→  });
+   448→   448→
+   449→   449→  socket.on('disconnect', () => {
+   450→   450→    realtimeClients.delete(socket.id);
+   451→   451→    console.log(`[IoT Gateway] Client disconnected: ${socket.id}`);
+   452→   452→  });
+   453→   453→});
+   454→   454→
+   455→   455→// ─── Simulation Engine ────────────────────────────────────────────────
+   456→   456→function startSimulation() {
+   457→   457→  if (simInterval) clearInterval(simInterval);
+   458→   458→  simInterval = setInterval(() => {
+   459→   459→    if (!simRunning) return;
+   460→   460→    tickCounter++;
+   461→   461→
+   462→   462→    const newReadings: SensorReading[] = [];
+   463→   463→
+   464→   464→    for (const edgeNode of EDGE_NODES) {
+   465→   465→      if (edgeNode.status !== 'online') continue;
+   466→   466→
+   467→   467→      for (const sensor of edgeNode.sensors) {
+   468→   468→        if (sensor.status !== 'active') continue;
+   469→   469→
+   470→   470→        // สุ่มค่าตาม sampling rate (เพื่อไม่ให้ทุก sensor ส่งทุก tick)
+   471→   471→        if (tickCounter % Math.max(1, Math.floor(sensor.samplingRate / 10)) !== 0) continue;
+   472→   472→
+   473→   473→        const value = generateSensorValue(sensor.sensorType, sensor, tickCounter);
+   474→   474→        const timestamp = new Date().toISOString();
+   475→   475→        const qualityFlag = validateReading(sensor, value);
+   476→   476→        const integrityHash = generateHash(sensor.sensorId, value, timestamp);
+   477→   477→        const signature = generateSignature(edgeNode.nodeId, integrityHash);
+   478→   478→
+   479→   479→        const reading: SensorReading = {
+   480→   480→          id: `RD-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+   481→   481→          edgeNodeId: edgeNode.nodeId,
+   482→   482→          sensorId: sensor.sensorId,
+   483→   483→          sensorType: sensor.sensorType,
+   484→   484→          value,
+   485→   485→          unit: sensor.unit,
+   486→   486→          timestamp,
+   487→   487→          receivedAt: new Date().toISOString(),
+   488→   488→          ingestionMode: 'realtime',
+   489→   489→          qualityFlag,
+   490→   490→          integrityHash,
+   491→   491→          signature,
+   492→   492→        };
+   493→   493→
+   494→   494→        newReadings.push(reading);
+   495→   495→        edgeNode.totalReadings++;
+   496→   496→      }
+   497→   497→
+   498→   498→      // Update heartbeat
+   499→   499→      edgeNode.lastHeartbeat = new Date().toISOString();
+   500→   500→    }
+   501→   501→
+   502→   502→    if (newReadings.length > 0) {
+   503→   503→      readings.push(...newReadings);
+   504→   504→      // เก็บแค่ 2000 รายการล่าสุด
+   505→   505→      if (readings.length > 2000) readings = readings.slice(-2000);
+   506→   506→
+   507→   507→      // Broadcast
+   508→   508→      io.emit('iot:readings', newReadings);
+   509→   509→    }
+   510→   510→
+   511→   511→    // ส่ง status update
+   512→   512→    io.emit('iot:status', {
+   513→   513→      running: simRunning,
+   514→   514→      tick: tickCounter,
+   515→   515→      edgeNodes: EDGE_NODES,
+   516→   516→      totalReadings: readings.length,
+   517→   517→      batchJobs: batchJobs.length,
+   518→   518→      connectedClients: realtimeClients.size,
+   519→   519→    });
+   520→   520→
+   521→   521→  }, 2000); // ทุก 2 วินาที
+   522→   522→}
+   523→   523→
+   524→   524→// ─── HTTP REST Endpoints ──────────────────────────────────────────────
+   525→   525→// สำหรับ Batch upload ผ่าน HTTP (เผื่อ Edge Node ที่ไม่ได้ใช้ WebSocket)
+   526→   526→
+   527→   527→const CORS_HEADERS = {
+   528→   528→  'Access-Control-Allow-Origin': '*',
+   529→   529→  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+   530→   530→  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+   531→   531→};
+   532→   532→
+   533→   533→httpServer.on('request', async (req, res) => {
+   534→   534→  // CORS preflight
+   535→   535→  if (req.method === 'OPTIONS') {
+   536→   536→    res.writeHead(204, CORS_HEADERS);
+   537→   537→    res.end();
+   538→   538→    return;
+   539→   539→  }
+   540→   540→
+   541→   541→  const url = new URL(req.url || '/', `http://localhost:${PORT}`);
+   542→   542→
+   543→   543→  // GET /api/status
+   544→   544→  if (url.pathname === '/api/status' && req.method === 'GET') {
+   545→   545→    res.writeHead(200, { 'Content-Type': 'application/json', ...CORS_HEADERS });
+   546→   546→    res.end(JSON.stringify({
+   547→   547→      running: simRunning,
+   548→   548→      tick: tickCounter,
+   549→   549→      edgeNodes: EDGE_NODES,
+   550→   550→      totalReadings: readings.length,
+   551→   551→      batchJobs: batchJobs.length,
+   552→   552→      connectedClients: realtimeClients.size,
+   553→   553→    }));
+   554→   554→    return;
+   555→   555→  }
+   556→   556→
+   557→   557→  // GET /api/readings
+   558→   558→  if (url.pathname === '/api/readings' && req.method === 'GET') {
+   559→   559→    const limit = parseInt(url.searchParams.get('limit') || '100');
+   560→   560→    const edgeNodeId = url.searchParams.get('edgeNodeId');
+   561→   561→    const sensorType = url.searchParams.get('sensorType');
+   562→   562→    let filtered = readings;
+   563→   563→    if (edgeNodeId) filtered = filtered.filter(r => r.edgeNodeId === edgeNodeId);
+   564→   564→    if (sensorType) filtered = filtered.filter(r => r.sensorType === sensorType);
+   565→   565→    res.writeHead(200, { 'Content-Type': 'application/json', ...CORS_HEADERS });
+   566→   566→    res.end(JSON.stringify({ readings: filtered.slice(-limit), total: filtered.length }));
+   567→   567→    return;
+   568→   568→  }
+   569→   569→
+   570→   570→  // GET /api/edge-nodes
+   571→   571→  if (url.pathname === '/api/edge-nodes' && req.method === 'GET') {
+   572→   572→    res.writeHead(200, { 'Content-Type': 'application/json', ...CORS_HEADERS });
+   573→   573→    res.end(JSON.stringify({ edgeNodes: EDGE_NODES }));
+   574→   574→    return;
+   575→   575→  }
+   576→   576→
+   577→   577→  // GET /api/batch-jobs
+   578→   578→  if (url.pathname === '/api/batch-jobs' && req.method === 'GET') {
+   579→   579→    res.writeHead(200, { 'Content-Type': 'application/json', ...CORS_HEADERS });
+   580→   580→    res.end(JSON.stringify({ batchJobs }));
+   581→   581→    return;
+   582→   582→  }
+   583→   583→
+   584→   584→  // POST /api/batch-upload
+   585→   585→  if (url.pathname === '/api/batch-upload' && req.method === 'POST') {
+   586→   586→    let body = '';
+   587→   587→    req.on('data', chunk => body += chunk);
+   588→   588→    req.on('end', () => {
+   589→   589→      try {
+   590→   590→        const data = JSON.parse(body);
+   591→   591→        const edgeNode = EDGE_NODES.find(n => n.nodeId === data.edgeNodeId);
+   592→   592→        if (!edgeNode) {
+   593→   593→          res.writeHead(404, { 'Content-Type': 'application/json', ...CORS_HEADERS });
+   594→   594→          res.end(JSON.stringify({ error: 'Edge node not found' }));
+   595→   595→          return;
+   596→   596→        }
+   597→   597→
+   598→   598→        const batchJob: BatchJobState = {
+   599→   599→          id: `BATCH-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+   600→   600→          edgeNodeId: data.edgeNodeId,
+   601→   601→          fileName: data.fileName || 'upload.json',
+   602→   602→          fileType: data.fileType || 'JSON',
+   603→   603→          totalRecords: data.records?.length || 0,
+   604→   604→          processedRecords: 0,
+   605→   605→          validRecords: 0,
+   606→   606→          rejectedRecords: 0,
+   607→   607→          anomalyRecords: 0,
+   608→   608→          status: 'COMPLETED',
+   609→   609→          certificationStatus: 'CERTIFIED',
+   610→   610→          merkleRoot: generateHash('batch', data.records?.length || 0, new Date().toISOString()),
+   611→   611→          createdAt: new Date().toISOString(),
+   612→   612→          completedAt: new Date().toISOString(),
+   613→   613→        };
+   614→   614→
+   615→   615→        const batchReadings: SensorReading[] = (data.records || []).map((record: any) => {
+   616→   616→          const sensor = edgeNode.sensors.find(s => s.sensorId === record.sensorId);
+   617→   617→          const qualityFlag = sensor ? validateReading(sensor, record.value) : 'RAW';
+   618→   618→          const integrityHash = generateHash(record.sensorId, record.value, record.timestamp);
+   619→   619→          const signature = generateSignature(data.edgeNodeId, integrityHash);
+   620→   620→
+   621→   621→          if (qualityFlag === 'VALIDATED') batchJob.validRecords++;
+   622→   622→          else if (qualityFlag === 'ANOMALY') { batchJob.anomalyRecords++; batchJob.validRecords++; }
+   623→   623→          else batchJob.rejectedRecords++;
+   624→   624→
+   625→   625→          batchJob.processedRecords++;
+   626→   626→
+   627→   627→          return {
+   628→   628→            id: `RD-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+   629→   629→            edgeNodeId: data.edgeNodeId,
+   630→   630→            sensorId: record.sensorId,
+   631→   631→            sensorType: record.sensorType,
+   632→   632→            value: record.value,
+   633→   633→            unit: record.unit || '',
+   634→   634→            timestamp: record.timestamp,
+   635→   635→            receivedAt: new Date().toISOString(),
+   636→   636→            ingestionMode: 'batch' as const,
+   637→   637→            qualityFlag,
+   638→   638→            integrityHash,
+   639→   639→            signature,
+   640→   640→          };
+   641→   641→        });
+   642→   642→
+   643→   643→        readings.push(...batchReadings);
+   644→   644→        edgeNode.totalReadings += batchReadings.length;
+   645→   645→        batchJobs.push(batchJob);
+   646→   646→
+   647→   647→        io.emit('iot:batch:completed', batchJob);
+   648→   648→
+   649→   649→        res.writeHead(200, { 'Content-Type': 'application/json', ...CORS_HEADERS });
+   650→   650→        res.end(JSON.stringify({ success: true, batchJob, readingsCount: batchReadings.length }));
+   651→   651→      } catch (e: any) {
+   652→   652→        res.writeHead(400, { 'Content-Type': 'application/json', ...CORS_HEADERS });
+   653→   653→        res.end(JSON.stringify({ error: e.message }));
+   654→   654→      }
+   655→   655→    });
+   656→   656→    return;
+   657→   657→  }
+   658→   658→
+   659→   659→  // POST /api/realtime-ingest
+   660→   660→  if (url.pathname === '/api/realtime-ingest' && req.method === 'POST') {
+   661→   661→    let body = '';
+   662→   662→    req.on('data', chunk => body += chunk);
+   663→   663→    req.on('end', () => {
+   664→   664→      try {
+   665→   665→        const data = JSON.parse(body);
+   666→   666→        const edgeNode = EDGE_NODES.find(n => n.nodeId === data.edgeNodeId);
+   667→   667→        if (!edgeNode) {
+   668→   668→          res.writeHead(404, { 'Content-Type': 'application/json', ...CORS_HEADERS });
+   669→   669→          res.end(JSON.stringify({ error: 'Edge node not found' }));
+   670→   670→          return;
+   671→   671→        }
+   672→   672→
+   673→   673→        const sensor = edgeNode.sensors.find(s => s.sensorId === data.sensorId);
+   674→   674→        const qualityFlag = sensor ? validateReading(sensor, data.value) : 'RAW';
+   675→   675→        const integrityHash = generateHash(data.sensorId, data.value, data.timestamp);
+   676→   676→        const signature = generateSignature(data.edgeNodeId, integrityHash);
+   677→   677→
+   678→   678→        const reading: SensorReading = {
+   679→   679→          id: `RD-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+   680→   680→          edgeNodeId: data.edgeNodeId,
+   681→   681→          sensorId: data.sensorId,
+   682→   682→          sensorType: data.sensorType,
+   683→   683→          value: data.value,
+   684→   684→          unit: data.unit,
+   685→   685→          timestamp: data.timestamp,
+   686→   686→          receivedAt: new Date().toISOString(),
+   687→   687→          ingestionMode: 'realtime',
+   688→   688→          qualityFlag,
+   689→   689→          integrityHash,
+   690→   690→          signature,
+   691→   691→        };
+   692→   692→
+   693→   693→        readings.push(reading);
+   694→   694→        edgeNode.totalReadings++;
+   695→   695→        io.emit('iot:reading', reading);
+   696→   696→
+   697→   697→        res.writeHead(200, { 'Content-Type': 'application/json', ...CORS_HEADERS });
+   698→   698→        res.end(JSON.stringify({ success: true, reading }));
+   699→   699→      } catch (e: any) {
+   700→   700→        res.writeHead(400, { 'Content-Type': 'application/json', ...CORS_HEADERS });
+   701→   701→        res.end(JSON.stringify({ error: e.message }));
+   702→   702→      }
+   703→   703→    });
+   704→   704→    return;
+   705→   705→  }
+   706→   706→
+   707→   707→  // GET /api/sample-data — ตัวอย่างข้อมูลสำหรับทดสอบ
+   708→   708→  if (url.pathname === '/api/sample-data' && req.method === 'GET') {
+   709→   709→    const sampleRealtime = {
+   710→   710→      description: 'ตัวอย่างข้อมูล Realtime — ส่งผ่าน WebSocket หรือ HTTP POST',
+   711→   711→      websocket_event: 'iot:ingest:realtime',
+   712→   712→      http_endpoint: 'POST /api/realtime-ingest',
+   713→   713→      payload: {
+   714→   714→        edgeNodeId: 'EDGE-BKK-001',
+   715→   715→        sensorId: 'CH4-BKK-001',
+   716→   716→        sensorType: 'ch4',
+   717→   717→        value: 1250.45,
+   718→   718→        unit: 'ppm',
+   719→   719→        timestamp: new Date().toISOString(),
+   720→   720→      },
+   721→   721→    };
+   722→   722→
+   723→   723→    const sampleBatch = {
+   724→   724→      description: 'ตัวอย่างข้อมูล Batch — ส่งผ่าน WebSocket หรือ HTTP POST',
+   725→   725→      websocket_event: 'iot:ingest:batch',
+   726→   726→      http_endpoint: 'POST /api/batch-upload',
+   727→   727→      payload: {
+   728→   728→        edgeNodeId: 'EDGE-CNX-001',
+   729→   729→        fileName: 'sensor_data_2025_01_15.csv',
+   730→   730→        fileType: 'CSV',
+   731→   731→        records: [
+   732→   732→          { sensorId: 'CH4-CNX-001', sensorType: 'ch4', value: 580.2, unit: 'ppm', timestamp: '2025-01-15T08:00:00Z' },
+   733→   733→          { sensorId: 'CH4-CNX-001', sensorType: 'ch4', value: 620.8, unit: 'ppm', timestamp: '2025-01-15T08:01:00Z' },
+   734→   734→          { sensorId: 'TEMP-CNX-001', sensorType: 'temperature', value: 28.5, unit: '°C', timestamp: '2025-01-15T08:00:00Z' },
+   735→   735→          { sensorId: 'SM-CNX-001', sensorType: 'soil_moisture', value: 42.3, unit: '%', timestamp: '2025-01-15T08:00:00Z' },
+   736→   736→          { sensorId: 'WL-CNX-001', sensorType: 'water_level', value: 12.1, unit: 'cm', timestamp: '2025-01-15T08:00:00Z' },
+   737→   737→        ],
+   738→   738→      },
+   739→   739→    };
+   740→   740→
+   741→   741→    const sampleEdgeConfig = {
+   742→   742→      description: 'ตัวอย่างการตั้งค่า Edge Node',
+   743→   743→      edgeNodeRegistration: {
+   744→   744→        nodeId: 'EDGE-NEW-001',
+   745→   745→        name: 'New Station',
+   746→   746→        nameTh: 'สถานีใหม่',
+   747→   747→        province: 'นครราชสีมา',
+   748→   748→        lat: 14.97,
+   749→   749→        lng: 102.1,
+   750→   750→        protocol: 'MQTT',
+   751→   751→        firmwareVersion: '1.2.0',
+   752→   752→        sensors: [
+   753→   753→          { sensorId: 'CH4-NEW-001', sensorType: 'ch4', unit: 'ppm', minRange: 0, maxRange: 5000, samplingRate: 60 },
+   754→   754→          { sensorId: 'TEMP-NEW-001', sensorType: 'temperature', unit: '°C', minRange: -10, maxRange: 60, samplingRate: 300 },
+   755→   755→        ],
+   756→   756→      },
+   757→   757→    };
+   758→   758→
+   759→   759→    res.writeHead(200, { 'Content-Type': 'application/json', ...CORS_HEADERS });
+   760→   760→    res.end(JSON.stringify({ sampleRealtime, sampleBatch, sampleEdgeConfig }));
+   761→   761→    return;
+   762→   762→  }
+   763→   763→
+   764→   764→  // 404
+   765→   765→  res.writeHead(404, { 'Content-Type': 'application/json', ...CORS_HEADERS });
+   766→   766→  res.end(JSON.stringify({ error: 'Not found' }));
+   767→   767→});
+   768→   768→
+   769→   769→// ─── Start Server ─────────────────────────────────────────────────────
+   770→   770→httpServer.listen(PORT, () => {
+   771→   771→  console.log(`[IoT Gateway] 🚀 Running on port ${PORT}`);
+   772→   772→  console.log(`[IoT Gateway] WebSocket: ws://localhost:${PORT}`);
+   773→   773→  console.log(`[IoT Gateway] HTTP API:  http://localhost:${PORT}/api/`);
+   774→   774→  console.log(`[IoT Gateway] Edge Nodes: ${EDGE_NODES.length} configured`);
+   775→   775→  console.log(`[IoT Gateway] Total Sensors: ${EDGE_NODES.reduce((s, n) => s + n.sensors.length, 0)}`);
+   776→   776→});
+   777→   777→

@@ -36152,11 +36152,15 @@ var { Server, Namespace, Socket } = import_dist.default;
 
 // index.ts
 var import_mqtt = __toESM(require_build2(), 1);
+import * as crypto from "crypto";
+import * as fs from "fs";
+import * as path from "path";
+var __dirname = "/home/z/my-project/mini-services/awd-simulator";
 var PORT = 3032;
 var SPEED_FACTOR = 1800;
 var INTERVAL_MS = 2000;
 var SIM_HOURS_PER_TICK = 1;
-var MQTT_BROKER_URL = process.env.MQTT_BROKER_URL || "mqtt://broker.hivemq.com:1883";
+var MQTT_BROKER_URL = process.env.MQTT_BROKER_URL || "mqtt://35.213.186.240:1883";
 var MQTT_TOPIC_READINGS = process.env.MQTT_TOPIC_READINGS || "awd/readings";
 var MQTT_TOPIC_STATUS = process.env.MQTT_TOPIC_STATUS || "awd/status";
 var MQTT_TOPIC_FIELD_PREFIX = process.env.MQTT_TOPIC_FIELD_PREFIX || "awd/field";
@@ -36227,6 +36231,193 @@ function publishStatusToMQTT(status) {
   try {
     mqttClient.publish(MQTT_TOPIC_STATUS, JSON.stringify(status), { qos: 0, retain: true });
   } catch (e) {}
+}
+var IOT_GATEWAY_URL = process.env.IOT_GATEWAY_URL || "http://127.0.0.1:3035";
+var EDGE_CREDENTIALS = [
+  { fieldId: "awd-korat", deviceId: "EDGE-AWD-001", apiKey: "awd-edge-key-2024-korat", gatewayUrl: IOT_GATEWAY_URL },
+  { fieldId: "awd-suphan", deviceId: "EDGE-AWD-002", apiKey: "awd-edge-key-2024-suphan", gatewayUrl: IOT_GATEWAY_URL },
+  { fieldId: "awd-ubon", deviceId: "EDGE-AWD-003", apiKey: "awd-edge-key-2024-ubon", gatewayUrl: IOT_GATEWAY_URL }
+];
+var edgeSessions = new Map;
+function sha256(input) {
+  return crypto.createHash("sha256").update(input, "utf8").digest("hex");
+}
+function hmacSha256(key, message) {
+  return crypto.createHmac("sha256", key).update(message, "utf8").digest("hex");
+}
+function authenticateEdge(fieldId) {
+  const cred = EDGE_CREDENTIALS.find((c) => c.fieldId === fieldId);
+  if (!cred)
+    return Promise.reject(new Error(`No edge credential for field ${fieldId}`));
+  const body = JSON.stringify({ deviceId: cred.deviceId, apiKey: cred.apiKey });
+  return new Promise((resolve, reject) => {
+    const url = new URL("/api/edge/auth", cred.gatewayUrl);
+    const lib = url.protocol === "https:" ? __require("https") : __require("http");
+    const req = lib.request(url.toString(), {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(body) },
+      timeout: 5000
+    }, (res) => {
+      let data = "";
+      res.on("data", (chunk) => data += chunk);
+      res.on("end", () => {
+        try {
+          if (res.statusCode !== 200) {
+            reject(new Error(`Auth failed (${res.statusCode}): ${data}`));
+            return;
+          }
+          const parsed = JSON.parse(data);
+          if (!parsed.success || !parsed.token) {
+            reject(new Error(`Auth response missing token: ${data}`));
+            return;
+          }
+          const session = {
+            fieldId,
+            deviceId: cred.deviceId,
+            token: parsed.token,
+            issuedAt: parsed.issuedAt,
+            expiresAt: parsed.expiresAt
+          };
+          edgeSessions.set(fieldId, session);
+          console.log(`[Auth] \u2705 Edge authenticated: ${cred.deviceId} \u2192 field ${fieldId} (expires in ${Math.floor((parsed.expiresAt - Date.now()) / 1000)}s)`);
+          resolve(session);
+        } catch (e) {
+          reject(new Error(`Auth parse error: ${e.message}`));
+        }
+      });
+    });
+    req.on("error", (e) => reject(new Error(`Auth request error: ${e.message}`)));
+    req.on("timeout", () => {
+      req.destroy();
+      reject(new Error("Auth request timeout"));
+    });
+    req.write(body);
+    req.end();
+  });
+}
+async function authenticateAllEdges() {
+  console.log(`[Auth] Authenticating ${EDGE_CREDENTIALS.length} edge devices with IoT Gateway (${IOT_GATEWAY_URL})...`);
+  const results = await Promise.allSettled(EDGE_CREDENTIALS.map((c) => authenticateEdge(c.fieldId)));
+  let ok = 0, fail = 0;
+  results.forEach((r, i) => {
+    if (r.status === "fulfilled")
+      ok++;
+    else {
+      fail++;
+      console.error(`[Auth] \u274C Failed for ${EDGE_CREDENTIALS[i].fieldId}: ${r.reason?.message || r.reason}`);
+    }
+  });
+  console.log(`[Auth] Done: ${ok} ok, ${fail} failed`);
+}
+async function getOrRefreshSession(fieldId) {
+  const existing = edgeSessions.get(fieldId);
+  if (existing && existing.expiresAt - Date.now() > 5 * 60 * 1000) {
+    return existing;
+  }
+  try {
+    return await authenticateEdge(fieldId);
+  } catch (e) {
+    console.error(`[Auth] Refresh failed for ${fieldId}: ${e.message}`);
+    return null;
+  }
+}
+function signReading(reading, session) {
+  const corePayload = JSON.stringify(reading);
+  const integrityHash = sha256(corePayload);
+  const signature = hmacSha256(session.token, integrityHash);
+  return {
+    ...reading,
+    edgeNodeId: session.deviceId,
+    integrityHash,
+    signature,
+    signatureAlgorithm: "HMAC-SHA256",
+    hashAlgorithm: "SHA-256",
+    tokenExpiresAt: new Date(session.expiresAt).toISOString()
+  };
+}
+var CSV_DIR = path.join(__dirname, "data");
+var CSV_FILE = path.join(CSV_DIR, "awd-readings.csv");
+var csvHeaderWritten = false;
+var CSV_COLUMNS = [
+  "timestamp",
+  "tick",
+  "fieldId",
+  "fieldName",
+  "province",
+  "edgeNodeId",
+  "simDAP",
+  "simHour",
+  "growthStage",
+  "awdPhase",
+  "awdCycles",
+  "waterLevelCm",
+  "soilMoisturePct",
+  "rainfallMmHr",
+  "airTempC",
+  "soilTempC",
+  "humidityPct",
+  "soilPH",
+  "ch4FluxMgM2Hr",
+  "ch4EfKgHaDay",
+  "n2oFluxMgM2Hr",
+  "n2oEfKgHaDay",
+  "co2FluxMgM2Hr",
+  "ch4CO2eMgM2Hr",
+  "n2oCO2eMgM2Hr",
+  "netGHGCO2eMgM2Hr",
+  "emissionReductionPct",
+  "cumulativeCH4kg",
+  "cumulativeN2Okg",
+  "cumulativeCH4tCO2e",
+  "cumulativeN2OtCO2e",
+  "cumulativeNettCO2e",
+  "baselineEmissiontCO2e",
+  "emissionReductiontCO2e",
+  "estimatedYieldKg",
+  "seasonComplete",
+  "integrityHash",
+  "signature",
+  "tverMethodology"
+];
+function ensureCsvFile() {
+  try {
+    if (!fs.existsSync(CSV_DIR)) {
+      fs.mkdirSync(CSV_DIR, { recursive: true });
+    }
+    if (!fs.existsSync(CSV_FILE)) {
+      const header = CSV_COLUMNS.join(",") + `
+`;
+      fs.writeFileSync(CSV_FILE, header, "utf8");
+      csvHeaderWritten = true;
+      console.log(`[CSV] Created: ${CSV_FILE}`);
+    } else {
+      csvHeaderWritten = true;
+    }
+  } catch (e) {
+    console.error(`[CSV] Init error: ${e.message}`);
+  }
+}
+function csvEscape(value) {
+  if (value === null || value === undefined)
+    return "";
+  const s = String(value);
+  if (s.includes(",") || s.includes('"') || s.includes(`
+`) || s.includes("\r")) {
+    return '"' + s.replace(/"/g, '""') + '"';
+  }
+  return s;
+}
+function appendReadingsToCsv(readings) {
+  if (!csvHeaderWritten)
+    return;
+  try {
+    const lines = readings.map((r) => CSV_COLUMNS.map((col) => csvEscape(r[col])).join(",")).join(`
+`);
+    fs.appendFileSync(CSV_FILE, lines + `
+`, "utf8");
+  } catch (e) {
+    console.error(`[CSV] Append error: ${e.message}`);
+  }
 }
 var GWP_CH4 = 28;
 var GWP_N2O = 265;
@@ -36729,9 +36920,22 @@ function simTick() {
   if (!mqttConnected && !mqttClient) {
     connectMQTT();
   }
-  for (const reading of newReadings) {
-    publishReadingToMQTT(reading);
-  }
+  (async () => {
+    const signedReadings = [];
+    for (const reading of newReadings) {
+      const session = await getOrRefreshSession(reading.fieldId);
+      if (!session) {
+        publishReadingToMQTT(reading);
+        continue;
+      }
+      const signed = signReading(reading, session);
+      signedReadings.push(signed);
+      publishReadingToMQTT(signed);
+    }
+    if (signedReadings.length > 0) {
+      appendReadingsToCsv(signedReadings);
+    }
+  })().catch((e) => console.error("[SIM] Sign/publish error:", e.message));
 }
 function getStatus() {
   return {
@@ -36774,7 +36978,7 @@ function startSim() {
     return;
   simRunning = true;
   if (!mqttConnected) {
-    console.log("[SIM] MQTT not connected \u2014 reconnecting to broker.hivemq.com:1883 before starting simulation...");
+    console.log("[SIM] MQTT not connected \u2014 reconnecting to 35.213.186.240:1883 before starting simulation...");
     if (mqttClient) {
       try {
         mqttClient.end(true);
@@ -36864,6 +37068,36 @@ httpServer.on("request", (req, res) => {
         errors: mqttErrorCount
       }
     }));
+  } else if (url.pathname === "/api/edge-sessions") {
+    res.end(JSON.stringify({
+      gatewayUrl: IOT_GATEWAY_URL,
+      credentials: EDGE_CREDENTIALS.map((c) => ({
+        fieldId: c.fieldId,
+        deviceId: c.deviceId,
+        gatewayUrl: c.gatewayUrl
+      })),
+      sessions: Array.from(edgeSessions.values()).map((s) => ({
+        fieldId: s.fieldId,
+        deviceId: s.deviceId,
+        issuedAt: new Date(s.issuedAt).toISOString(),
+        expiresAt: new Date(s.expiresAt).toISOString(),
+        ttlSeconds: Math.max(0, Math.floor((s.expiresAt - Date.now()) / 1000)),
+        tokenPreview: s.token.slice(0, 24) + "..."
+      }))
+    }));
+  } else if (url.pathname === "/api/csv-info") {
+    try {
+      const stats = fs.existsSync(CSV_FILE) ? fs.statSync(CSV_FILE) : null;
+      res.end(JSON.stringify({
+        csvFile: CSV_FILE,
+        exists: !!stats,
+        sizeBytes: stats?.size ?? 0,
+        sizeKB: stats ? Math.round(stats.size / 1024 * 10) / 10 : 0,
+        lastModified: stats?.mtime?.toISOString() ?? null
+      }));
+    } catch (e) {
+      res.end(JSON.stringify({ error: e.message }));
+    }
   } else if (url.pathname === "/api/mqtt-reconnect") {
     if (mqttClient) {
       try {
@@ -36909,16 +37143,24 @@ httpServer.on("request", (req, res) => {
     res.end(JSON.stringify({ error: "Not found" }));
   }
 });
-httpServer.listen(PORT, () => {
+httpServer.listen(PORT, async () => {
   console.log(`\uD83C\uDF3E AWD Rice Simulator running on port ${PORT}`);
   console.log(`   Speed: ${SPEED_FACTOR}x (1 tick = ${SIM_HOURS_PER_TICK}hr simulated, every ${INTERVAL_MS / 1000}s real)`);
   console.log(`   Fields: ${fields.map((f) => f.name).join(", ")}`);
+  console.log(`   \uD83D\uDD10 IoT Gateway: ${IOT_GATEWAY_URL} (edge auth via /api/edge/auth)`);
   console.log(`   \uD83D\uDCE1 MQTT Broker: ${MQTT_BROKER_URL}`);
-  console.log(`      Topics:`);
+  console.log(`      Topics (prefix: awd/):`);
   console.log(`        - ${MQTT_TOPIC_READINGS}        (per-tick readings, qos=0)`);
   console.log(`        - ${MQTT_TOPIC_STATUS}           (status, retain=true)`);
   console.log(`        - ${MQTT_TOPIC_FIELD_PREFIX}/<fieldId>  (per-field readings)`);
+  console.log(`   \uD83D\uDCC4 CSV Log: ${CSV_FILE}`);
+  ensureCsvFile();
   connectMQTT();
+  try {
+    await authenticateAllEdges();
+  } catch (e) {
+    console.error(`[Auth] Startup auth error: ${e.message}`);
+  }
 });
 setInterval(() => {
   if (mqttPublishCount > 0 || mqttErrorCount > 0) {

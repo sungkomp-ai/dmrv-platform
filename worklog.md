@@ -302,3 +302,61 @@ Stage Summary:
 - CertificationTab: text-base titles, w-8 step circles, text-sm checklist items, text-sm requirement items
 - IngestionTab: text-base titles, text-xl sensor values, text-xs labels/units, p-4 card padding
 - SoilCarbonAgentView: gradient banner header, text-2xl title, p-3 icon container, text-sm tabs
+
+---
+Task ID: 1
+Agent: full-stack-developer
+Task: Add Edge Device Authentication to IoT Gateway
+
+Work Log:
+- Read previous worklog entries to understand the IoT Gateway mini-service context (port 3035, 776 lines originally, 5 edge nodes, 25 sensors, WebSocket + HTTP REST + simulation + certification)
+- Read /home/z/my-project/mini-services/iot-gateway/index.ts to locate insertion points (line 13 imports, line 256 Create Server section, line 707 sample-data block, line 764 404 fallback)
+- Added `import * as crypto from 'crypto';` after the existing `cors` import (line 14)
+- Inserted Edge Device Authentication section before `// ─── Create Server ───` (now spanning lines 257-348): EdgeCredential and AuthToken interfaces, GATEWAY_SECRET constant (env-overridable), EDGE_CREDENTIALS array with 3 pre-registered AWD edge devices (นครราชสีมา, สุพรรณบุรี, อุบลราชธานี), ACTIVE_TOKENS Map, TOKEN_TTL_MS (24h), sha256() and hmacSha256() helper functions, issueToken(), verifyToken() (constant-time compare), verifyEdgePayload() (token + integrity hash + signature verification)
+- Inserted 3 new HTTP endpoints after the `/api/sample-data` block and before the 404 fallback (lines 858-959): POST /api/edge/auth (deviceId+apiKey → signed token, returns ttlSeconds=86400, hashAlgorithm=SHA-256, signatureAlgorithm=HMAC-SHA256), POST /api/edge/verify (token+payload+integrityHash+signature → valid:true/false), GET /api/edge/credentials (demo listing of 3 deviceId+apiKey pairs)
+- Verified all existing endpoints (realtime-ingest, batch-upload, sample-data, etc.) remain untouched — only new edge auth endpoints were added
+- Ran `bun build ./index.ts --outfile ./index.js --target bun` — successful (0.48 MB, 59 modules)
+- Killed existing service (PID on port 3035) and restarted with `bun run dev` in background via nohup
+- Confirmed service started cleanly: "[IoT Gateway] 🚀 Running on port 3035", 5 edge nodes, 25 sensors
+- Tested GET /api/edge/credentials → 200 OK with 3 credentials (EDGE-AWD-001/002/003)
+- Tested POST /api/edge/auth with EDGE-AWD-001 + awd-edge-key-2024-korat → 200 OK with success:true and signed token (format: `deviceId:issuedAt:expiresAt.hmacSignature`)
+- Tested POST /api/edge/verify using the issued token, payload `{"test":1}`, its SHA-256 integrity hash, and HMAC-SHA256 signature (key=token, msg=integrityHash) → 200 OK with valid:true, deviceId:EDGE-AWD-001
+
+Stage Summary:
+- 3 new endpoints added: POST /api/edge/auth, POST /api/edge/verify, GET /api/edge/credentials
+- Token format: `{deviceId}:{issuedAt}:{expiresAt}.{HMAC-SHA256(GATEWAY_SECRET, payload)}` with 24h TTL
+- 3 pre-registered AWD edge credentials across 3 Thai provinces (นครราชสีมา, สุพรรณบุรี, อุบลราชธานี)
+- Crypto: SHA-256 for integrity hashing and API key hashing, HMAC-SHA256 for token signing and payload signature verification
+- All 3 curl tests passed: credentials list returns 3 entries, auth returns valid token, verify returns `valid: true` with deviceId
+- No issues encountered — build clean, restart clean, all endpoints behave as specified
+
+---
+Task ID: 2-5
+Agent: full-stack-developer
+Task: Update AWD Simulator with Edge Authentication, SHA-256 Hash, HMAC-SHA256 Signature, and CSV Logging
+
+Work Log:
+- Read /home/z/my-project/worklog.md to confirm Task 1 IoT Gateway edge auth endpoints (POST /api/edge/auth, POST /api/edge/verify, GET /api/edge/credentials) with 3 pre-registered AWD credentials (EDGE-AWD-001 korat, EDGE-AWD-002 suphan, EDGE-AWD-003 ubon)
+- Verified IoT Gateway (port 3035) is live: GET /api/edge/credentials returns 3 credentials; POST /api/edge/auth with EDGE-AWD-001 + awd-edge-key-2024-korat returns { success:true, token, issuedAt, expiresAt, ttlSeconds:86400, hashAlgorithm:SHA-256, signatureAlgorithm:HMAC-SHA256 }
+- Read /home/z/my-project/mini-services/awd-simulator/index.ts (937 lines) to locate insertion points: line 22 imports, line 119 publishStatusToMQTT closing brace, line 121 TGO/T-VER Constants header, lines 707-722 simTick reading-publish block, line 844 mqtt-status endpoint, line 859 mqtt-reconnect endpoint, line 903 httpServer.listen block
+- Added 3 new imports after `import mqtt from 'mqtt';`: `import * as crypto from 'crypto';`, `import * as fs from 'fs';`, `import * as path from 'path';`
+- Inserted Edge Device Authentication + CSV Logging section (188 lines) between publishStatusToMQTT() and TGO/T-VER Constants header: EdgeCredentialConfig interface, IOT_GATEWAY_URL constant (env-overridable, defaults to http://127.0.0.1:3035), EDGE_CREDENTIALS array (3 fields → deviceId/apiKey mapping), EdgeSession interface, edgeSessions Map, sha256() + hmacSha256() helpers, authenticateEdge() (HTTP POST /api/edge/auth → parses {success, token, issuedAt, expiresAt} → stores session), authenticateAllEdges() (Promise.allSettled over 3 fields), getOrRefreshSession() (re-auth if expires within 5 min), signReading() (computes integrityHash=SHA-256(coreReading JSON), signature=HMAC-SHA256(token, integrityHash); adds edgeNodeId, integrityHash, signature, signatureAlgorithm='HMAC-SHA256', hashAlgorithm='SHA-256', tokenExpiresAt), CSV_DIR/CSV_FILE paths, CSV_COLUMNS (38 columns including edgeNodeId, integrityHash, signature, tverMethodology), ensureCsvFile() (creates dir + header), csvEscape() (RFC 4180), appendReadingsToCsv()
+- Modified simTick() reading-publish block: replaced plain `for (reading of newReadings) publishReadingToMQTT(reading)` loop with async IIFE that awaits getOrRefreshSession(reading.fieldId) for each reading, signs the reading via signReading(), publishes the signed reading to MQTT, and accumulates signed readings for appendReadingsToCsv() at the end (degraded mode: if session refresh fails, publishes raw reading without auth fields)
+- Modified httpServer.listen callback to async: added `🔐 IoT Gateway` log line, `📄 CSV Log` log line, calls ensureCsvFile() before connectMQTT(), then `await authenticateAllEdges()` wrapped in try/catch — so all 3 edge devices authenticate against IoT Gateway on startup
+- Added 2 new HTTP endpoints between /api/mqtt-status and /api/mqtt-reconnect: GET /api/edge-sessions (returns gatewayUrl + credential list + active session list with fieldId, deviceId, issuedAt, expiresAt, ttlSeconds, tokenPreview) and GET /api/csv-info (returns csvFile, exists, sizeBytes, sizeKB, lastModified)
+- Ran `bun build ./index.ts --outfile ./index.js --target bun` → Bundled 198 modules in 60ms, 1.13 MB output, no errors
+- Killed existing port 3032 process and restarted via nohup `bun run dev` → verified clean startup log with all expected lines: 🌾 AWD Rice Simulator running on port 3032, 🔐 IoT Gateway: http://127.0.0.1:3035, 📄 CSV Log: .../data/awd-readings.csv, [Auth] Authenticating 3 edge devices..., [Auth] ✅ Edge authenticated: EDGE-AWD-001/002/003 → field awd-korat/suphan/ubon (expires in 86399s), [MQTT] ✅ Connected to mqtt://35.213.186.240:1883, [CSV] Created: .../awd-readings.csv
+- Started simulation via POST /api/start, waited 8 seconds
+- Verified /api/edge-sessions → 3 active sessions with deviceId, issuedAt, expiresAt (24h), ttlSeconds≈86365, tokenPreview for each field
+- Verified /api/mqtt-status → connected=true, published=12 (i.e., > 0), errors=0
+- Verified /api/csv-info → csvFile exists, sizeBytes=5800 (> 0), sizeKB=5.7
+- Verified CSV head -3 → header row with all 38 columns (timestamp, tick, fieldId, ..., edgeNodeId, ..., integrityHash, signature, tverMethodology) + 2 data rows: awd-korat (EDGE-AWD-001) with integrityHash=52692260279e08237b28992125a5084226e6a9089629ae34d36df0579824851c and signature=2567b97313e368ff4f7f9314792f9fb893a8a3d6eda1b4faeadabc6779e05a3b; awd-suphan (EDGE-AWD-002) with hash=48230192237c658bae96fada6a3cd73c876b0b10bb809257065082bf0fb12d7c and signature=627e3b8ee9d22b1684e09ed90adb0813ad784fda9f0fc4f3730b3f0dcca3dfa0; both rows end with tverMethodology=T-VER-P-AG-001
+- Verified /api/readings?limit=1 → returns raw reading (no auth fields, edgeNodeId/integrityHash/signature/etc are null), confirming that signed payload is only sent to MQTT broker and CSV audit log, not stored in memory — as specified in the task
+- Ran `bun run lint` at project root → passes with zero errors
+
+Stage Summary:
+- Edge auth flow implemented: on startup, AWD Simulator authenticates all 3 fields (awd-korat, awd-suphan, awd-ubon) in parallel against IoT Gateway at http://127.0.0.1:3035/api/edge/auth using pre-shared API keys (awd-edge-key-2024-korat/suphan/ubon); gateway returns HMAC-SHA256-signed tokens (24h TTL) which are cached in edgeSessions Map and auto-refreshed within 5 min of expiry
+- Hash + signature fields added to MQTT payload: every per-tick reading published to awd/readings and awd/field/<fieldId> topics now includes edgeNodeId (e.g., EDGE-AWD-001), integrityHash (SHA-256 of core reading JSON), signature (HMAC-SHA256 of integrityHash using the gateway-issued token as key), signatureAlgorithm='HMAC-SHA256', hashAlgorithm='SHA-256', tokenExpiresAt (ISO 8601) — enabling tamper-evident transmission that downstream consumers can verify via POST http://127.0.0.1:3035/api/edge/verify
+- CSV file location: /home/z/my-project/mini-services/awd-simulator/data/awd-readings.csv (auto-created on first startup with 38-column header; appended every sim tick with all 3 fields per row; RFC 4180 escaping for commas/quotes/newlines)
+- Test results: build succeeded (198 modules, 1.13 MB); service started cleanly; 3 edge sessions active with 86365s TTL; MQTT published 12 messages with 0 errors after 8 seconds of simulation; CSV grew to 5800 bytes with proper header + signed data rows showing valid SHA-256 hashes and HMAC-SHA256 signatures; lint passes with zero errors; MQTT broker URL (mqtt://35.213.186.240:1883) and topic names (awd/readings, awd/status, awd/field/<fieldId>) preserved unchanged
+- Two new HTTP endpoints added: GET /api/edge-sessions (inspect active auth tokens per field) and GET /api/csv-info (CSV file metadata); existing endpoints (start/stop/reset/status/mqtt-status/mqtt-reconnect/readings/summary) and Socket.IO events preserved unchanged

@@ -20,6 +20,9 @@
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import mqtt from 'mqtt';
+import * as crypto from 'crypto';
+import * as fs from 'fs';
+import * as path from 'path';
 
 const PORT = 3032;
 const SPEED_FACTOR = 1800; // 1800x speed
@@ -27,9 +30,10 @@ const INTERVAL_MS = 2000; // 2 วินาทีจริง = 1 ชม.จำ�
 const SIM_HOURS_PER_TICK = 1;
 
 // ─── MQTT External Broker ────────────────────────────────────────────
-// ส่งค่าจำลอง AWD ไปยัง MQTT Broker สาธารณะ broker.hivemq.com:1883
-// รองรับทั้ง TCP (1883) และ WebSocket (8000/8081) ผ่าน env variable
-const MQTT_BROKER_URL = process.env.MQTT_BROKER_URL || 'mqtt://broker.hivemq.com:1883';
+// ส่งค่าจำลอง AWD ไปยัง MQTT Broker ภายนอก 35.213.186.240:1883
+// Topics ใช้ prefix "awd/"
+// รองรับการ override ผ่าน env variable
+const MQTT_BROKER_URL = process.env.MQTT_BROKER_URL || 'mqtt://35.213.186.240:1883';
 const MQTT_TOPIC_READINGS = process.env.MQTT_TOPIC_READINGS || 'awd/readings';
 const MQTT_TOPIC_STATUS = process.env.MQTT_TOPIC_STATUS || 'awd/status';
 const MQTT_TOPIC_FIELD_PREFIX = process.env.MQTT_TOPIC_FIELD_PREFIX || 'awd/field';
@@ -114,6 +118,195 @@ function publishStatusToMQTT(status: any) {
     mqttClient.publish(MQTT_TOPIC_STATUS, JSON.stringify(status), { qos: 0, retain: true });
   } catch (e: any) {
     // ignore
+  }
+}
+
+// ─── Edge Device Authentication ──────────────────────────────────────
+// Each AWD field is mapped to a pre-registered edge device that authenticates
+// with the IoT Gateway (port 3035) using a pre-shared API key.
+// The gateway issues an HMAC-SHA256 signed token used to sign all subsequent
+// sensor payloads (integrity hash + signature) for tamper-evident transmission.
+interface EdgeCredentialConfig {
+  fieldId: string;          // e.g., "awd-korat"
+  deviceId: string;         // e.g., "EDGE-AWD-001"
+  apiKey: string;           // pre-shared key
+  gatewayUrl: string;       // base URL of IoT Gateway
+}
+const IOT_GATEWAY_URL = process.env.IOT_GATEWAY_URL || 'http://127.0.0.1:3035';
+
+const EDGE_CREDENTIALS: EdgeCredentialConfig[] = [
+  { fieldId: 'awd-korat',  deviceId: 'EDGE-AWD-001', apiKey: 'awd-edge-key-2024-korat',  gatewayUrl: IOT_GATEWAY_URL },
+  { fieldId: 'awd-suphan', deviceId: 'EDGE-AWD-002', apiKey: 'awd-edge-key-2024-suphan', gatewayUrl: IOT_GATEWAY_URL },
+  { fieldId: 'awd-ubon',   deviceId: 'EDGE-AWD-003', apiKey: 'awd-edge-key-2024-ubon',   gatewayUrl: IOT_GATEWAY_URL },
+];
+
+// Active tokens per fieldId
+interface EdgeSession {
+  fieldId: string;
+  deviceId: string;
+  token: string;
+  issuedAt: number;
+  expiresAt: number;
+}
+const edgeSessions: Map<string, EdgeSession> = new Map();
+
+function sha256(input: string): string {
+  return crypto.createHash('sha256').update(input, 'utf8').digest('hex');
+}
+function hmacSha256(key: string, message: string): string {
+  return crypto.createHmac('sha256', key).update(message, 'utf8').digest('hex');
+}
+
+// Authenticate with IoT Gateway — fetch signed token
+function authenticateEdge(fieldId: string): Promise<EdgeSession> {
+  const cred = EDGE_CREDENTIALS.find(c => c.fieldId === fieldId);
+  if (!cred) return Promise.reject(new Error(`No edge credential for field ${fieldId}`));
+
+  const body = JSON.stringify({ deviceId: cred.deviceId, apiKey: cred.apiKey });
+  return new Promise((resolve, reject) => {
+    const url = new URL('/api/edge/auth', cred.gatewayUrl);
+    const lib = url.protocol === 'https:' ? require('https') : require('http');
+    const req = lib.request(url.toString(), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) },
+      timeout: 5000,
+    }, (res: any) => {
+      let data = '';
+      res.on('data', (chunk: any) => data += chunk);
+      res.on('end', () => {
+        try {
+          if (res.statusCode !== 200) {
+            reject(new Error(`Auth failed (${res.statusCode}): ${data}`));
+            return;
+          }
+          const parsed = JSON.parse(data);
+          if (!parsed.success || !parsed.token) {
+            reject(new Error(`Auth response missing token: ${data}`));
+            return;
+          }
+          const session: EdgeSession = {
+            fieldId,
+            deviceId: cred.deviceId,
+            token: parsed.token,
+            issuedAt: parsed.issuedAt,
+            expiresAt: parsed.expiresAt,
+          };
+          edgeSessions.set(fieldId, session);
+          console.log(`[Auth] ✅ Edge authenticated: ${cred.deviceId} → field ${fieldId} (expires in ${Math.floor((parsed.expiresAt - Date.now())/1000)}s)`);
+          resolve(session);
+        } catch (e: any) {
+          reject(new Error(`Auth parse error: ${e.message}`));
+        }
+      });
+    });
+    req.on('error', (e: any) => reject(new Error(`Auth request error: ${e.message}`)));
+    req.on('timeout', () => { req.destroy(); reject(new Error('Auth request timeout')); });
+    req.write(body);
+    req.end();
+  });
+}
+
+// Authenticate all 3 fields in parallel on startup
+async function authenticateAllEdges(): Promise<void> {
+  console.log(`[Auth] Authenticating ${EDGE_CREDENTIALS.length} edge devices with IoT Gateway (${IOT_GATEWAY_URL})...`);
+  const results = await Promise.allSettled(EDGE_CREDENTIALS.map(c => authenticateEdge(c.fieldId)));
+  let ok = 0, fail = 0;
+  results.forEach((r, i) => {
+    if (r.status === 'fulfilled') ok++;
+    else { fail++; console.error(`[Auth] ❌ Failed for ${EDGE_CREDENTIALS[i].fieldId}: ${r.reason?.message || r.reason}`); }
+  });
+  console.log(`[Auth] Done: ${ok} ok, ${fail} failed`);
+}
+
+// Get a session, re-authenticating if missing or about to expire (within 5 minutes)
+async function getOrRefreshSession(fieldId: string): Promise<EdgeSession | null> {
+  const existing = edgeSessions.get(fieldId);
+  if (existing && existing.expiresAt - Date.now() > 5 * 60 * 1000) {
+    return existing;
+  }
+  try {
+    return await authenticateEdge(fieldId);
+  } catch (e: any) {
+    console.error(`[Auth] Refresh failed for ${fieldId}: ${e.message}`);
+    return null;
+  }
+}
+
+// Build the authenticated/hashed payload for a reading
+// Adds: edgeNodeId, authToken, integrityHash (SHA-256 of reading JSON), signature (HMAC-SHA256 of hash using token)
+function signReading(reading: any, session: EdgeSession): any {
+  // Build "core" reading (without auth fields) then hash it
+  const corePayload = JSON.stringify(reading);
+  const integrityHash = sha256(corePayload);
+  const signature = hmacSha256(session.token, integrityHash);
+  return {
+    ...reading,
+    // Edge authentication & integrity fields
+    edgeNodeId: session.deviceId,
+    integrityHash,
+    signature,
+    signatureAlgorithm: 'HMAC-SHA256',
+    hashAlgorithm: 'SHA-256',
+    tokenExpiresAt: new Date(session.expiresAt).toISOString(),
+  };
+}
+
+// ─── CSV Logging ─────────────────────────────────────────────────────
+// All readings (with auth/hash fields) are appended to a CSV file for audit trail.
+const CSV_DIR = path.join(__dirname, 'data');
+const CSV_FILE = path.join(CSV_DIR, 'awd-readings.csv');
+let csvHeaderWritten = false;
+
+const CSV_COLUMNS = [
+  'timestamp', 'tick', 'fieldId', 'fieldName', 'province', 'edgeNodeId',
+  'simDAP', 'simHour', 'growthStage', 'awdPhase', 'awdCycles',
+  'waterLevelCm', 'soilMoisturePct', 'rainfallMmHr',
+  'airTempC', 'soilTempC', 'humidityPct', 'soilPH',
+  'ch4FluxMgM2Hr', 'ch4EfKgHaDay', 'n2oFluxMgM2Hr', 'n2oEfKgHaDay', 'co2FluxMgM2Hr',
+  'ch4CO2eMgM2Hr', 'n2oCO2eMgM2Hr', 'netGHGCO2eMgM2Hr', 'emissionReductionPct',
+  'cumulativeCH4kg', 'cumulativeN2Okg', 'cumulativeCH4tCO2e', 'cumulativeN2OtCO2e',
+  'cumulativeNettCO2e', 'baselineEmissiontCO2e', 'emissionReductiontCO2e',
+  'estimatedYieldKg', 'seasonComplete',
+  'integrityHash', 'signature',
+  'tverMethodology',
+];
+
+function ensureCsvFile() {
+  try {
+    if (!fs.existsSync(CSV_DIR)) {
+      fs.mkdirSync(CSV_DIR, { recursive: true });
+    }
+    if (!fs.existsSync(CSV_FILE)) {
+      // Write header
+      const header = CSV_COLUMNS.join(',') + '\n';
+      fs.writeFileSync(CSV_FILE, header, 'utf8');
+      csvHeaderWritten = true;
+      console.log(`[CSV] Created: ${CSV_FILE}`);
+    } else {
+      csvHeaderWritten = true;
+    }
+  } catch (e: any) {
+    console.error(`[CSV] Init error: ${e.message}`);
+  }
+}
+
+function csvEscape(value: any): string {
+  if (value === null || value === undefined) return '';
+  const s = String(value);
+  // RFC 4180 — wrap in quotes if contains comma, quote, newline
+  if (s.includes(',') || s.includes('"') || s.includes('\n') || s.includes('\r')) {
+    return '"' + s.replace(/"/g, '""') + '"';
+  }
+  return s;
+}
+
+function appendReadingsToCsv(readings: any[]) {
+  if (!csvHeaderWritten) return;
+  try {
+    const lines = readings.map(r => CSV_COLUMNS.map(col => csvEscape(r[col])).join(',')).join('\n');
+    fs.appendFileSync(CSV_FILE, lines + '\n', 'utf8');
+  } catch (e: any) {
+    console.error(`[CSV] Append error: ${e.message}`);
   }
 }
 
@@ -703,22 +896,40 @@ function simTick() {
     newReadings.push(reading);
   }
 
-  // Store readings
+  // Store raw readings
   readings.push(...newReadings);
   if (readings.length > 600) readings = readings.slice(-600);
 
-  // Emit via Socket.IO (local dashboard)
+  // Emit raw readings via Socket.IO (local dashboard)
   io.emit('awd:reading', newReadings);
   io.emit('awd:status', getStatus());
 
-  // Publish via MQTT to external broker (broker.hivemq.com)
+  // Publish via MQTT to external broker (35.213.186.240:1883)
   // Auto-reconnect if connection dropped mid-simulation
   if (!mqttConnected && !mqttClient) {
     connectMQTT();
   }
-  for (const reading of newReadings) {
-    publishReadingToMQTT(reading);
-  }
+
+  // Sign each reading with edge auth (integrityHash + signature) and publish + log to CSV
+  // Use async IIFE to await session refresh for each field
+  (async () => {
+    const signedReadings: any[] = [];
+    for (const reading of newReadings) {
+      const session = await getOrRefreshSession(reading.fieldId);
+      if (!session) {
+        // Skip signing — publish raw reading (degraded mode)
+        publishReadingToMQTT(reading);
+        continue;
+      }
+      const signed = signReading(reading, session);
+      signedReadings.push(signed);
+      publishReadingToMQTT(signed);
+    }
+    // Append signed readings to CSV (audit trail with hash + signature)
+    if (signedReadings.length > 0) {
+      appendReadingsToCsv(signedReadings);
+    }
+  })().catch(e => console.error('[SIM] Sign/publish error:', e.message));
 }
 
 function getStatus() {
@@ -761,10 +972,10 @@ function getStatus() {
 function startSim() {
   if (simRunning) return;
   simRunning = true;
-  // Ensure MQTT is connected to broker.hivemq.com:1883 before publishing
+  // Ensure MQTT is connected to 35.213.186.240:1883 before publishing
   // (auto-reconnect if connection was lost or never established)
   if (!mqttConnected) {
-    console.log('[SIM] MQTT not connected — reconnecting to broker.hivemq.com:1883 before starting simulation...');
+    console.log('[SIM] MQTT not connected — reconnecting to 35.213.186.240:1883 before starting simulation...');
     if (mqttClient) {
       try { mqttClient.end(true); } catch (e) {}
       mqttClient = null;
@@ -855,6 +1066,36 @@ httpServer.on('request', (req, res) => {
         errors: mqttErrorCount,
       },
     }));
+  } else if (url.pathname === '/api/edge-sessions') {
+    res.end(JSON.stringify({
+      gatewayUrl: IOT_GATEWAY_URL,
+      credentials: EDGE_CREDENTIALS.map(c => ({
+        fieldId: c.fieldId,
+        deviceId: c.deviceId,
+        gatewayUrl: c.gatewayUrl,
+      })),
+      sessions: Array.from(edgeSessions.values()).map(s => ({
+        fieldId: s.fieldId,
+        deviceId: s.deviceId,
+        issuedAt: new Date(s.issuedAt).toISOString(),
+        expiresAt: new Date(s.expiresAt).toISOString(),
+        ttlSeconds: Math.max(0, Math.floor((s.expiresAt - Date.now()) / 1000)),
+        tokenPreview: s.token.slice(0, 24) + '...',
+      })),
+    }));
+  } else if (url.pathname === '/api/csv-info') {
+    try {
+      const stats = fs.existsSync(CSV_FILE) ? fs.statSync(CSV_FILE) : null;
+      res.end(JSON.stringify({
+        csvFile: CSV_FILE,
+        exists: !!stats,
+        sizeBytes: stats?.size ?? 0,
+        sizeKB: stats ? Math.round(stats.size / 1024 * 10) / 10 : 0,
+        lastModified: stats?.mtime?.toISOString() ?? null,
+      }));
+    } catch (e: any) {
+      res.end(JSON.stringify({ error: e.message }));
+    }
   } else if (url.pathname === '/api/mqtt-reconnect') {
     if (mqttClient) {
       try { mqttClient.end(true); } catch (e) {}
@@ -899,17 +1140,27 @@ httpServer.on('request', (req, res) => {
   }
 });
 
-httpServer.listen(PORT, () => {
+httpServer.listen(PORT, async () => {
   console.log(`🌾 AWD Rice Simulator running on port ${PORT}`);
   console.log(`   Speed: ${SPEED_FACTOR}x (1 tick = ${SIM_HOURS_PER_TICK}hr simulated, every ${INTERVAL_MS / 1000}s real)`);
   console.log(`   Fields: ${fields.map(f => f.name).join(', ')}`);
+  console.log(`   🔐 IoT Gateway: ${IOT_GATEWAY_URL} (edge auth via /api/edge/auth)`);
   console.log(`   📡 MQTT Broker: ${MQTT_BROKER_URL}`);
-  console.log(`      Topics:`);
+  console.log(`      Topics (prefix: awd/):`);
   console.log(`        - ${MQTT_TOPIC_READINGS}        (per-tick readings, qos=0)`);
   console.log(`        - ${MQTT_TOPIC_STATUS}           (status, retain=true)`);
   console.log(`        - ${MQTT_TOPIC_FIELD_PREFIX}/<fieldId>  (per-field readings)`);
+  console.log(`   📄 CSV Log: ${CSV_FILE}`);
+  // Initialize CSV file
+  ensureCsvFile();
   // เริ่มการเชื่อมต่อ MQTT ไปยัง 35.213.186.240
   connectMQTT();
+  // Authenticate all edge devices with IoT Gateway
+  try {
+    await authenticateAllEdges();
+  } catch (e: any) {
+    console.error(`[Auth] Startup auth error: ${e.message}`);
+  }
 });
 
 // ตรวจสอบสถานะ MQTT ทุก 30 วินาที — log stats
