@@ -2,25 +2,25 @@
 
 import type { TerraceLayer, CheckDam } from './types';
 
-// ─── Color Palette ───────────────────────────────────────────────
-export const COLORS = ['#10b981', '#f59e0b', '#3b82f6', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16', '#f97316', '#6366f1'];
-export const TERRACE_COLORS = ['#065f46', '#047857', '#059669', '#10b981', '#34d399'];
-export const CREDIT_SOURCE_COLORS = ['#10b981', '#f59e0b', '#3b82f6', '#84cc16', '#ef4444', '#8b5cf6'];
+// ─── Color Palette (vivid, high-contrast) ───────────────────────
+export const COLORS = ['#34d399', '#fbbf24', '#60a5fa', '#f87171', '#a78bfa', '#f472b6', '#22d3ee', '#a3e635', '#fb923c', '#818cf8'];
+export const TERRACE_COLORS = ['#047857', '#059669', '#10b981', '#34d399', '#6ee7b7'];
+export const CREDIT_SOURCE_COLORS = ['#34d399', '#fbbf24', '#60a5fa', '#a3e635', '#f87171', '#a78bfa'];
 
 export const STATUS_COLORS: Record<string, string> = {
-  REGISTERED: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
-  MONITORING: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
-  VERIFIED: 'bg-green-500/20 text-green-400 border-green-500/30',
-  CERTIFIED: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
-  SUSPENDED: 'bg-red-500/20 text-red-400 border-red-500/30',
+  REGISTERED: 'bg-sky-500/25 text-sky-300 border-sky-500/50',
+  MONITORING: 'bg-amber-500/25 text-amber-300 border-amber-500/50',
+  VERIFIED: 'bg-green-500/25 text-green-300 border-green-500/50',
+  CERTIFIED: 'bg-emerald-500/25 text-emerald-300 border-emerald-500/50',
+  SUSPENDED: 'bg-red-500/25 text-red-300 border-red-500/50',
 };
 
 export const QUALITY_COLORS: Record<string, string> = {
-  RAW: 'bg-gray-500/20 text-gray-400 border-gray-500/30',
-  VALIDATED: 'bg-green-500/20 text-green-400 border-green-500/30',
-  CERTIFIED: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
-  REJECTED: 'bg-red-500/20 text-red-400 border-red-500/30',
-  ANOMALY: 'bg-orange-500/20 text-orange-400 border-orange-500/30',
+  RAW: 'bg-slate-500/25 text-slate-300 border-slate-500/50',
+  VALIDATED: 'bg-green-500/25 text-green-300 border-green-500/50',
+  CERTIFIED: 'bg-emerald-500/25 text-emerald-300 border-emerald-500/50',
+  REJECTED: 'bg-red-500/25 text-red-300 border-red-500/50',
+  ANOMALY: 'bg-orange-500/25 text-orange-300 border-orange-500/50',
 };
 
 // ─── Label Maps ──────────────────────────────────────────────────
@@ -98,10 +98,10 @@ export const VETIVER_STATUS_LABELS: Record<string, string> = {
 };
 
 export const VETIVER_STATUS_COLORS: Record<string, string> = {
-  NONE: 'bg-gray-500/20 text-gray-400 border-gray-500/30',
-  PLANTED: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
-  ESTABLISHED: 'bg-green-500/20 text-green-400 border-green-500/30',
-  MATURE: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
+  NONE: 'bg-slate-500/25 text-slate-300 border-slate-500/50',
+  PLANTED: 'bg-amber-500/25 text-amber-300 border-amber-500/50',
+  ESTABLISHED: 'bg-green-500/25 text-green-300 border-green-500/50',
+  MATURE: 'bg-emerald-500/25 text-emerald-300 border-emerald-500/50',
 };
 
 // ─── Certification Checklist Items ────────────────────────────────

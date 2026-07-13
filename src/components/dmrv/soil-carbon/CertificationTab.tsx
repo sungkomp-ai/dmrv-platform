@@ -32,12 +32,12 @@ export default function CertificationTab({
   return (
     <>
       {/* Eligible Plots */}
-      <Card className="bg-slate-800/50 border-slate-700/50">
+      <Card className="bg-slate-800/70 border-slate-600/60">
         <CardHeader className="pb-2">
-          <CardTitle className="text-base font-semibold text-slate-200 flex items-center gap-2">
+          <CardTitle className="text-base font-semibold text-slate-100 flex items-center gap-2">
             <Award className="h-4 w-4 text-emerald-400" /> แปลงที่มีสิทธิ์ขอรับรอง
           </CardTitle>
-          <CardDescription className="text-xs text-slate-500">
+          <CardDescription className="text-xs text-slate-400">
             แสดงเฉพาะแปลงที่มีสถานะ &quot;กำลังติดตาม&quot; หรือ &quot;ตรวจสอบแล้ว&quot;
           </CardDescription>
         </CardHeader>
@@ -45,8 +45,8 @@ export default function CertificationTab({
           {eligiblePlots.length === 0 ? (
             <div className="text-center py-8">
               <FileCheck className="h-10 w-10 text-slate-600 mx-auto mb-2" />
-              <p className="text-sm text-slate-500">ไม่มีแปลงที่มีสิทธิ์ขอรับรองในขณะนี้</p>
-              <p className="text-xs text-slate-600">แปลงต้องมีสถานะ MONITORING หรือ VERIFIED จึงจะสามารถขอรับรองได้</p>
+              <p className="text-sm text-slate-400">ไม่มีแปลงที่มีสิทธิ์ขอรับรองในขณะนี้</p>
+              <p className="text-xs text-slate-500">แปลงต้องมีสถานะ MONITORING หรือ VERIFIED จึงจะสามารถขอรับรองได้</p>
             </div>
           ) : (
             <div className="max-h-96 overflow-y-auto custom-scrollbar space-y-3">
@@ -55,18 +55,18 @@ export default function CertificationTab({
                 const checks = certChecklist[plot.plotId] || {};
                 const allChecked = CERT_CHECKLIST_ITEMS.every(item => checks[item.key]);
                 return (
-                  <div key={plot.id} className="bg-slate-900/50 rounded-lg border border-slate-700/50 p-4">
+                  <div key={plot.id} className="bg-slate-900/60 rounded-lg border border-slate-600/60 p-4">
                     <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center gap-3">
-                        <div className="p-2 rounded-lg bg-emerald-500/10">
-                          <Mountain className="h-5 w-5 text-emerald-400" />
+                        <div className="p-2 rounded-lg bg-emerald-500/20 border border-emerald-400/40">
+                          <Mountain className="h-5 w-5 text-emerald-300" />
                         </div>
                         <div>
-                          <p className="text-sm font-medium text-white">{plot.nameTh || plot.name}</p>
+                          <p className="text-sm font-semibold text-white">{plot.nameTh || plot.name}</p>
                           <p className="text-xs text-slate-400">{plot.plotId} · {plot.province} · {fmt(plot.areaRai, 1)} ไร่ · {plot.terraceCount || 5} ชั้นปลูก</p>
                         </div>
                       </div>
-                      <Badge variant="outline" className={`text-xs px-2 py-0 ${STATUS_COLORS[plot.status] || ''}`}>
+                      <Badge variant="outline" className={`text-xs px-2 py-0 font-medium ${STATUS_COLORS[plot.status] || ''}`}>
                         {STATUS_LABELS[plot.status] || plot.status}
                       </Badge>
                     </div>
@@ -77,11 +77,11 @@ export default function CertificationTab({
                         <React.Fragment key={i}>
                           <div className="flex items-center gap-1.5">
                             <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${
-                              step >= i ? 'bg-emerald-500 text-white' : 'bg-slate-700 text-slate-400'
+                              step >= i ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/30' : 'bg-slate-700 text-slate-400'
                             }`}>
                               {step > i ? <CheckCircle2 className="h-4 w-4" /> : i + 1}
                             </div>
-                            <span className={`text-xs ${step >= i ? 'text-emerald-400' : 'text-slate-500'}`}>{label}</span>
+                            <span className={`text-xs font-medium ${step >= i ? 'text-emerald-300' : 'text-slate-500'}`}>{label}</span>
                           </div>
                           {i < 2 && <div className={`flex-1 h-0.5 ${step > i ? 'bg-emerald-500' : 'bg-slate-700'}`} />}
                         </React.Fragment>
@@ -92,7 +92,7 @@ export default function CertificationTab({
                     {step === 0 && (
                       <Button
                         size="sm"
-                        className="bg-emerald-600 hover:bg-emerald-700 text-white text-sm"
+                        className="bg-emerald-600 hover:bg-emerald-500 text-white text-sm"
                         onClick={() => setCertStep(prev => ({ ...prev, [plot.plotId]: 1 }))}
                       >
                         <Eye className="h-3 w-3 mr-1" /> เริ่มตรวจสอบ
@@ -101,7 +101,7 @@ export default function CertificationTab({
 
                     {step === 1 && (
                       <div className="space-y-3">
-                        <p className="text-sm text-slate-300 font-medium">ตรวจสอบรายการดังต่อไปนี้:</p>
+                        <p className="text-sm text-slate-200 font-medium">ตรวจสอบรายการดังต่อไปนี้:</p>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                           {CERT_CHECKLIST_ITEMS.map(item => (
                             <button
@@ -109,14 +109,14 @@ export default function CertificationTab({
                               onClick={() => toggleCertCheck(plot.plotId, item.key)}
                               className={`flex items-start gap-2 p-3 rounded text-left text-sm transition-colors ${
                                 checks[item.key]
-                                  ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-300'
-                                  : 'bg-slate-800/50 border border-slate-700/30 text-slate-400 hover:bg-slate-700/50'
+                                  ? 'bg-emerald-500/20 border border-emerald-500/50 text-emerald-200'
+                                  : 'bg-slate-800/70 border border-slate-600/50 text-slate-400 hover:bg-slate-700/60'
                               }`}
                             >
                               {checks[item.key] ? (
-                                <CheckCircle2 className="h-4 w-4 text-emerald-400 flex-shrink-0 mt-0.5" />
+                                <CheckCircle2 className="h-4 w-4 text-emerald-300 flex-shrink-0 mt-0.5" />
                               ) : (
-                                <div className="h-4 w-4 rounded-full border border-slate-600 flex-shrink-0 mt-0.5" />
+                                <div className="h-4 w-4 rounded-full border border-slate-500 flex-shrink-0 mt-0.5" />
                               )}
                               {item.label}
                             </button>
@@ -125,7 +125,7 @@ export default function CertificationTab({
                         <div className="flex items-center gap-2">
                           <Button
                             size="sm"
-                            className="bg-emerald-600 hover:bg-emerald-700 text-white text-sm"
+                            className="bg-emerald-600 hover:bg-emerald-500 text-white text-sm"
                             disabled={!allChecked}
                             onClick={() => setCertStep(prev => ({ ...prev, [plot.plotId]: 2 }))}
                           >
@@ -134,7 +134,7 @@ export default function CertificationTab({
                           <Button
                             variant="outline"
                             size="sm"
-                            className="border-slate-600 text-slate-400 text-sm"
+                            className="border-slate-600 text-slate-300 text-sm"
                             onClick={() => setCertStep(prev => ({ ...prev, [plot.plotId]: 0 }))}
                           >
                             ย้อนกลับ
@@ -145,16 +145,16 @@ export default function CertificationTab({
 
                     {step === 2 && (
                       <div className="space-y-3">
-                        <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
-                          <p className="text-sm text-emerald-300 mb-1">พร้อมรับรองเครดิตคาร์บอน</p>
-                          <p className="text-xs text-slate-400">
+                        <div className="p-3 rounded-lg bg-emerald-500/15 border border-emerald-500/40">
+                          <p className="text-sm text-emerald-200 mb-1 font-medium">พร้อมรับรองเครดิตคาร์บอน</p>
+                          <p className="text-xs text-slate-300">
                             แปลง {plot.nameTh || plot.name} ผ่านการตรวจสอบทุกข้อ สามารถดำเนินการรับรองได้
                           </p>
                         </div>
                         <div className="flex items-center gap-2">
                           <Button
                             size="sm"
-                            className="bg-emerald-600 hover:bg-emerald-700 text-white text-sm"
+                            className="bg-emerald-600 hover:bg-emerald-500 text-white text-sm"
                             onClick={() => handleCertifyPlot(plot.plotId)}
                           >
                             <Award className="h-3 w-3 mr-1" /> รับรองเครดิตคาร์บอน
@@ -162,7 +162,7 @@ export default function CertificationTab({
                           <Button
                             variant="outline"
                             size="sm"
-                            className="border-slate-600 text-slate-400 text-sm"
+                            className="border-slate-600 text-slate-300 text-sm"
                             onClick={() => setCertStep(prev => ({ ...prev, [plot.plotId]: 1 }))}
                           >
                             ย้อนกลับ
@@ -172,12 +172,12 @@ export default function CertificationTab({
                     )}
 
                     {step === 3 && (
-                      <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+                      <div className="p-3 rounded-lg bg-emerald-500/20 border border-emerald-500/50">
                         <div className="flex items-center gap-2 mb-1">
-                          <CheckCircle2 className="h-4 w-4 text-emerald-400" />
-                          <p className="text-sm text-emerald-300 font-medium">รับรองเครดิตคาร์บอนสำเร็จ</p>
+                          <CheckCircle2 className="h-4 w-4 text-emerald-300" />
+                          <p className="text-sm text-emerald-200 font-semibold">รับรองเครดิตคาร์บอนสำเร็จ</p>
                         </div>
-                        <p className="text-xs text-slate-400">
+                        <p className="text-xs text-slate-300">
                           Certificate ID: {certHistory.find(c => c.plotId === plot.plotId)?.certificateId || `T-VER-${plot.plotId}`}
                         </p>
                       </div>
@@ -192,75 +192,75 @@ export default function CertificationTab({
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Certification Requirements (Updated) */}
-        <Card className="bg-slate-800/50 border-slate-700/50">
+        <Card className="bg-slate-800/70 border-slate-600/60">
           <CardHeader className="pb-2">
-            <CardTitle className="text-base font-semibold text-slate-200 flex items-center gap-2">
-              <FileText className="h-4 w-4 text-yellow-400" /> ข้อกำหนดการรับรอง T-VER-SOIL-01 (ขั้นบันได/ฝาย)
+            <CardTitle className="text-base font-semibold text-slate-100 flex items-center gap-2">
+              <FileText className="h-4 w-4 text-amber-400" /> ข้อกำหนดการรับรอง T-VER-SOIL-01 (ขั้นบันได/ฝาย)
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-2 text-sm max-h-80 overflow-y-auto custom-scrollbar">
-              <div className="flex items-start gap-2 p-2 rounded bg-slate-900/50">
+              <div className="flex items-start gap-2 p-2 rounded bg-slate-900/60 border border-slate-700/40">
                 <CheckCircle2 className="h-4 w-4 text-emerald-400 flex-shrink-0 mt-0.5" />
                 <div>
-                  <p className="text-slate-200">ข้อมูลชั้นปลูกครบถ้วน</p>
-                  <p className="text-xs text-slate-500">ระบุจำนวน ความกว้าง ความสูงของแต่ละชั้นปลูก พร้อมข้อมูลพืชและตะกอน</p>
+                  <p className="text-slate-100 font-medium">ข้อมูลชั้นปลูกครบถ้วน</p>
+                  <p className="text-xs text-slate-400">ระบุจำนวน ความกว้าง ความสูงของแต่ละชั้นปลูก พร้อมข้อมูลพืชและตะกอน</p>
                 </div>
               </div>
-              <div className="flex items-start gap-2 p-2 rounded bg-slate-900/50">
+              <div className="flex items-start gap-2 p-2 rounded bg-slate-900/60 border border-slate-700/40">
                 <CheckCircle2 className="h-4 w-4 text-emerald-400 flex-shrink-0 mt-0.5" />
                 <div>
-                  <p className="text-slate-200">ข้อมูลฝายชะลอน้ำครบถ้วน</p>
-                  <p className="text-xs text-slate-500">ระบุประเภท ขนาด ประสิทธิภาพของฝายในแต่ละชั้น</p>
+                  <p className="text-slate-100 font-medium">ข้อมูลฝายชะลอน้ำครบถ้วน</p>
+                  <p className="text-xs text-slate-400">ระบุประเภท ขนาด ประสิทธิภาพของฝายในแต่ละชั้น</p>
                 </div>
               </div>
-              <div className="flex items-start gap-2 p-2 rounded bg-slate-900/50">
+              <div className="flex items-start gap-2 p-2 rounded bg-slate-900/60 border border-slate-700/40">
                 <CheckCircle2 className="h-4 w-4 text-emerald-400 flex-shrink-0 mt-0.5" />
                 <div>
-                  <p className="text-slate-200">ตะกอนดินที่กักได้มีการวัด</p>
-                  <p className="text-xs text-slate-500">ต้องมีข้อมูลการวัดปริมาณตะกอนดินที่กักได้ในแต่ละชั้นปลูกและหลังฝาย</p>
+                  <p className="text-slate-100 font-medium">ตะกอนดินที่กักได้มีการวัด</p>
+                  <p className="text-xs text-slate-400">ต้องมีข้อมูลการวัดปริมาณตะกอนดินที่กักได้ในแต่ละชั้นปลูกและหลังฝาย</p>
                 </div>
               </div>
-              <div className="flex items-start gap-2 p-2 rounded bg-slate-900/50">
+              <div className="flex items-start gap-2 p-2 rounded bg-slate-900/60 border border-slate-700/40">
                 <CheckCircle2 className="h-4 w-4 text-amber-400 flex-shrink-0 mt-0.5" />
                 <div>
-                  <p className="text-slate-200">ประสิทธิภาพฝายชะลอน้ำ ≥ 60%</p>
-                  <p className="text-xs text-slate-500">ฝายชะลอน้ำทุกแห่งต้องมีประสิทธิภาพในการกักตะกอนอย่างน้อย 60%</p>
+                  <p className="text-slate-100 font-medium">ประสิทธิภาพฝายชะลอน้ำ ≥ 60%</p>
+                  <p className="text-xs text-slate-400">ฝายชะลอน้ำทุกแห่งต้องมีประสิทธิภาพในการกักตะกอนอย่างน้อย 60%</p>
                 </div>
               </div>
-              <div className="flex items-start gap-2 p-2 rounded bg-slate-900/50">
+              <div className="flex items-start gap-2 p-2 rounded bg-slate-900/60 border border-slate-700/40">
                 <CheckCircle2 className="h-4 w-4 text-amber-400 flex-shrink-0 mt-0.5" />
                 <div>
-                  <p className="text-slate-200">อัตราการพังทลายลดลง ≥ 50%</p>
-                  <p className="text-xs text-slate-500">อัตราการพังทลายของดินหลังโครงการต้องลดลงอย่างน้อย 50% จาก Baseline</p>
+                  <p className="text-slate-100 font-medium">อัตราการพังทลายลดลง ≥ 50%</p>
+                  <p className="text-xs text-slate-400">อัตราการพังทลายของดินหลังโครงการต้องลดลงอย่างน้อย 50% จาก Baseline</p>
                 </div>
               </div>
-              <div className="flex items-start gap-2 p-2 rounded bg-slate-900/50">
+              <div className="flex items-start gap-2 p-2 rounded bg-slate-900/60 border border-slate-700/40">
                 <CheckCircle2 className="h-4 w-4 text-emerald-400 flex-shrink-0 mt-0.5" />
                 <div>
-                  <p className="text-slate-200">ขอบเขตโครงการชัดเจน</p>
-                  <p className="text-xs text-slate-500">ระบุพิกัด GPS และพื้นที่แปลงที่สอดคล้องกับหลักฐานสิทธิ์การใช้ที่ดิน</p>
+                  <p className="text-slate-100 font-medium">ขอบเขตโครงการชัดเจน</p>
+                  <p className="text-xs text-slate-400">ระบุพิกัด GPS และพื้นที่แปลงที่สอดคล้องกับหลักฐานสิทธิ์การใช้ที่ดิน</p>
                 </div>
               </div>
-              <div className="flex items-start gap-2 p-2 rounded bg-slate-900/50">
+              <div className="flex items-start gap-2 p-2 rounded bg-slate-900/60 border border-slate-700/40">
                 <CheckCircle2 className="h-4 w-4 text-emerald-400 flex-shrink-0 mt-0.5" />
                 <div>
-                  <p className="text-slate-200">Baseline SOC สมบูรณ์</p>
-                  <p className="text-xs text-slate-500">ต้องมีข้อมูล Baseline SOC จากการวัดภาคสนามหรือห้องปฏิบัติการ</p>
+                  <p className="text-slate-100 font-medium">Baseline SOC สมบูรณ์</p>
+                  <p className="text-xs text-slate-400">ต้องมีข้อมูล Baseline SOC จากการวัดภาคสนามหรือห้องปฏิบัติการ</p>
                 </div>
               </div>
-              <div className="flex items-start gap-2 p-2 rounded bg-slate-900/50">
+              <div className="flex items-start gap-2 p-2 rounded bg-slate-900/60 border border-slate-700/40">
                 <CheckCircle2 className="h-4 w-4 text-emerald-400 flex-shrink-0 mt-0.5" />
                 <div>
-                  <p className="text-slate-200">หักค่าความไม่แน่นอน (Buffer) 20%</p>
-                  <p className="text-xs text-slate-500">ตาม T-VER-SOIL-01 ต้องหัก Buffer Pool 20% จาก Gross Credits</p>
+                  <p className="text-slate-100 font-medium">หักค่าความไม่แน่นอน (Buffer) 20%</p>
+                  <p className="text-xs text-slate-400">ตาม T-VER-SOIL-01 ต้องหัก Buffer Pool 20% จาก Gross Credits</p>
                 </div>
               </div>
-              <div className="flex items-start gap-2 p-2 rounded bg-slate-900/50">
+              <div className="flex items-start gap-2 p-2 rounded bg-slate-900/60 border border-slate-700/40">
                 <CheckCircle2 className="h-4 w-4 text-emerald-400 flex-shrink-0 mt-0.5" />
                 <div>
-                  <p className="text-slate-200">Additionality & Permanence</p>
-                  <p className="text-xs text-slate-500">พิสูจน์การเพิ่มขึ้นของการกักคาร์บอนได้ และมีแผนรักษาความคงตัวอย่างน้อย 10 ปี</p>
+                  <p className="text-slate-100 font-medium">Additionality & Permanence</p>
+                  <p className="text-xs text-slate-400">พิสูจน์การเพิ่มขึ้นของการกักคาร์บอนได้ และมีแผนรักษาความคงตัวอย่างน้อย 10 ปี</p>
                 </div>
               </div>
             </div>
@@ -268,22 +268,22 @@ export default function CertificationTab({
         </Card>
 
         {/* Certification History */}
-        <Card className="bg-slate-800/50 border-slate-700/50">
+        <Card className="bg-slate-800/70 border-slate-600/60">
           <CardHeader className="pb-2">
-            <CardTitle className="text-base font-semibold text-slate-200 flex items-center gap-2">
-              <Clock className="h-4 w-4 text-blue-400" /> ประวัติการรับรอง
+            <CardTitle className="text-base font-semibold text-slate-100 flex items-center gap-2">
+              <Clock className="h-4 w-4 text-sky-400" /> ประวัติการรับรอง
             </CardTitle>
           </CardHeader>
           <CardContent className="pt-0">
             {certHistory.length === 0 ? (
               <div className="text-center py-6">
-                <Award className="h-8 w-8 text-slate-700 mx-auto mb-2" />
-                <p className="text-sm text-slate-500">ยังไม่มีประวัติการรับรอง</p>
+                <Award className="h-8 w-8 text-slate-600 mx-auto mb-2" />
+                <p className="text-sm text-slate-400">ยังไม่มีประวัติการรับรอง</p>
               </div>
             ) : (
               <div className="max-h-80 overflow-y-auto custom-scrollbar space-y-2">
                 {certHistory.map((cert, i) => (
-                  <div key={i} className="flex items-center justify-between p-2 rounded bg-slate-900/50 border border-slate-700/30">
+                  <div key={i} className="flex items-center justify-between p-2 rounded bg-slate-900/60 border border-slate-600/50">
                     <div className="flex items-center gap-2">
                       <CheckCircle2 className="h-4 w-4 text-emerald-400 flex-shrink-0" />
                       <div>
@@ -292,9 +292,9 @@ export default function CertificationTab({
                       </div>
                     </div>
                     <div className="text-right">
-                      <p className="text-sm text-emerald-400 font-medium">{fmt(cert.netCredits, 2)} tCO₂e</p>
-                      <p className="text-xs text-slate-500">{fmtDateTime(cert.certifiedAt || '')}</p>
-                      <p className="text-[9px] text-slate-600 font-mono">{cert.certificateId}</p>
+                      <p className="text-sm text-emerald-300 font-bold">{fmt(cert.netCredits, 2)} tCO₂e</p>
+                      <p className="text-xs text-slate-400">{fmtDateTime(cert.certifiedAt || '')}</p>
+                      <p className="text-[9px] text-slate-500 font-mono">{cert.certificateId}</p>
                     </div>
                   </div>
                 ))}

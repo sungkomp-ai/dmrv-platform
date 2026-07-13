@@ -39,12 +39,12 @@ export default function IngestionTab({
   return (
     <>
       {/* Terrace Layer Selector */}
-      <Card className="bg-slate-800/50 border-slate-700/50">
+      <Card className="bg-slate-800/70 border-slate-600/60">
         <CardHeader className="pb-2">
-          <CardTitle className="text-base font-semibold text-slate-200 flex items-center gap-2">
+          <CardTitle className="text-base font-semibold text-slate-100 flex items-center gap-2">
             <Layers className="h-4 w-4 text-emerald-400" /> เลือกชั้นปลูก
           </CardTitle>
-          <CardDescription className="text-xs text-slate-500">
+          <CardDescription className="text-xs text-slate-400">
             เลือกชั้นปลูกที่ต้องการดู/นำเข้าข้อมูล
           </CardDescription>
         </CardHeader>
@@ -61,7 +61,7 @@ export default function IngestionTab({
                 ))}
               </SelectContent>
             </Select>
-            <Badge variant="outline" className="border-emerald-500/30 text-emerald-400 text-xs">
+            <Badge variant="outline" className="border-emerald-500/50 text-emerald-300 text-xs font-medium">
               {selectedTerraceLayer === 'all' ? 'ทุกชั้น' : `ชั้น ${selectedTerraceLayer.split('-')[1]}`}
             </Badge>
           </div>
@@ -79,16 +79,16 @@ export default function IngestionTab({
               ? (pct > 50 ? 'bg-red-500' : 'bg-emerald-500')
               : 'bg-emerald-500';
             return (
-              <Card key={key} className="bg-slate-800/50 border-slate-700/50">
+              <Card key={key} className="bg-slate-800/70 border-slate-600/60 hover:border-emerald-500/50 transition-colors">
                 <CardContent className="p-4">
                   <div className="flex items-center gap-2 mb-2">
                     <Icon className={`h-4 w-4 ${isHigh ? (pct > 50 ? 'text-red-400' : 'text-emerald-400') : 'text-emerald-400'}`} />
-                    <span className="text-xs text-slate-400 truncate">{sensor.label}</span>
+                    <span className="text-xs text-slate-300 truncate">{sensor.label}</span>
                   </div>
-                  <p className={`text-xl font-bold ${isHigh ? (pct > 50 ? 'text-red-400' : 'text-emerald-400') : 'text-white'}`}>
+                  <p className={`text-xl font-bold ${isHigh ? (pct > 50 ? 'text-red-300' : 'text-emerald-300') : 'text-white'}`}>
                     {fmt(sensor.value, 1)}
                   </p>
-                  <p className="text-xs text-slate-500">{sensor.unit}</p>
+                  <p className="text-xs text-slate-400">{sensor.unit}</p>
                   <div className="mt-1.5 h-1.5 bg-slate-700 rounded-full overflow-hidden">
                     <div className={`h-full ${barColor} rounded-full transition-all`} style={{ width: `${pct}%` }} />
                   </div>
@@ -100,23 +100,23 @@ export default function IngestionTab({
       )}
 
       {/* Quality Summary */}
-      <Card className="bg-slate-800/50 border-slate-700/50">
+      <Card className="bg-slate-800/70 border-slate-600/60">
         <CardHeader className="pb-2">
-          <CardTitle className="text-base font-semibold text-slate-200 flex items-center gap-2">
-            <Shield className="h-4 w-4 text-blue-400" /> สรุปคุณภาพข้อมูล
+          <CardTitle className="text-base font-semibold text-slate-100 flex items-center gap-2">
+            <Shield className="h-4 w-4 text-sky-400" /> สรุปคุณภาพข้อมูล
           </CardTitle>
         </CardHeader>
         <CardContent className="pt-0">
           <div className="flex items-center gap-4 flex-wrap">
             {Object.entries(qualitySummary).map(([flag, count]) => (
               <div key={flag} className="flex items-center gap-2">
-                <Badge variant="outline" className={`text-xs ${QUALITY_COLORS[flag] || ''}`}>
+                <Badge variant="outline" className={`text-xs font-medium ${QUALITY_COLORS[flag] || ''}`}>
                   {QUALITY_LABELS[flag] || flag}: {count}
                 </Badge>
               </div>
             ))}
             <div className="flex items-center gap-2 ml-auto">
-              <label className="text-xs text-slate-400 flex items-center gap-2">
+              <label className="text-xs text-slate-300 flex items-center gap-2">
                 <input
                   type="checkbox"
                   checked={autoRefresh}
@@ -131,12 +131,12 @@ export default function IngestionTab({
       </Card>
 
       {/* Batch Upload */}
-      <Card className="bg-slate-800/50 border-slate-700/50">
+      <Card className="bg-slate-800/70 border-slate-600/60">
         <CardHeader className="pb-2">
-          <CardTitle className="text-base font-semibold text-slate-200 flex items-center gap-2">
-            <Upload className="h-4 w-4 text-blue-400" /> นำเข้าข้อมูลแบบกลุ่ม (Batch Upload)
+          <CardTitle className="text-base font-semibold text-slate-100 flex items-center gap-2">
+            <Upload className="h-4 w-4 text-sky-400" /> นำเข้าข้อมูลแบบกลุ่ม (Batch Upload)
           </CardTitle>
-          <CardDescription className="text-xs text-slate-500">
+          <CardDescription className="text-xs text-slate-400">
             รองรับรูปแบบ JSON หรือ CSV — เพิ่มฟิลด์ runoffVolumeL, sedimentConcGpL, waterFlowRate, infiltrationRate, erosionRate, terraceLayerId
           </CardDescription>
         </CardHeader>
@@ -151,7 +151,7 @@ export default function IngestionTab({
             <Button
               onClick={handleIngest}
               disabled={ingesting || !batchData.trim()}
-              className="bg-blue-600 hover:bg-blue-700 text-white text-sm"
+              className="bg-sky-600 hover:bg-sky-500 text-white text-sm"
             >
               {ingesting ? <RefreshCw className="h-4 w-4 mr-1 animate-spin" /> : <Send className="h-4 w-4 mr-1" />}
               นำเข้าข้อมูล
@@ -159,28 +159,28 @@ export default function IngestionTab({
             <Button
               variant="outline"
               size="sm"
-              className="border-slate-600 text-slate-400"
+              className="border-slate-600 text-slate-300"
               onClick={() => setBatchData('')}
             >
               ล้าง
             </Button>
           </div>
           {ingestResult && (
-            <div className={`p-3 rounded-lg text-xs ${ingestResult.success ? 'bg-emerald-500/10 border border-emerald-500/20' : 'bg-red-500/10 border border-red-500/20'}`}>
+            <div className={`p-3 rounded-lg text-xs ${ingestResult.success ? 'bg-emerald-500/15 border border-emerald-500/40' : 'bg-red-500/15 border border-red-500/40'}`}>
               {ingestResult.success ? (
                 <div className="space-y-1">
-                  <p className="text-emerald-400 font-medium">{ingestResult.message}</p>
+                  <p className="text-emerald-300 font-medium">{ingestResult.message}</p>
                   {ingestResult.data?.summary && (
                     <div className="grid grid-cols-4 gap-2 mt-2">
-                      <div><span className="text-slate-400">ทั้งหมด:</span> <span className="text-white">{ingestResult.data.summary.total}</span></div>
-                      <div><span className="text-slate-400">ผ่าน:</span> <span className="text-emerald-400">{ingestResult.data.summary.valid}</span></div>
-                      <div><span className="text-slate-400">ผิดปกติ:</span> <span className="text-amber-400">{ingestResult.data.summary.anomaly}</span></div>
-                      <div><span className="text-slate-400">ปฏิเสธ:</span> <span className="text-red-400">{ingestResult.data.summary.rejected}</span></div>
+                      <div><span className="text-slate-400">ทั้งหมด:</span> <span className="text-white font-medium">{ingestResult.data.summary.total}</span></div>
+                      <div><span className="text-slate-400">ผ่าน:</span> <span className="text-emerald-300 font-medium">{ingestResult.data.summary.valid}</span></div>
+                      <div><span className="text-slate-400">ผิดปกติ:</span> <span className="text-amber-300 font-medium">{ingestResult.data.summary.anomaly}</span></div>
+                      <div><span className="text-slate-400">ปฏิเสธ:</span> <span className="text-red-300 font-medium">{ingestResult.data.summary.rejected}</span></div>
                     </div>
                   )}
                 </div>
               ) : (
-                <p className="text-red-400">{ingestResult.error}</p>
+                <p className="text-red-300">{ingestResult.error}</p>
               )}
             </div>
           )}

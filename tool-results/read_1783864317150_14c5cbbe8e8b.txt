@@ -1,0 +1,363 @@
+     1→---
+     2→Task ID: 1
+     3→Agent: Main Agent
+     4→Task: IoT Ingestion System - Verification and Thai Explanation
+     5→
+     6→Work Log:
+     7→- Verified all IoT system components are in place and functional
+     8→- IoT Gateway mini-service running on port 3035 (776 lines of code)
+     9→- IoTIngestionView frontend component (1171 lines) with 6 tabs: Realtime, Batch, Edge Nodes, Certification, Charts, Sample/API
+    10→- 5 Next.js API routes: /api/iot/edge-nodes, /api/iot/ingest, /api/iot/batch, /api/iot/certify, /api/iot/sample
+    11→- 6 Prisma IoT models: IoTEdgeNode, IoTSensorV2, IoTSensorReading, IoTBatchJob, IoTCertificationLog (plus existing IoTSensor)
+    12→- DmrvApp sidebar includes "📡 IoT Ingestion" menu item
+    13→- API endpoints verified working via curl
+    14→- IoT Gateway responds with 5 edge nodes across Thailand (Bangkok, Chiang Mai, Khon Kaen, Phuket, Surat Thani)
+    15→- Server experiences memory pressure when loading all 30+ dynamic components via browser
+    16→
+    17→Stage Summary:
+    18→- Complete IoT data ingestion system is functional with Realtime (WebSocket/MQTT) and Batch (CSV/JSON) modes
+    19→- Data certification with SHA-256 integrity hash, Merkle root, digital signatures, and 5 certification rules
+    20→- 5 simulated edge nodes with 25+ sensors covering 14 sensor types (CH4, CO2, temperature, etc.)
+    21→- All API endpoints tested and working correctly
+    22→- Frontend view complete with Thai language support
+    23→---
+    24→Task ID: 6
+    25→Agent: Main Agent
+    26→Task: Verify IoT Ingestion system and provide Thai explanation
+    27→
+    28→Work Log:
+    29→- Verified all IoT system components are running and functional
+    30→- IoT Gateway running on port 3035 with 5 edge nodes and 25 sensors
+    31→- Next.js dev server running on port 3000
+    32→- Tested IoT Ingestion page via Agent Browser
+    33→- Confirmed simulation generates sensor data correctly (Realtime mode)
+    34→- Verified all 6 tabs: Realtime, Batch, Edge Nodes, การรับรอง, กราฟ, ตัวอย่าง/API
+    35→- KPI cards showing correct data (readings, validated, anomalies)
+    36→- Edge node status (4/5 online, 1 offline) displaying correctly
+    37→
+    38→Stage Summary:
+    39→- Complete IoT Ingestion system is verified and working
+    40→- All components: Gateway (port 3035), API routes (5 endpoints), Frontend (6 tabs), Prisma schema (5 models)
+    41→- Simulation generates realistic sensor data with integrity hashing and quality flags
+    42→- Ready for Thai language explanation
+    43→---
+    44→Task ID: 1
+    45→Agent: main
+    46→Task: Update project configuration to comply with Prisma 7 requirements
+    47→
+    48→Work Log:
+    49→- Researched Prisma 7 breaking changes (provider rename, required output field, removed datasource url, driver adapters required, new prisma.config.ts)
+    50→- Updated prisma/schema.prisma: changed `provider = "prisma-client-js"` to `provider = "prisma-client"`, added required `output = "../src/generated/prisma"`, removed `url` from datasource block
+    51→- Created prisma.config.ts at project root with datasource URL configuration
+    52→- Updated package.json: upgraded `@prisma/client` and `prisma` to ^7.0.0, added `@prisma/adapter-better-sqlite3` ^7.0.0
+    53→- Rewrote src/lib/db.ts: changed import from `@prisma/client` to `@/generated/prisma/client`, added `PrismaBetterSqlite3` driver adapter
+    54→- Added `src/generated/` to .gitignore and eslint.config.mjs ignores
+    55→- Ran `bun install`, `prisma generate`, `prisma db push` — all successful
+    56→- Verified dev server starts cleanly, lint passes, and browser renders the full dashboard with live data
+    57→
+    58→Stage Summary:
+    59→- Prisma upgraded from 6.19.2 → 7.8.0
+    60→- Key changes: new `prisma-client` provider, explicit output path, driver adapter required, datasource URL moved to prisma.config.ts
+    61→- Generated client at `src/generated/prisma/`
+    62→- All 29 models (including 5 IoT models) work correctly with the new adapter
+    63→- Browser verification confirmed: page loads with full dashboard, KPIs show real data, API routes return 200 OK
+    64→---
+    65→Task ID: 3
+    66→Agent: full-stack-developer
+    67→Task: Update SoilCarbonAgentView.tsx for Vetiver Grass + Nan Province + Correct Dimensions
+    68→
+    69→Work Log:
+    70→- Updated TerraceLayer interface with new fields: plantingAreaWidthM, ridgeWidthM, vetiverGrassStatus, vetiverRootDepthCm, vetiverPlantDensity, vetiverErosionPreventionPct, vetiverSedimentAccumulationKg, vetiverCarbonSequestrationKg
+    71→- Updated SoilCarbonPlot interface with new fields: previousLandUse, vetiverGrassCoveragePct, plantingAreaWidthM, ridgeWidthMPlot
+    72→- Added PREVIOUS_LAND_USE_LABELS constant (slash_and_burn, conventional, degraded_forest, abandoned_mining, grassland)
+    73→- Added VETIVER_STATUS_LABELS and VETIVER_STATUS_COLORS constants (NONE, PLANTED, ESTABLISHED, MATURE)
+    74→- Updated CREDIT_SOURCE_COLORS to include 6 segments (added lime for Vetiver Grass)
+    75→- Completely rewrote TerraceCrossSection SVG component to show vetiver ridge on outer edge of each terrace with grass-like lines, planting area vs ridge split, and vetiver grass legend
+    76→- Updated generateMockTerraces to include all vetiver fields with appropriate mock values per status
+    77→- Updated summary useMemo to include slashAndBurnPlots, totalVetiverArea, totalVetiverCarbon
+    78→- Added new KPI row in overview: แปลงเปลี่ยนจากไร่เลื่อนลอย, พื้นที่หญ้าแฝกรวม, คาร์บอนจากหญ้าแฝกรวม
+    79→- Updated creditSourceData to include Vetiver Grass segment (13%)
+    80→- Added province filter state + filteredPlots/provinces useMemo
+    81→- Added province selector dropdown and "พื้นที่จังหวัดน่าน" quick filter button in plots tab
+    82→- Updated plots table to use filteredPlots instead of plots
+    83→- Updated expanded plot details with: Previous Land Use badge, Vetiver Grass Coverage progress bar, Dimension Diagram showing planting area vs ridge, Vetiver Grass Status badges per layer, Vetiver Performance Summary section
+    84→- Added 6th calculation card in calculator: คาร์บอนจากหญ้าแฝก (Vetiver Grass CO2e)
+    85→- Updated stacked bar chart in calculator to include Vetiver Grass segment
+    86→- Updated handleCalculate to include vetiverCarbon in gross total
+    87→- Updated calculator description to include หญ้าแฝก
+    88→- Updated certification checklist with 3 new vetiver items: vetiver_data, vetiver_ridge_width, planting_area_width
+    89→- Updated header title to "เกษตรกักตะกอนดิน & หญ้าแฝก"
+    90→- Lint passes with no errors
+    91→
+    92→Stage Summary:
+    93→- All vetiver grass fields correctly integrated across interfaces, mock data, SVG visualization, plot details, calculator, and certification
+    94→- Correct dimensions applied: ridge 0.7-1.0m, planting area 1.5-2.0m, total 2.0-2.7m
+    95→- Nan province filter and quick filter button added
+    96→- SVG cross-section now shows distinct planting area and vetiver ridge with grass visualization
+    97→- Calculator includes vetiver carbon as 6th credit source
+    98→
+    99→---
+   100→Task ID: 2
+   101→Agent: full-stack-developer
+   102→Task: Update Soil Carbon API routes for Vetiver Grass + Nan Province + Correct Dimensions
+   103→
+   104→Work Log:
+   105→- Updated plots/route.ts POST handler to accept new fields (previousLandUse, vetiverGrassCoveragePct, plantingAreaWidthM, ridgeWidthMPlot) and auto-generate TerraceLayer with vetiver grass fields (vetiverGrassStatus, vetiverRootDepthCm, vetiverPlantDensity, ridgeWidthM, plantingAreaSqm)
+   106→- Updated sample/route.ts with 3 new Nan province plots (SOIL-NNN-006, SOIL-NNN-007, SOIL-NNN-008) showing slash_and_burn → sediment_trap conversion; corrected dimensions for all 5 existing plots (terraceWidthM now 2.0-2.7m, ridgeWidthMPlot 0.7-1.0m, plantingAreaWidthM 1.5-2.0m); added vetiver grass fields to all 8 SAMPLE_TERRACES entries; added 3 new SAMPLE_CHECK_DAMS for Nan plots; updated seed function to include all new TerraceLayer and SoilCarbonPlot fields
+   107→- Updated calculate/route.ts with Step 2.5: Vetiver Grass Carbon Sequestration (vetiverSedimentCarbon + vetiverBiomassCarbon + vetiverErosionCredit × 44/12); added vetiverData to terraceSedimentDetails; added step2_5_vetiverGrass section to calculationReport; updated grossCredits to include totalVetiverCO2e; added vetiverGrass to step6 breakdown; added vetiver grass and slash-and-burn conversion recommendations; added previousLandUse and vetiverGrassCoveragePct to plotInfo
+   108→- Updated measurements/route.ts GET and POST handlers to include ridgeWidthM, plantingAreaWidthM, vetiverGrassStatus in terraceLayer select
+   109→
+   110→Stage Summary:
+   111→- All 4 API route files updated successfully
+   112→- Lint passes cleanly with no errors
+   113→- Dev server running without issues
+   114→- Key design decisions:
+   115→  - Vetiver grass auto-config: when vetiverGrassCoveragePct > 0, TerraceLayer gets vetiverGrassStatus=PLANTED, vetiverRootDepthCm=250, vetiverPlantDensity=7
+   116→  - Step 2.5 calculations: 3 carbon pools (sediment, biomass, erosion prevention) per terrace with vetiver grass
+   117→  - Nan province plots tell the "slash_and_burn → sediment_trap" conversion story with previousLandUse='slash_and_burn'
+   118→  - Corrected dimensions: terraceWidthM = ridgeWidthMPlot + plantingAreaWidthM (2.0-2.7m total)
+   119→
+   120→---
+   121→Task ID: 1
+   122→Agent: main
+   123→Task: Update Soil Carbon system with Vetiver Grass + Nan Province + Correct Dimensions
+   124→
+   125→Work Log:
+   126→- Updated Prisma schema: Added plantingAreaWidthM, plantingAreaSqm, ridgeWidthMPlot to SoilCarbonPlot; Added ridgeWidthM (0.7-1.0m), plantingAreaWidthM (1.5-2.0m), plantingAreaSqm, vetiverGrassStatus, vetiverRootDepthCm, vetiverPlantDensity, vetiverErosionPreventionPct, vetiverSedimentAccumulationKg, vetiverCarbonSequestrationKg to TerraceLayer; Added previousLandUse, vetiverGrassCoveragePct, plantingAreaWidthM, ridgeWidthMPlot to SoilCarbonPlot
+   127→- Updated API plots/route.ts: Auto-create terraces with vetiver grass and correct dimensions
+   128→- Updated API sample/route.ts: 8 plots (5 existing + 3 Nan province), all with correct ridge/planting dimensions and vetiver grass data
+   129→- Updated API calculate/route.ts: New Step 2.5 Vetiver Grass Carbon Sequestration (sediment + biomass + erosion prevention credits)
+   130→- Updated API measurements/route.ts: Added vetiver fields in terraceLayer select
+   131→- Updated SoilCarbonAgentView.tsx: Vetiver grass labels, status badges, terrace SVG with ridge/planting split, Nan province filter, previous land use badges, vetiver statistics
+   132→- Reset database and re-seeded with corrected data
+   133→- All APIs verified working via curl
+   134→
+   135→Stage Summary:
+   136→- All 8 plots have correct dimensions: ridge=0.7-1.0m, planting=1.5-2.0m, total=2.0-2.7m
+   137→- 3 new Nan province plots: SOIL-NNN-006 (Coffee, ท่าวังผา), SOIL-NNN-007 (Macadamia, ปัว), SOIL-NNN-008 (Arabica Coffee, เฉลิมพระเกียรติ) - all former slash-and-burn
+   138→- Vetiver grass carbon credit calculation working: sediment + biomass + erosion prevention
+   139→- Calculate API returns proper breakdown including vetiverGrass component
+   140→
+   141→---
+   142→Task ID: 5-split
+   143→Agent: Refactoring Agent
+   144→Task: Split SoilCarbonAgentView.tsx into smaller sub-components to reduce memory usage
+   145→
+   146→Work Log:
+   147→- Read and analyzed the full 2722-line SoilCarbonAgentView.tsx file
+   148→- Identified 5 major tab sections and shared constants/types/helpers
+   149→- Created soil-carbon/types.ts (151 lines) with all TypeScript interfaces
+   150→- Created soil-carbon/constants.ts (195 lines) with colors, labels, helpers, mock generators
+   151→- Created soil-carbon/TerraceCrossSection.tsx (226 lines) SVG component
+   152→- Created soil-carbon/OverviewTab.tsx (302 lines) overview tab content
+   153→- Created soil-carbon/PlotsTab.tsx (323 lines) plots tab content
+   154→- Created soil-carbon/IngestionTab.tsx (191 lines) ingestion tab content
+   155→- Created soil-carbon/CalculatorTab.tsx (379 lines) calculator tab content
+   156→- Created soil-carbon/CertificationTab.tsx (308 lines) certification tab content
+   157→- Created soil-carbon/useSoilCarbonState.ts (405 lines) custom hook with all state management
+   158→- Rewrote main SoilCarbonAgentView.tsx down to 189 lines (from 2722, 93% reduction)
+   159→- Used next/dynamic with ssr:false for all 5 tab components
+   160→- Kept header, tabs structure, and new plot dialog in main component
+   161→- All imports verified, no functionality or UI changes
+   162→- Lint passes with zero errors
+   163→- Dev server compiles successfully
+   164→
+   165→Summary:
+   166→Split a 2722-line monolithic component into 9 focused files under soil-carbon/ directory plus a lean 189-line main component. This reduces per-file memory footprint during Next.js dev server compilation, preventing OOM crashes. The custom hook pattern keeps state management clean while dynamic imports with ssr:false ensure tab content loads only when needed.
+   167→
+   168→---
+   169→Task ID: 6
+   170→Agent: main
+   171→Task: Continue from context loss — Verify and finalize Soil Carbon system with Vetiver Grass + Nan Province + Correct Dimensions
+   172→
+   173→Work Log:
+   174→- Reviewed all existing code and worklog entries from previous session
+   175→- Verified Prisma schema has correct fields: ridgeWidthM (0.7-1.0m), plantingAreaWidthM (1.5-2.0m), terraceWidthM (2.0-2.7m) in both SoilCarbonPlot and TerraceLayer
+   176→- Verified API /api/soil-carbon/plots returns 8 plots with correct dimensions (3 Nan province with slash_and_burn previousLandUse)
+   177→- Verified API /api/soil-carbon/calculate returns correct breakdown: SOC=112.64, Sediment=0.18, Vetiver=799.096, Dam=9.277, Erosion=1.338, GHG=18.24 tCO2e (Net=752.616 after 20% buffer)
+   178→- Verified API /api/soil-carbon/sample?seed=true works correctly
+   179→- Changed SoilCarbonAgentView.tsx sub-component imports from dynamic (next/dynamic) to static imports to reduce chunk compilation overhead
+   180→- Lint passes cleanly with zero errors
+   181→- Browser verification attempted but limited by memory constraints (8GB RAM, server + Chromium exceed available memory when compiling client-side chunks)
+   182→- API-only verification confirms all backend logic is correct
+   183→
+   184→Stage Summary:
+   185→- All Soil Carbon system updates confirmed working:
+   186→  - 8 plots with correct dimensions: ridge=0.7-1.0m, planting=1.5-2.0m, total=2.0-2.7m
+   187→  - 3 Nan province plots (SOIL-NNN-006, SOIL-NNN-007, SOIL-NNN-008) with slash_and_burn → sediment_trap conversion
+   188→  - Vetiver Grass Carbon (Step 2.5): 3 carbon pools (sediment, biomass, erosion prevention)
+   189→  - Calculate API: Net 752.616 tCO2e for SOIL-NNN-006 (including 799.096 tCO2e from vetiver)
+   190→  - Component refactored from 2722 lines → 189 lines main + 9 sub-files under soil-carbon/
+   191→- Browser verification not possible due to memory constraints (Next.js dev server + Chromium = ~6GB, system has 8GB total)
+   192→- All APIs verified via curl with correct data
+   193→
+   194→---
+   195→Task ID: 7
+   196→Agent: main
+   197→Task: Create .zip file with latest updates for user
+   198→
+   199→Work Log:
+   200→- Fixed seed function in /api/soil-carbon/sample/route.ts: existing plots now properly create terraces, check dams, and measurements (previously skipped all child record creation for existing plots)
+   201→- Reset database (deleted custom.db, re-pushed schema, re-seeded)
+   202→- Verified seed creates: 8 plots, 37 terraces, 35 check dams, 72 measurements
+   203→- Verified terraces include vetiver grass data: ridge=0.8m, planting=1.7m, vetiver=ESTABLISHED
+   204→- Verified calculate API: SOIL-NNN-006 → Gross 940.769 tCO2e, Net 752.616 tCO2e
+   205→- Created dmrv-platform-latest.zip (834KB, 330 files) excluding node_modules, .git, .next, generated prisma, images, db
+   206→
+   207→Stage Summary:
+   208→- Seed function fixed: no longer skips terrace/dam/measurement creation for existing plots
+   209→- All APIs verified working with complete data
+   210→- dmrv-platform-latest.zip created at /home/z/my-project/dmrv-platform-latest.zip (834KB)
+   211→- Contains: src/, prisma/, public/, mini-services/, config files, worklog
+   212→
+   213→---
+   214→Task ID: 2
+   215→Agent: full-stack-developer
+   216→Task: Redesign OverviewTab for visual clarity
+   217→
+   218→Work Log:
+   219→- Updated first row KPI cards (4 cards): value text from text-2xl to text-3xl, label text from text-xs to text-sm, sub-text removed text-slate-500, icon container bg from /10 to /15 opacity, card padding from p-4 to p-5
+   220→- Added gradient backgrounds to first row KPI cards: blue (แปลงทั้งหมด), emerald (ชั้นปลูกรวม), amber (ตะกอนดิน), teal (เครดิตคาร์บอน)
+   221→- Updated second row KPI cards (3 cards): same sizing upgrades, gradient backgrounds from-orange-500/8, from-lime-500/8, from-emerald-500/8
+   222→- Updated Charts Row 1: chart height from 260 to 320, card title from text-sm font-medium to text-base font-semibold, CardContent from pt-0 to p-5 pt-0
+   223→- Updated Charts Row 2: same title and padding upgrades, pie chart outerRadius from 90 to 100, innerRadius from 50 to 60, height from 260 to 320
+   224→- Updated Latest Plots Table: header text from text-[10px] to text-xs, cell text from text-xs to text-sm, row padding from py-1/py-1.5 to py-2/py-2.5, max-h from 260px to 320px
+   225→- Updated all section gaps from gap-4 to gap-5
+   226→- Lint passes with zero errors
+   227→- All props, data flow, and logic preserved exactly
+   228→
+   229→Stage Summary:
+   230→- OverviewTab visually redesigned with bigger, bolder, clearer presentation
+   231→- KPI values now text-3xl (from text-2xl), labels text-sm (from text-xs)
+   232→- All cards have distinctive gradient backgrounds for visual distinction
+   233→- Charts increased to 320px height (from 260px) with larger pie radii
+   234→- Table text upgraded from text-xs/text-[10px] to text-sm/text-xs
+   235→- Consistent gap-5 spacing throughout all sections
+   236→
+   237→---
+   238→Task ID: 3
+   239→Agent: full-stack-developer
+   240→Task: Redesign PlotsTab and TerraceCrossSection for visual clarity
+   241→
+   242→Work Log:
+   243→- Updated PlotsTab.tsx filter bar: province select widened from w-40 to w-48, text from text-xs to text-sm
+   244→- Updated PlotsTab.tsx main table: header text from text-[10px] to text-xs font-medium, cell text from text-xs/text-[11px] to text-sm, row padding from py-2 to py-3, Plot ID column from text-[11px] font-mono to text-sm font-mono, status badge from text-[10px] px-2 py-0 to text-xs px-2.5 py-0.5, table max height from max-h-[600px] to max-h-[700px]
+   245→- Updated PlotsTab.tsx expanded row info cards: card padding from p-3 to p-4, card titles from text-[10px] to text-sm font-medium, vetiver coverage percentage from text-xs to text-base, dimension diagram bar from h-8 to h-10, dimension labels from text-[9px]/text-[8px] to text-xs
+   246→- Updated PlotsTab.tsx section headers: ภาพตัดขวางชั้นปลูก from text-sm to text-base, ประสิทธิภาพหญ้าแฝก and ฝายชะลอน้ำ from text-xs to text-sm
+   247→- Updated PlotsTab.tsx layer detail grid from lg:grid-cols-5 to lg:grid-cols-3, card padding from p-3 to p-4, layer title from text-xs to text-sm, detail rows from text-[10px] to text-xs, vetiver badge from text-[8px] to text-xs
+   248→- Updated PlotsTab.tsx vetiver performance grid from lg:grid-cols-5 to lg:grid-cols-3, same text size increases
+   249→- Updated PlotsTab.tsx check dam grid from lg:grid-cols-5 to lg:grid-cols-3, same text size increases
+   250→- Updated TerraceCrossSection.tsx SVG dimensions: default from 720x280 to 800x320, compact from 520x180 to 600x220
+   251→- Updated TerraceCrossSection.tsx text sizes: layer number from fontSize 10 to 12 (compact 8→9), crop type from fontSize 7 to 9 (compact now shows crop type at fontSize 7), ridge label from 7 to 9, ridge width from 6 to 8
+   252→- Updated TerraceCrossSection.tsx vetiver grass heights: MATURE 12→15, ESTABLISHED 9→11, PLANTED 6→8
+   253→- Updated TerraceCrossSection.tsx legend: fontSize from 8 to 10, items more spaced out
+   254→- Updated TerraceCrossSection.tsx color opacities: planting area 0.85→0.9, ridge 0.9→0.95, grass lines slightly increased, gradient stops slightly increased
+   255→- Lint passes with zero errors
+   256→- All props, data flow, and logic preserved exactly
+   257→
+   258→Stage Summary:
+   259→- PlotsTab completely redesigned with bigger text, more padding, clearer hierarchy
+   260→- TerraceCrossSection SVG enlarged and text made more readable
+   261→- Grid layouts changed from 5-column to 3-column for better readability in expanded rows
+   262→- All dimension specifications from the task followed exactly
+   263→
+   264→---
+   265→Task ID: 4-5
+   266→Agent: full-stack-developer
+   267→Task: Redesign CalculatorTab, CertificationTab, IngestionTab, and Main Header for visual clarity
+   268→
+   269→Work Log:
+   270→- Updated CalculatorTab.tsx input section: title from text-sm font-medium to text-base font-semibold
+   271→- Updated CalculatorTab.tsx 6 calculation cards: grid from lg:grid-cols-6 to lg:grid-cols-3, value text from text-lg to text-2xl font-bold, label text from text-[10px] to text-xs font-medium, unit text from text-[10px] to text-xs, formula text from text-[9px] to text-[10px], card padding from p-3 to p-4, icon container from p-1.5 rounded to p-2 rounded-lg
+   272→- Added gradient backgrounds to 6 calculation cards: SOC (emerald), Sediment (amber), Check Dam (blue), Vetiver (lime), Erosion (red), GHG (purple) with from-{color}-500/8 to-slate-800/50 gradients
+   273→- Updated CalculatorTab.tsx summary row: value text from text-2xl to text-3xl font-bold, label text from text-xs to text-sm, added colored bar indicators on left side of each card
+   274→- Updated CalculatorTab.tsx Net card: bg-gradient-to-br from-emerald-500/15 to-emerald-500/5 border-emerald-500/40 for prominent styling
+   275→- Updated CalculatorTab.tsx charts row: height from 260 to 320, card title from text-sm font-medium to text-base font-semibold, card padding from default to p-5
+   276→- Updated CalculatorTab.tsx co-benefits: value from text-lg to text-xl font-bold, label from text-xs to text-sm, icon from h-5 w-5 to h-6 w-6
+   277→- Updated CalculatorTab.tsx detailed calculation info: cell text from text-xs to text-sm
+   278→- Updated CalculatorTab.tsx sediment table: header from text-[10px] to text-xs, cell text from text-xs to text-sm, row padding from py-1 to py-2, section title from text-sm font-medium to text-base font-semibold
+   279→- Updated CertificationTab.tsx eligible plots card: title from text-sm font-medium to text-base font-semibold, badge from text-[10px] to text-xs
+   280→- Updated CertificationTab.tsx workflow step circles: from w-6 h-6 to w-8 h-8, step number text from text-[10px] to text-xs, check icon from h-3 w-3 to h-4 w-4
+   281→- Updated CertificationTab.tsx step labels: from text-[10px] to text-xs
+   282→- Updated CertificationTab.tsx checklist buttons: padding from p-2 to p-3, text from text-xs to text-sm, check circle from h-3.5 w-3.5 to h-4 w-4, empty circle from h-3.5 w-3.5 to h-4 w-4
+   283→- Updated CertificationTab.tsx step content buttons: text from text-xs to text-sm
+   284→- Updated CertificationTab.tsx step 2 text: "พร้อมรับรอง" from text-xs to text-sm, description from text-[10px] to text-xs
+   285→- Updated CertificationTab.tsx step 3 text: "รับรองสำเร็จ" from text-xs to text-sm, cert ID from text-[10px] to text-xs
+   286→- Updated CertificationTab.tsx requirements card: title from text-sm font-medium to text-base font-semibold, items from text-xs to text-sm, description added explicit text-xs, check icons from h-3.5 w-3.5 to h-4 w-4
+   287→- Updated CertificationTab.tsx history card: title from text-sm font-medium to text-base font-semibold, plot name from text-xs to text-sm, plot details from text-[10px] to text-xs, net credits from text-xs to text-sm, date from text-[10px] to text-xs, empty state from text-xs to text-sm
+   288→- Updated IngestionTab.tsx terrace layer selector: title from text-sm font-medium to text-base font-semibold
+   289→- Updated IngestionTab.tsx sensor cards: value from text-lg to text-xl font-bold, label from text-[10px] to text-xs, unit from text-[10px] to text-xs, card padding from p-3 to p-4, icon from h-3.5 w-3.5 to h-4 w-4
+   290→- Updated IngestionTab.tsx quality summary: title from text-sm font-medium to text-base font-semibold, badges from text-[10px] to text-xs
+   291→- Updated IngestionTab.tsx batch upload: title from text-sm font-medium to text-base font-semibold
+   292→- Updated SoilCarbonAgentView.tsx header: wrapped in gradient banner div with p-4 rounded-xl bg-gradient-to-r from-emerald-500/10 via-slate-800/50 to-slate-800/50 border border-emerald-500/20
+   293→- Updated SoilCarbonAgentView.tsx header: title from text-xl to text-2xl font-bold, icon container from p-2 to p-3
+   294→- Updated SoilCarbonAgentView.tsx tabs: added text-sm to all TabsTrigger components for bigger tab text
+   295→- Lint passes with zero errors
+   296→- Dev server returns 200 OK
+   297→- All props, data flow, and logic preserved exactly
+   298→
+   299→Stage Summary:
+   300→- All four files visually redesigned with bigger, bolder, clearer presentation
+   301→- CalculatorTab: 3-column grid, gradient cards, text-2xl values, text-3xl summary, colored bar indicators, 320px charts
+   302→- CertificationTab: text-base titles, w-8 step circles, text-sm checklist items, text-sm requirement items
+   303→- IngestionTab: text-base titles, text-xl sensor values, text-xs labels/units, p-4 card padding
+   304→- SoilCarbonAgentView: gradient banner header, text-2xl title, p-3 icon container, text-sm tabs
+   305→
+   306→---
+   307→Task ID: 1
+   308→Agent: full-stack-developer
+   309→Task: Add Edge Device Authentication to IoT Gateway
+   310→
+   311→Work Log:
+   312→- Read previous worklog entries to understand the IoT Gateway mini-service context (port 3035, 776 lines originally, 5 edge nodes, 25 sensors, WebSocket + HTTP REST + simulation + certification)
+   313→- Read /home/z/my-project/mini-services/iot-gateway/index.ts to locate insertion points (line 13 imports, line 256 Create Server section, line 707 sample-data block, line 764 404 fallback)
+   314→- Added `import * as crypto from 'crypto';` after the existing `cors` import (line 14)
+   315→- Inserted Edge Device Authentication section before `// ─── Create Server ───` (now spanning lines 257-348): EdgeCredential and AuthToken interfaces, GATEWAY_SECRET constant (env-overridable), EDGE_CREDENTIALS array with 3 pre-registered AWD edge devices (นครราชสีมา, สุพรรณบุรี, อุบลราชธานี), ACTIVE_TOKENS Map, TOKEN_TTL_MS (24h), sha256() and hmacSha256() helper functions, issueToken(), verifyToken() (constant-time compare), verifyEdgePayload() (token + integrity hash + signature verification)
+   316→- Inserted 3 new HTTP endpoints after the `/api/sample-data` block and before the 404 fallback (lines 858-959): POST /api/edge/auth (deviceId+apiKey → signed token, returns ttlSeconds=86400, hashAlgorithm=SHA-256, signatureAlgorithm=HMAC-SHA256), POST /api/edge/verify (token+payload+integrityHash+signature → valid:true/false), GET /api/edge/credentials (demo listing of 3 deviceId+apiKey pairs)
+   317→- Verified all existing endpoints (realtime-ingest, batch-upload, sample-data, etc.) remain untouched — only new edge auth endpoints were added
+   318→- Ran `bun build ./index.ts --outfile ./index.js --target bun` — successful (0.48 MB, 59 modules)
+   319→- Killed existing service (PID on port 3035) and restarted with `bun run dev` in background via nohup
+   320→- Confirmed service started cleanly: "[IoT Gateway] 🚀 Running on port 3035", 5 edge nodes, 25 sensors
+   321→- Tested GET /api/edge/credentials → 200 OK with 3 credentials (EDGE-AWD-001/002/003)
+   322→- Tested POST /api/edge/auth with EDGE-AWD-001 + awd-edge-key-2024-korat → 200 OK with success:true and signed token (format: `deviceId:issuedAt:expiresAt.hmacSignature`)
+   323→- Tested POST /api/edge/verify using the issued token, payload `{"test":1}`, its SHA-256 integrity hash, and HMAC-SHA256 signature (key=token, msg=integrityHash) → 200 OK with valid:true, deviceId:EDGE-AWD-001
+   324→
+   325→Stage Summary:
+   326→- 3 new endpoints added: POST /api/edge/auth, POST /api/edge/verify, GET /api/edge/credentials
+   327→- Token format: `{deviceId}:{issuedAt}:{expiresAt}.{HMAC-SHA256(GATEWAY_SECRET, payload)}` with 24h TTL
+   328→- 3 pre-registered AWD edge credentials across 3 Thai provinces (นครราชสีมา, สุพรรณบุรี, อุบลราชธานี)
+   329→- Crypto: SHA-256 for integrity hashing and API key hashing, HMAC-SHA256 for token signing and payload signature verification
+   330→- All 3 curl tests passed: credentials list returns 3 entries, auth returns valid token, verify returns `valid: true` with deviceId
+   331→- No issues encountered — build clean, restart clean, all endpoints behave as specified
+   332→
+   333→---
+   334→Task ID: 2-5
+   335→Agent: full-stack-developer
+   336→Task: Update AWD Simulator with Edge Authentication, SHA-256 Hash, HMAC-SHA256 Signature, and CSV Logging
+   337→
+   338→Work Log:
+   339→- Read /home/z/my-project/worklog.md to confirm Task 1 IoT Gateway edge auth endpoints (POST /api/edge/auth, POST /api/edge/verify, GET /api/edge/credentials) with 3 pre-registered AWD credentials (EDGE-AWD-001 korat, EDGE-AWD-002 suphan, EDGE-AWD-003 ubon)
+   340→- Verified IoT Gateway (port 3035) is live: GET /api/edge/credentials returns 3 credentials; POST /api/edge/auth with EDGE-AWD-001 + awd-edge-key-2024-korat returns { success:true, token, issuedAt, expiresAt, ttlSeconds:86400, hashAlgorithm:SHA-256, signatureAlgorithm:HMAC-SHA256 }
+   341→- Read /home/z/my-project/mini-services/awd-simulator/index.ts (937 lines) to locate insertion points: line 22 imports, line 119 publishStatusToMQTT closing brace, line 121 TGO/T-VER Constants header, lines 707-722 simTick reading-publish block, line 844 mqtt-status endpoint, line 859 mqtt-reconnect endpoint, line 903 httpServer.listen block
+   342→- Added 3 new imports after `import mqtt from 'mqtt';`: `import * as crypto from 'crypto';`, `import * as fs from 'fs';`, `import * as path from 'path';`
+   343→- Inserted Edge Device Authentication + CSV Logging section (188 lines) between publishStatusToMQTT() and TGO/T-VER Constants header: EdgeCredentialConfig interface, IOT_GATEWAY_URL constant (env-overridable, defaults to http://127.0.0.1:3035), EDGE_CREDENTIALS array (3 fields → deviceId/apiKey mapping), EdgeSession interface, edgeSessions Map, sha256() + hmacSha256() helpers, authenticateEdge() (HTTP POST /api/edge/auth → parses {success, token, issuedAt, expiresAt} → stores session), authenticateAllEdges() (Promise.allSettled over 3 fields), getOrRefreshSession() (re-auth if expires within 5 min), signReading() (computes integrityHash=SHA-256(coreReading JSON), signature=HMAC-SHA256(token, integrityHash); adds edgeNodeId, integrityHash, signature, signatureAlgorithm='HMAC-SHA256', hashAlgorithm='SHA-256', tokenExpiresAt), CSV_DIR/CSV_FILE paths, CSV_COLUMNS (38 columns including edgeNodeId, integrityHash, signature, tverMethodology), ensureCsvFile() (creates dir + header), csvEscape() (RFC 4180), appendReadingsToCsv()
+   344→- Modified simTick() reading-publish block: replaced plain `for (reading of newReadings) publishReadingToMQTT(reading)` loop with async IIFE that awaits getOrRefreshSession(reading.fieldId) for each reading, signs the reading via signReading(), publishes the signed reading to MQTT, and accumulates signed readings for appendReadingsToCsv() at the end (degraded mode: if session refresh fails, publishes raw reading without auth fields)
+   345→- Modified httpServer.listen callback to async: added `🔐 IoT Gateway` log line, `📄 CSV Log` log line, calls ensureCsvFile() before connectMQTT(), then `await authenticateAllEdges()` wrapped in try/catch — so all 3 edge devices authenticate against IoT Gateway on startup
+   346→- Added 2 new HTTP endpoints between /api/mqtt-status and /api/mqtt-reconnect: GET /api/edge-sessions (returns gatewayUrl + credential list + active session list with fieldId, deviceId, issuedAt, expiresAt, ttlSeconds, tokenPreview) and GET /api/csv-info (returns csvFile, exists, sizeBytes, sizeKB, lastModified)
+   347→- Ran `bun build ./index.ts --outfile ./index.js --target bun` → Bundled 198 modules in 60ms, 1.13 MB output, no errors
+   348→- Killed existing port 3032 process and restarted via nohup `bun run dev` → verified clean startup log with all expected lines: 🌾 AWD Rice Simulator running on port 3032, 🔐 IoT Gateway: http://127.0.0.1:3035, 📄 CSV Log: .../data/awd-readings.csv, [Auth] Authenticating 3 edge devices..., [Auth] ✅ Edge authenticated: EDGE-AWD-001/002/003 → field awd-korat/suphan/ubon (expires in 86399s), [MQTT] ✅ Connected to mqtt://35.213.186.240:1883, [CSV] Created: .../awd-readings.csv
+   349→- Started simulation via POST /api/start, waited 8 seconds
+   350→- Verified /api/edge-sessions → 3 active sessions with deviceId, issuedAt, expiresAt (24h), ttlSeconds≈86365, tokenPreview for each field
+   351→- Verified /api/mqtt-status → connected=true, published=12 (i.e., > 0), errors=0
+   352→- Verified /api/csv-info → csvFile exists, sizeBytes=5800 (> 0), sizeKB=5.7
+   353→- Verified CSV head -3 → header row with all 38 columns (timestamp, tick, fieldId, ..., edgeNodeId, ..., integrityHash, signature, tverMethodology) + 2 data rows: awd-korat (EDGE-AWD-001) with integrityHash=52692260279e08237b28992125a5084226e6a9089629ae34d36df0579824851c and signature=2567b97313e368ff4f7f9314792f9fb893a8a3d6eda1b4faeadabc6779e05a3b; awd-suphan (EDGE-AWD-002) with hash=48230192237c658bae96fada6a3cd73c876b0b10bb809257065082bf0fb12d7c and signature=627e3b8ee9d22b1684e09ed90adb0813ad784fda9f0fc4f3730b3f0dcca3dfa0; both rows end with tverMethodology=T-VER-P-AG-001
+   354→- Verified /api/readings?limit=1 → returns raw reading (no auth fields, edgeNodeId/integrityHash/signature/etc are null), confirming that signed payload is only sent to MQTT broker and CSV audit log, not stored in memory — as specified in the task
+   355→- Ran `bun run lint` at project root → passes with zero errors
+   356→
+   357→Stage Summary:
+   358→- Edge auth flow implemented: on startup, AWD Simulator authenticates all 3 fields (awd-korat, awd-suphan, awd-ubon) in parallel against IoT Gateway at http://127.0.0.1:3035/api/edge/auth using pre-shared API keys (awd-edge-key-2024-korat/suphan/ubon); gateway returns HMAC-SHA256-signed tokens (24h TTL) which are cached in edgeSessions Map and auto-refreshed within 5 min of expiry
+   359→- Hash + signature fields added to MQTT payload: every per-tick reading published to awd/readings and awd/field/<fieldId> topics now includes edgeNodeId (e.g., EDGE-AWD-001), integrityHash (SHA-256 of core reading JSON), signature (HMAC-SHA256 of integrityHash using the gateway-issued token as key), signatureAlgorithm='HMAC-SHA256', hashAlgorithm='SHA-256', tokenExpiresAt (ISO 8601) — enabling tamper-evident transmission that downstream consumers can verify via POST http://127.0.0.1:3035/api/edge/verify
+   360→- CSV file location: /home/z/my-project/mini-services/awd-simulator/data/awd-readings.csv (auto-created on first startup with 38-column header; appended every sim tick with all 3 fields per row; RFC 4180 escaping for commas/quotes/newlines)
+   361→- Test results: build succeeded (198 modules, 1.13 MB); service started cleanly; 3 edge sessions active with 86365s TTL; MQTT published 12 messages with 0 errors after 8 seconds of simulation; CSV grew to 5800 bytes with proper header + signed data rows showing valid SHA-256 hashes and HMAC-SHA256 signatures; lint passes with zero errors; MQTT broker URL (mqtt://35.213.186.240:1883) and topic names (awd/readings, awd/status, awd/field/<fieldId>) preserved unchanged
+   362→- Two new HTTP endpoints added: GET /api/edge-sessions (inspect active auth tokens per field) and GET /api/csv-info (CSV file metadata); existing endpoints (start/stop/reset/status/mqtt-status/mqtt-reconnect/readings/summary) and Socket.IO events preserved unchanged
+   363→

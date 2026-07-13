@@ -27,8 +27,8 @@ export default function SoilCarbonAgentView() {
     return (
       <div className="flex items-center justify-center min-h-[600px]">
         <div className="text-center space-y-4">
-          <RefreshCw className="h-10 w-10 animate-spin text-emerald-500 mx-auto" />
-          <p className="text-slate-400">กำลังโหลดข้อมูล Soil Carbon Agent...</p>
+          <RefreshCw className="h-10 w-10 animate-spin text-emerald-400 mx-auto" />
+          <p className="text-slate-300">กำลังโหลดข้อมูล Soil Carbon Agent...</p>
         </div>
       </div>
     );
@@ -37,18 +37,18 @@ export default function SoilCarbonAgentView() {
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="p-4 rounded-xl bg-gradient-to-r from-emerald-500/10 via-slate-800/50 to-slate-800/50 border border-emerald-500/20">
+      <div className="p-5 rounded-xl bg-gradient-to-r from-emerald-500/25 via-emerald-500/10 to-slate-800/60 border-2 border-emerald-500/40 shadow-lg shadow-emerald-500/10">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
-              <Mountain className="h-6 w-6 text-emerald-500" />
+            <div className="p-3 rounded-lg bg-emerald-500/25 border border-emerald-400/40 shadow-inner">
+              <Mountain className="h-6 w-6 text-emerald-300" />
             </div>
             <div>
               <h1 className="text-2xl font-bold text-white">Soil Carbon — เกษตรกักตะกอนดิน & หญ้าแฝก</h1>
-              <p className="text-sm text-slate-400">ระบบติดตามและรับรองโครงการกักคาร์บอนในดิน — พื้นที่สูง/ลาดชัน — คันขอบหญ้าแฝก — T-VER-SOIL-01</p>
+              <p className="text-sm text-emerald-100/80">ระบบติดตามและรับรองโครงการกักคาร์บอนในดิน — พื้นที่สูง/ลาดชัน — คันขอบหญ้าแฝก — T-VER-SOIL-01</p>
             </div>
           </div>
-          <Button variant="outline" size="sm" className="border-slate-600 text-slate-300 hover:bg-slate-700"
+          <Button variant="outline" size="sm" className="border-emerald-500/50 text-emerald-200 hover:bg-emerald-500/20"
             onClick={() => { s.fetchPlots(); s.fetchMeasurements(); s.fetchTerraces(); s.fetchCheckDams(); }}>
             <RefreshCw className="h-4 w-4 mr-1" /> รีเฟรช
           </Button>
@@ -57,20 +57,20 @@ export default function SoilCarbonAgentView() {
 
       {/* Tabs */}
       <Tabs value={s.activeTab} onValueChange={s.setActiveTab}>
-        <TabsList className="bg-slate-800/50 border border-slate-700/50">
-          <TabsTrigger value="overview" className="text-sm data-[state=active]:bg-emerald-500/20 data-[state=active]:text-emerald-400">
+        <TabsList className="bg-slate-800/70 border border-slate-600/50">
+          <TabsTrigger value="overview" className="text-sm data-[state=active]:bg-emerald-500/30 data-[state=active]:text-emerald-200 data-[state=active]:shadow-inner">
             <BarChart3 className="h-4 w-4 mr-1" /> ภาพรวม
           </TabsTrigger>
-          <TabsTrigger value="plots" className="text-sm data-[state=active]:bg-emerald-500/20 data-[state=active]:text-emerald-400">
+          <TabsTrigger value="plots" className="text-sm data-[state=active]:bg-emerald-500/30 data-[state=active]:text-emerald-200 data-[state=active]:shadow-inner">
             <Sprout className="h-4 w-4 mr-1" /> แปลงเกษตร
           </TabsTrigger>
-          <TabsTrigger value="ingestion" className="text-sm data-[state=active]:bg-emerald-500/20 data-[state=active]:text-emerald-400">
+          <TabsTrigger value="ingestion" className="text-sm data-[state=active]:bg-emerald-500/30 data-[state=active]:text-emerald-200 data-[state=active]:shadow-inner">
             <Activity className="h-4 w-4 mr-1" /> รับข้อมูล
           </TabsTrigger>
-          <TabsTrigger value="calculator" className="text-sm data-[state=active]:bg-emerald-500/20 data-[state=active]:text-emerald-400">
+          <TabsTrigger value="calculator" className="text-sm data-[state=active]:bg-emerald-500/30 data-[state=active]:text-emerald-200 data-[state=active]:shadow-inner">
             <Calculator className="h-4 w-4 mr-1" /> คำนวณคาร์บอน
           </TabsTrigger>
-          <TabsTrigger value="certification" className="text-sm data-[state=active]:bg-emerald-500/20 data-[state=active]:text-emerald-400">
+          <TabsTrigger value="certification" className="text-sm data-[state=active]:bg-emerald-500/30 data-[state=active]:text-emerald-200 data-[state=active]:shadow-inner">
             <FileCheck className="h-4 w-4 mr-1" /> รับรอง
           </TabsTrigger>
         </TabsList>

@@ -21,24 +21,24 @@ export default function TerraceCrossSection({ layers, checkDams, compact = false
     <svg width="100%" viewBox={`0 0 ${w} ${h}`} className="rounded-lg" style={{ maxHeight: compact ? 220 : 320 }}>
       <defs>
         <linearGradient id="terraceGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#065f46" />
-          <stop offset="100%" stopColor="#10b981" />
+          <stop offset="0%" stopColor="#047857" />
+          <stop offset="100%" stopColor="#34d399" />
         </linearGradient>
         <linearGradient id="plantGrad" x1="0%" y1="0%" x2="0%" y2="100%">
           <stop offset="0%" stopColor="#059669" />
-          <stop offset="100%" stopColor="#10b981" />
+          <stop offset="100%" stopColor="#34d399" />
         </linearGradient>
         <linearGradient id="ridgeGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-          <stop offset="0%" stopColor="#064e3b" />
-          <stop offset="100%" stopColor="#065f46" />
+          <stop offset="0%" stopColor="#065f46" />
+          <stop offset="100%" stopColor="#047857" />
         </linearGradient>
         <linearGradient id="waterGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-          <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.7" />
-          <stop offset="100%" stopColor="#1d4ed8" stopOpacity="0.4" />
+          <stop offset="0%" stopColor="#60a5fa" stopOpacity="0.9" />
+          <stop offset="100%" stopColor="#3b82f6" stopOpacity="0.6" />
         </linearGradient>
         <linearGradient id="sedimentGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-          <stop offset="0%" stopColor="#92400e" stopOpacity="0.9" />
-          <stop offset="100%" stopColor="#78350f" stopOpacity="0.7" />
+          <stop offset="0%" stopColor="#fbbf24" stopOpacity="0.95" />
+          <stop offset="100%" stopColor="#d97706" stopOpacity="0.8" />
         </linearGradient>
       </defs>
 
@@ -46,8 +46,8 @@ export default function TerraceCrossSection({ layers, checkDams, compact = false
       <path
         d={`M 0,${h * 0.15} L ${w * 0.1},${h * 0.1} L ${w},${h * 0.85} L ${w},${h} L 0,${h} Z`}
         fill="#1e293b"
-        stroke="#334155"
-        strokeWidth="1"
+        stroke="#475569"
+        strokeWidth="1.5"
       />
 
       {/* Terrace steps */}
@@ -77,8 +77,8 @@ export default function TerraceCrossSection({ layers, checkDams, compact = false
               d={`M ${px1},${y1} L ${px2},${y2} L ${px2},${y3} L ${px1},${y3} Z`}
               fill={TERRACE_COLORS[i % TERRACE_COLORS.length]}
               stroke="#065f46"
-              strokeWidth="1"
-              opacity="0.9"
+              strokeWidth="1.5"
+              opacity="1"
             />
 
             {/* Ridge area (darker green, slightly elevated) */}
@@ -86,8 +86,8 @@ export default function TerraceCrossSection({ layers, checkDams, compact = false
               d={`M ${rx1},${y1 - 3} L ${rx2},${y2 - 3} L ${rx2},${y3} L ${rx1},${y3} Z`}
               fill="url(#ridgeGrad)"
               stroke="#064e3b"
-              strokeWidth="1"
-              opacity="0.95"
+              strokeWidth="1.5"
+              opacity="1"
             />
 
             {/* Sediment layer */}
@@ -127,9 +127,9 @@ export default function TerraceCrossSection({ layers, checkDams, compact = false
                 y={y2 - 3}
                 width={7}
                 height={y3 - y2 + 3}
-                fill="#f59e0b"
+                fill="#fbbf24"
                 stroke="#b45309"
-                strokeWidth="1"
+                strokeWidth="1.5"
                 rx="1"
               />
             )}
@@ -142,15 +142,15 @@ export default function TerraceCrossSection({ layers, checkDams, compact = false
                   y1={y2 + 4}
                   x2={rx1 + stepW * 0.1}
                   y2={y3 + stepH * 0.35}
-                  stroke="#3b82f6"
-                  strokeWidth="2"
+                  stroke="#60a5fa"
+                  strokeWidth="2.5"
                   strokeDasharray="4,2"
-                  opacity="0.7"
+                  opacity="0.9"
                 />
                 <polygon
                   points={`${rx1 + stepW * 0.1},${y3 + stepH * 0.35} ${rx1 + stepW * 0.02},${y3 + stepH * 0.2} ${rx1 + stepW * 0.15},${y3 + stepH * 0.25}`}
-                  fill="#3b82f6"
-                  opacity="0.7"
+                  fill="#60a5fa"
+                  opacity="0.9"
                 />
               </>
             )}
@@ -220,16 +220,16 @@ export default function TerraceCrossSection({ layers, checkDams, compact = false
       {!compact && (
         <g transform={`translate(10, ${h - 34})`}>
           <rect x="0" y="0" width="14" height="10" fill="url(#sedimentGrad)" rx="1" />
-          <text x="20" y="9" fill="#94a3b8" fontSize="10">ตะกอน</text>
-          <rect x="75" y="0" width="7" height="12" fill="#f59e0b" stroke="#b45309" rx="1" />
-          <text x="88" y="9" fill="#94a3b8" fontSize="10">ฝาย</text>
-          <line x1="130" y1="6" x2="155" y2="6" stroke="#3b82f6" strokeWidth="1.5" strokeDasharray="3,2" />
-          <text x="160" y="9" fill="#94a3b8" fontSize="10">น้ำไหล</text>
-          <rect x="215" y="0" width="14" height="10" fill="#064e3b" rx="1" />
-          <text x="234" y="9" fill="#94a3b8" fontSize="10">คันแฝก</text>
-          <line x1="295" y1="10" x2="299" y2="1" stroke="#34d399" strokeWidth="1.2" />
-          <line x1="299" y1="10" x2="302" y2="0" stroke="#34d399" strokeWidth="1.2" />
-          <text x="308" y="9" fill="#94a3b8" fontSize="10">หญ้าแฝก</text>
+          <text x="20" y="9" fill="#cbd5e1" fontSize="10" fontWeight="500">ตะกอน</text>
+          <rect x="75" y="0" width="7" height="12" fill="#fbbf24" stroke="#b45309" rx="1" />
+          <text x="88" y="9" fill="#cbd5e1" fontSize="10" fontWeight="500">ฝาย</text>
+          <line x1="130" y1="6" x2="155" y2="6" stroke="#60a5fa" strokeWidth="2" strokeDasharray="3,2" />
+          <text x="160" y="9" fill="#cbd5e1" fontSize="10" fontWeight="500">น้ำไหล</text>
+          <rect x="215" y="0" width="14" height="10" fill="#065f46" rx="1" />
+          <text x="234" y="9" fill="#cbd5e1" fontSize="10" fontWeight="500">คันแฝก</text>
+          <line x1="295" y1="10" x2="299" y2="1" stroke="#34d399" strokeWidth="1.5" />
+          <line x1="299" y1="10" x2="302" y2="0" stroke="#34d399" strokeWidth="1.5" />
+          <text x="308" y="9" fill="#cbd5e1" fontSize="10" fontWeight="500">หญ้าแฝก</text>
         </g>
       )}
     </svg>

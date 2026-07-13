@@ -360,3 +360,37 @@ Stage Summary:
 - CSV file location: /home/z/my-project/mini-services/awd-simulator/data/awd-readings.csv (auto-created on first startup with 38-column header; appended every sim tick with all 3 fields per row; RFC 4180 escaping for commas/quotes/newlines)
 - Test results: build succeeded (198 modules, 1.13 MB); service started cleanly; 3 edge sessions active with 86365s TTL; MQTT published 12 messages with 0 errors after 8 seconds of simulation; CSV grew to 5800 bytes with proper header + signed data rows showing valid SHA-256 hashes and HMAC-SHA256 signatures; lint passes with zero errors; MQTT broker URL (mqtt://35.213.186.240:1883) and topic names (awd/readings, awd/status, awd/field/<fieldId>) preserved unchanged
 - Two new HTTP endpoints added: GET /api/edge-sessions (inspect active auth tokens per field) and GET /api/csv-info (CSV file metadata); existing endpoints (start/stop/reset/status/mqtt-status/mqtt-reconnect/readings/summary) and Socket.IO events preserved unchanged
+
+---
+Task ID: 3
+Agent: main (Z.ai Code)
+Task: ปรับสีการแสดงผลของ Soil Carbon ให้ชัดเจนมากขึ้น (Adjust Soil Carbon display colors to be clearer/more vivid)
+
+Work Log:
+- Read 6 Soil Carbon component files: SoilCarbonAgentView.tsx, soil-carbon/OverviewTab.tsx, soil-carbon/PlotsTab.tsx, soil-carbon/IngestionTab.tsx, soil-carbon/CalculatorTab.tsx, soil-carbon/CertificationTab.tsx, soil-carbon/TerraceCrossSection.tsx, soil-carbon/constants.ts
+- Updated constants.ts: brightened COLORS, TERRACE_COLORS, CREDIT_SOURCE_COLORS hex values (e.g. #10b981→#34d399, #f59e0b→#fbbf24, #3b82f6→#60a5fa); strengthened STATUS_COLORS/QUALITY_COLORS/VETIVER_STATUS_COLORS badge classes from /20 opacity → /25 with -300 text shades and /50 borders
+- Updated SoilCarbonAgentView.tsx: header gradient opacity /10→/25 with 2px border-emerald-500/40 + shadow; TabsList active state emerald-500/30 with text-emerald-200; loading state text-slate-300
+- Updated OverviewTab.tsx: KPI cards 4 colors (sky/emerald/amber/teal) with bg-gradient /20 + border-2 /40 + hover state + shadow-inner icon boxes /30; chart card bg slate-800/70 border slate-600/60; CartesianGrid stroke #475569; axis tick fill #cbd5e1; Tooltip bg #0f172a border #64748b with colored labelStyle; chart bar/line fills brightened (#34d399, #fbbf24, #60a5fa); Pie chart outerRadius 110 innerRadius 65 with stroke #0f172a separator; table headers text-slate-300 font-semibold; table cells text-emerald-300/amber-300 font-bold
+- Updated PlotsTab.tsx: table headers text-slate-300 font-semibold; expanded row bg-slate-900/50; terrace layer circle has shadow-md; vetiver status badges use updated color palette; layer detail cards bg-slate-800/70 border-slate-600/50; vetiver performance cards bg-lime-500/10 border-lime-500/40 with text-lime-300 font-bold; check dam cards bg-amber-500/10 border-amber-500/40 with text-amber-300 font-bold
+- Updated IngestionTab.tsx: card bg slate-800/70 border-slate-600/60; sensor cards have hover:border-emerald-500/50; quality badges use updated palette; batch upload button bg-sky-600 hover:bg-sky-500; ingest result box uses bg-emerald-500/15 border-emerald-500/40
+- Updated CalculatorTab.tsx: 6 calculation cards each with vivid gradient (/20) + border-2 (/40) + colored icon boxes (/25 + /40 border); Net Carbon Credits card promoted to bg-emerald-500/30 border-2 /60 with shadow-lg shadow-emerald-500/20; co-benefit cards bg-sky-500/15 + bg-cyan-500/15 with colored borders; chart uses brightened fills (#34d399, #fbbf24, #60a5fa, #a3e635, #f87171, #a78bfa); CartesianGrid stroke #475569; Tooltip dark with colored labelStyle
+- Updated CertificationTab.tsx: eligible plot cards bg-slate-900/60 border-slate-600/60; plot icon box bg-emerald-500/20 border-emerald-400/40 with text-emerald-300; workflow step circles use bg-emerald-500 with shadow-md shadow-emerald-500/30; checklist checked state bg-emerald-500/20 border-emerald-500/50 text-emerald-200; certification success box bg-emerald-500/20 border-emerald-500/50; requirement items bg-slate-900/60 with text-slate-100 font-medium headings
+- Updated TerraceCrossSection.tsx SVG: brightened linear gradients (#047857→#34d399, #60a5fa/#3b82f6 for water, #fbbf24/#d97706 for sediment); background hillside stroke #475569 width 1.5; terrace planting area stroke 1.5 opacity 1; check dam indicator fill #fbbf24 with stroke 1.5; water flow arrow stroke #60a5fa width 2.5 opacity 0.9; legend text fill #cbd5e1 with fontWeight 500
+- Ran `bun run lint` → passes with zero errors
+- Verified dev server is up: curl http://localhost:3000/ → 200 OK
+- Used Agent Browser to navigate to /, clicked "🌱 Soil Carbon" sidebar button, verified Overview tab renders correctly with vivid KPI cards, charts, table
+- VLM verification on Overview screenshot: "vivid, clear colors (teal, orange, green for KPI cards) with good contrast — KPI cards have distinct background hues and legible text. Charts feature bright, distinguishable colors. Text is readable."
+- Clicked Plots tab, expanded first plot row → VLM: "Colors are vivid and clear: lime/green vetiver cards and amber check dam cards contrast well against the dark background. Text is readable. The terrace cross-section is distinct, and the legend's color coding is easily distinguishable."
+- Clicked Calculator tab, selected plot, clicked "คำนวณเครดิตคาร์บอน" → VLM: "6 calculation cards (SOC: emerald, Sediment: amber, Check Dam: sky, Vetiver: lime, Erosion: red, GHG: violet) use vivid, distinct colors. Gross/Buffer/Net summary cards also have clear, contrasting hues."
+- Clicked Certification tab → VLM: "Colors are vivid and clear: emerald for active steps, gray for inactive, distinct hues for status indicators, ensuring readability."
+- Checked browser errors/console → no errors, only React DevTools info and HMR/Fast Refresh logs
+
+Stage Summary:
+- All 7 Soil Carbon files updated with vivid, high-contrast color scheme
+- Color palette upgraded: 500-series → 300-series text shades, /5-10 opacities → /20-30, /20 borders → /40-50, muted slate-400 text → slate-100/200/300, soft /10 backgrounds → /15-25
+- KPI cards now have distinct color identity per category (sky/emerald/amber/teal/orange/lime) with hover states and shadow effects
+- Charts brightened: CartesianGrid stroke #475569, axis ticks #cbd5e1, Tooltip dark #0f172a with colored labels, fills use vivid 300/400-series hex values
+- TerraceCrossSection SVG gradients and indicators brightened with stronger strokes and full opacity
+- All 4 main user flows verified via Agent Browser + VLM: Overview, Plots (with expanded row showing terrace cross-section + vetiver/check-dam cards), Calculator (with 6 result cards in 6 different vivid colors + summary cards), Certification (with workflow steps + checklist)
+- Lint passes with zero errors; no console errors; no runtime errors
+- User can preview at the right-side Preview Panel; click "Open in New Tab" for full-page view
