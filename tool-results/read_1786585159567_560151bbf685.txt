@@ -1,0 +1,955 @@
+     1→'use client';
+     2→
+     3→import React, { useState, useEffect, useCallback, useMemo, useSyncExternalStore } from 'react';
+     4→import { io, Socket } from 'socket.io-client';
+     5→import dynamic from 'next/dynamic';
+     6→import {
+     7→  Play, Square, RotateCcw, Send, Activity, BarChart3, TrendingDown,
+     8→  TrendingUp, MapPin, Zap, Clock, RefreshCw, ChevronDown,
+     9→  CheckCircle2, Shield, FileCheck, Satellite, Eye, Trees, Mountain,
+    10→  Waves, AlertTriangle, Leaf, Gauge,
+    11→} from 'lucide-react';
+    12→import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+    13→import { Button } from '@/components/ui/button';
+    14→import { Badge } from '@/components/ui/badge';
+    15→import { Progress } from '@/components/ui/progress';
+    16→import { Separator } from '@/components/ui/separator';
+    17→import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+    18→import {
+    19→  LineChart, Line, AreaChart, Area, BarChart, Bar,
+    20→  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+    21→  ComposedChart, ReferenceLine,
+    22→} from 'recharts';
+    23→
+    24→// Dynamic import for map (Leaflet requires window)
+    25→const LidarFieldMap = dynamic(() => import('./LidarFieldMap'), { ssr: false });
+    26→
+    27→// ─── Types ──────────────────────────────────────────────────────────
+    28→interface LidarReading {
+    29→  tick: number;
+    30→  fieldId: string;
+    31→  timestamp: string;
+    32→  simYear: number;
+    33→  simMonth: number;
+    34→  surveyPhase: 'FLIGHT' | 'PROCESSING' | 'VERIFIED';
+    35→
+    36→  // LIDAR metrics
+    37→  pointDensityPerM2: number;
+    38→  scanCoveragePct: number;
+    39→  chmMaxHeight: number;
+    40→  chmMeanHeight: number;
+    41→  canopyCoverPct: number;
+    42→  lai: number;
+    43→  treeDensityPerHa: number;
+    44→
+    45→  // Biomass & Carbon (International)
+    46→  agbTonnePerHa: number;
+    47→  bgbTonnePerHa: number;
+    48→  carbonTcPerHa: number;
+    49→  co2eTonnePerHa: number;
+    50→
+    51→  // TGO Standard
+    52→  tverCarbonTcPerHa: number;
+    53→  tverCo2eTonnePerHa: number;
+    54→  tverUncertaintyPct: number;
+    55→
+    56→  // Area totals
+    57→  totalCarbonStockTc: number;
+    58→  totalCO2eStock: number;
+    59→
+    60→  // Change detection
+    61→  annualCarbonChangeTcPerHa: number;
+    62→  deforestationHa: number;
+    63→  degradationPct: number;
+    64→
+    65→  // Soil carbon (mangrove)
+    66→  soilCarbonTcPerHa: number;
+    67→
+    68→  surveyComplete: boolean;
+    69→}
+    70→
+    71→interface LidarFieldStatus {
+    72→  id: string;
+    73→  name: string;
+    74→  nameTh: string;
+    75→  province: string;
+    76→  lat: number;
+    77→  lng: number;
+    78→  areaHa: number;
+    79→  forestType: string;
+    80→  boundary: number[][];
+    81→  simYear: number;
+    82→  simMonth: number;
+    83→  surveyPhase: string;
+    84→  chmMeanHeight: number;
+    85→  canopyCoverPct: number;
+    86→  pointDensityPerM2: number;
+    87→  scanCoveragePct: number;
+    88→  agbTonnePerHa: number;
+    89→  carbonTcPerHa: number;
+    90→  totalCarbonStockTc: number;
+    91→  totalCO2eStock: number;
+    92→  deforestationHa: number;
+    93→  annualCarbonChangeTcPerHa: number;
+    94→  surveyComplete: boolean;
+    95→  isMangrove: boolean;
+    96→  soilCarbonTcPerHa: number;
+    97→}
+    98→
+    99→interface LidarSimStatus {
+   100→  running: boolean;
+   101→  tick: number;
+   102→  simYear: number;
+   103→  simMonth: number;
+   104→  surveyPhase: string;
+   105→  totalYears: number;
+   106→  progressPct: number;
+   107→  totalReadings: number;
+   108→  fields: LidarFieldStatus[];
+   109→}
+   110→
+   111→// ─── Config ─────────────────────────────────────────────────────────
+   112→const FOREST_CONFIG: Record<string, {
+   113→  color: string;
+   114→  emoji: string;
+   115→  label: string;
+   116→  shortLabel: string;
+   117→  forestEmoji: string;
+   118→}> = {
+   119→  'khao-yai': { color: '#059669', emoji: '🌴', label: 'Khao Yai (Evergreen)', shortLabel: 'Khao Yai', forestEmoji: '🌴' },
+   120→  'mae-wong': { color: '#d97706', emoji: '🍂', label: 'Mae Wong (Deciduous)', shortLabel: 'Mae Wong', forestEmoji: '🍂' },
+   121→  'samut-mangrove': { color: '#0891b2', emoji: '🌊', label: 'Samut Songkhram (Mangrove)', shortLabel: 'Mangrove', forestEmoji: '🌊' },
+   122→};
+   123→
+   124→const SURVEY_PHASE_CONFIG: Record<string, { color: string; bg: string; label: string; icon: string }> = {
+   125→  FLIGHT: { color: 'text-cyan-600', bg: 'bg-cyan-50', label: 'Scanning', icon: '✈️' },
+   126→  PROCESSING: { color: 'text-amber-600', bg: 'bg-amber-50', label: 'Processing', icon: '⚙️' },
+   127→  VERIFIED: { color: 'text-emerald-600', bg: 'bg-emerald-50', label: 'Verified', icon: '✅' },
+   128→};
+   129→
+   130→const mountedEmptySub = () => () => {};
+   131→function useMounted() {
+   132→  return useSyncExternalStore(mountedEmptySub, () => true, () => false);
+   133→}
+   134→
+   135→// ─── Component ──────────────────────────────────────────────────────
+   136→export default function LidarSimulatorView() {
+   137→  const mounted = useMounted();
+   138→  const [socket, setSocket] = useState<Socket | null>(null);
+   139→  const [connected, setConnected] = useState(false);
+   140→  const [status, setStatus] = useState<LidarSimStatus | null>(null);
+   141→  const [readings, setReadings] = useState<LidarReading[]>([]);
+   142→  const [sendingToDmrv, setSendingToDmrv] = useState(false);
+   143→  const [dMRVCount, setDMRVCount] = useState(0);
+   144→  const [selectedFieldId, setSelectedFieldId] = useState<string | null>(null);
+   145→  const [standardMode, setStandardMode] = useState<'international' | 'tgo'>('tgo');
+   146→
+   147→  // Connect to simulator
+   148→  useEffect(() => {
+   149→    if (!mounted) return;
+   150→    let s: Socket | null = null;
+   151→    try {
+   152→      s = io('/?XTransformPort=3033', { transports: ['polling', 'websocket'], reconnectionAttempts: 5, reconnectionDelay: 3000, timeout: 8000 });
+   153→      s.on('connect', () => setConnected(true));
+   154→      s.on('disconnect', () => setConnected(false));
+   155→      s.on('lidar:status', (data: LidarSimStatus) => setStatus(data));
+   156→      s.on('lidar:reading', (data: LidarReading[]) => {
+   157→        setReadings(prev => [...prev, ...data].slice(-500));
+   158→      });
+   159→      s.on('lidar:readings', (data: LidarReading[]) => {
+   160→        setReadings(data.slice(-500));
+   161→      });
+   162→      s.on('lidar:started', () => {});
+   163→      s.on('lidar:stopped', () => {});
+   164→      s.on('lidar:reset', () => setReadings([]));
+   165→      setSocket(s);
+   166→    } catch {
+   167→      // Fallback: poll via HTTP
+   168→    }
+   169→
+   170→    // HTTP polling fallback — fetch status every 3s if WebSocket fails
+   171→    const pollInterval = setInterval(async () => {
+   172→      try {
+   173→        const res = await fetch('/api/status?XTransformPort=3033');
+   174→        if (res.ok) {
+   175→          const data = await res.json();
+   176→          setStatus(data);
+   177→          setConnected(true);
+   178→        }
+   179→        const readingsRes = await fetch('/api/readings?limit=50&XTransformPort=3033');
+   180→        if (readingsRes.ok) {
+   181→          const rData = await readingsRes.json();
+   182→          const readingsArray = Array.isArray(rData) ? rData : (rData.readings || []);
+   183→          if (readingsArray.length > 0) {
+   184→            setReadings(prev => {
+   185→              const lastTick = prev.length > 0 ? prev[prev.length - 1].tick : 0;
+   186→              const newReadings = readingsArray.filter((r: LidarReading) => r.tick > lastTick);
+   187→              if (newReadings.length > 0) return [...prev, ...newReadings].slice(-500);
+   188→              return prev;
+   189→            });
+   190→          }
+   191→        }
+   192→      } catch { /* ignore */ }
+   193→    }, 3000);
+   194→
+   195→    // Initial fetch
+   196→    (async () => {
+   197→      try {
+   198→        const res = await fetch('/api/status?XTransformPort=3033');
+   199→        if (res.ok) { const data = await res.json(); setStatus(data); setConnected(true); }
+   200→      } catch { /* ignore */ }
+   201→    })();
+   202→
+   203→    return () => {
+   204→      if (s) s.disconnect();
+   205→      clearInterval(pollInterval);
+   206→    };
+   207→  }, [mounted]);
+   208→
+   209→  const startSim = useCallback(async () => {
+   210→    if (socket?.connected) { socket.emit('lidar:start'); return; }
+   211→    try {
+   212→      await fetch('/api/control?XTransformPort=3033', {
+   213→        method: 'POST', headers: { 'Content-Type': 'application/json' },
+   214→        body: JSON.stringify({ action: 'start' }),
+   215→      });
+   216→    } catch { /* ignore */ }
+   217→  }, [socket]);
+   218→  const stopSim = useCallback(async () => {
+   219→    if (socket?.connected) { socket.emit('lidar:stop'); return; }
+   220→    try {
+   221→      await fetch('/api/control?XTransformPort=3033', {
+   222→        method: 'POST', headers: { 'Content-Type': 'application/json' },
+   223→        body: JSON.stringify({ action: 'stop' }),
+   224→      });
+   225→    } catch { /* ignore */ }
+   226→  }, [socket]);
+   227→  const resetSim = useCallback(async () => {
+   228→    if (socket?.connected) { socket.emit('lidar:reset'); setReadings([]); return; }
+   229→    try {
+   230→      await fetch('/api/control?XTransformPort=3033', {
+   231→        method: 'POST', headers: { 'Content-Type': 'application/json' },
+   232→        body: JSON.stringify({ action: 'reset' }),
+   233→      });
+   234→    } catch { /* ignore */ }
+   235→    setReadings([]);
+   236→  }, [socket]);
+   237→
+   238→  // Auto-start when connected
+   239→  useEffect(() => {
+   240→    if (connected && status && !status.running) {
+   241→      const timer = setTimeout(() => startSim(), 1000);
+   242→      return () => clearTimeout(timer);
+   243→    }
+   244→  }, [connected, status?.running, startSim]);
+   245→
+   246→  // Send to dMRV
+   247→  const sendToDmrv = useCallback(async () => {
+   248→    if (readings.length === 0) return;
+   249→    setSendingToDmrv(true);
+   250→    try {
+   251→      const res = await fetch('/api/dmrv/lidar', {
+   252→        method: 'POST',
+   253→        headers: { 'Content-Type': 'application/json' },
+   254→        body: JSON.stringify({ action: 'ingest_batch', readings: readings.slice(-50) }),
+   255→      });
+   256→      if (res.ok) {
+   257→        const data = await res.json();
+   258→        setDMRVCount(prev => prev + (data.ingested || 0));
+   259→      }
+   260→    } finally { setSendingToDmrv(false); }
+   261→  }, [readings]);
+   262→
+   263→  // ─── Computed Data ────────────────────────────────────────────────
+   264→  const fieldIds = useMemo(() => ['khao-yai', 'mae-wong', 'samut-mangrove'], []);
+   265→
+   266→  const fieldReadings = useMemo(() => {
+   267→    const map: Record<string, LidarReading[]> = {};
+   268→    for (const fid of fieldIds) {
+   269→      map[fid] = readings.filter(r => r.fieldId === fid).slice(-200);
+   270→    }
+   271→    return map;
+   272→  }, [readings, fieldIds]);
+   273→
+   274→  const latestByField = useMemo(() => {
+   275→    const map: Record<string, LidarReading | null> = {};
+   276→    for (const fid of fieldIds) {
+   277→      const arr = fieldReadings[fid];
+   278→      map[fid] = arr.length > 0 ? arr[arr.length - 1] : null;
+   279→    }
+   280→    return map;
+   281→  }, [fieldReadings, fieldIds]);
+   282→
+   283→  // Chart data - grouped by tick
+   284→  const chartData = useMemo(() => {
+   285→    const tickMap: Record<number, Record<string, LidarReading>> = {};
+   286→    for (const r of readings) {
+   287→      if (!tickMap[r.tick]) tickMap[r.tick] = {};
+   288→      tickMap[r.tick][r.fieldId] = r;
+   289→    }
+   290→    return Object.entries(tickMap)
+   291→      .sort(([a], [b]) => Number(a) - Number(b))
+   292→      .slice(-100)
+   293→      .map(([tick, fields]) => {
+   294→        const entry: Record<string, number | string> = { tick: Number(tick), month: 0, year: 0 };
+   295→        for (const [fid, r] of Object.entries(fields)) {
+   296→          const cfg = FOREST_CONFIG[fid];
+   297→          if (!cfg) continue;
+   298→          const key = cfg.shortLabel;
+   299→          // Carbon stock (convert to per-rai in TGO mode)
+   300→          entry[`${key}_carbon`] = standardMode === 'tgo' ? (r.tverCarbonTcPerHa ?? r.carbonTcPerHa) * 0.16 : (r.tverCarbonTcPerHa ?? r.carbonTcPerHa);
+   301→          entry[`${key}_co2e`] = standardMode === 'tgo' ? (r.tverCo2eTonnePerHa ?? r.co2eTonnePerHa) : r.co2eTonnePerHa;
+   302→          entry[`${key}_totalCarbon`] = r.totalCarbonStockTc;
+   303→          entry[`${key}_totalCO2e`] = r.totalCO2eStock;
+   304→          // Biomass (convert to per-rai in TGO mode)
+   305→          entry[`${key}_agb`] = standardMode === 'tgo' ? r.agbTonnePerHa * 0.16 : r.agbTonnePerHa;
+   306→          entry[`${key}_bgb`] = standardMode === 'tgo' ? r.bgbTonnePerHa * 0.16 : r.bgbTonnePerHa;
+   307→          // Change detection (convert to per-rai in TGO mode)
+   308→          entry[`${key}_change`] = standardMode === 'tgo' ? r.annualCarbonChangeTcPerHa * 0.16 : r.annualCarbonChangeTcPerHa;
+   309→          entry[`${key}_deforest`] = standardMode === 'tgo' ? r.deforestationHa * 6.25 : r.deforestationHa;
+   310→          // LIDAR quality
+   311→          entry[`${key}_pointDensity`] = r.pointDensityPerM2;
+   312→          entry[`${key}_scanCoverage`] = r.scanCoveragePct;
+   313→          // Structural metrics
+   314→          entry[`${key}_height`] = r.chmMeanHeight;
+   315→          entry[`${key}_canopy`] = r.canopyCoverPct;
+   316→          entry[`${key}_lai`] = r.lai;
+   317→          // Soil carbon (convert to per-rai in TGO mode)
+   318→          entry[`${key}_soilCarbon`] = standardMode === 'tgo' ? r.soilCarbonTcPerHa * 0.16 : r.soilCarbonTcPerHa;
+   319→          // TGO uncertainty
+   320→          entry[`${key}_uncertainty`] = r.tverUncertaintyPct ?? 0;
+   321→          entry['month'] = r.simMonth;
+   322→          entry['year'] = r.simYear;
+   323→        }
+   324→        return entry;
+   325→      });
+   326→  }, [readings, standardMode]);
+   327→
+   328→  // Summary stats
+   329→  const totalReadings = readings.length;
+   330→  const currentYear = status?.simYear ?? 0;
+   331→  const currentMonth = status?.simMonth ?? 0;
+   332→  const totalCarbonStock = useMemo(() => {
+   333→    if (!status?.fields) return 0;
+   334→    return status.fields.reduce((s, f) => s + (f.totalCarbonStockTc || 0), 0);
+   335→  }, [status?.fields]);
+   336→  const totalCO2eStock = useMemo(() => {
+   337→    if (!status?.fields) return 0;
+   338→    return status.fields.reduce((s, f) => s + (f.totalCO2eStock || 0), 0);
+   339→  }, [status?.fields]);
+   340→  const deforestationAlerts = useMemo(() => {
+   341→    if (!status?.fields) return 0;
+   342→    return status.fields.filter(f => f.deforestationHa > 0).length;
+   343→  }, [status?.fields]);
+   344→
+   345→  // Year progress (0-5 years)
+   346→  const yearProgress = useMemo(() => {
+   347→    if (!status) return 0;
+   348→    const totalMonths = (status.totalYears || 5) * 12;
+   349→    const elapsedMonths = (status.simYear || 0) * 12 + (status.simMonth || 0);
+   350→    return Math.min((elapsedMonths / totalMonths) * 100, 100);
+   351→  }, [status]);
+   352→
+   353→  if (!mounted) {
+   354→    return <div className="flex items-center justify-center h-64"><RefreshCw className="h-8 w-8 animate-spin text-emerald-600" /></div>;
+   355→  }
+   356→
+   357→  return (
+   358→    <div className="space-y-6">
+   359→      {/* Hero Header */}
+   360→      <div className="relative overflow-hidden rounded-xl bg-gradient-to-r from-emerald-800 via-teal-700 to-cyan-700 p-6 text-white">
+   361→        <div className="absolute inset-0 opacity-10">
+   362→          <div className="absolute top-4 right-10 text-8xl">🌴</div>
+   363→          <div className="absolute bottom-2 left-20 text-6xl">🌲</div>
+   364→        </div>
+   365→        <div className="relative z-10">
+   366→          <div className="flex items-center gap-3 mb-2 flex-wrap">
+   367→            <Trees className="h-7 w-7" />
+   368→            <h2 className="text-2xl font-bold">LIDAR Carbon Credit Verification</h2>
+   369→            <Badge className="bg-white/20 text-white hover:bg-white/30 text-xs">5-Year Monitoring</Badge>
+   370→            <Badge className="bg-amber-500/80 text-white text-[9px]">T-VER-P-FOR-001</Badge>
+   371→            <div className="flex items-center gap-1 bg-white/10 rounded-lg p-0.5 text-[10px]">
+   372→              <button
+   373→                onClick={() => setStandardMode('tgo')}
+   374→                className={`px-2.5 py-1 rounded-md transition-all ${standardMode === 'tgo' ? 'bg-white/25 font-bold' : 'hover:bg-white/10'}`}
+   375→              >
+   376→                🇹🇭 TGO/T-VER
+   377→              </button>
+   378→              <button
+   379→                onClick={() => setStandardMode('international')}
+   380→                className={`px-2.5 py-1 rounded-md transition-all ${standardMode === 'international' ? 'bg-white/25 font-bold' : 'hover:bg-white/10'}`}
+   381→              >
+   382→                🌐 International
+   383→              </button>
+   384→            </div>
+   385→          </div>
+   386→          <p className="text-sm text-white/80 mb-1">
+   387→            LIDAR-based forest carbon stock monitoring across 3 Thai forest areas with 5-year verification cycle
+   388→          </p>
+   389→          <p className="text-[10px] text-white/60 mb-4">
+   390→            {standardMode === 'tgo'
+   391→              ? 'อ้างอิงมาตรฐาน: T-VER-P-FOR-001 (ป่าไม้) / T-VER-BC-001 (Blue Carbon) | Thai allometric equations (Ogawa et al.) | CF: 0.47 evergreen, 0.49 mangrove | หน่วย: tC/ไร่, tCO₂e, พื้นที่: ไร่ (1 ไร่ = 0.16 ha)'
+   392→              : 'Reference: IPCC 2006 GL Vol. 4 | Verra VCS VM0047 | Gold Standard | IPCC allometric equations | CF = 0.47 default | ISO 14064-2 | Units: tC/ha, tCO₂e/ha'
+   393→            }
+   394→          </p>
+   395→          <div className="flex flex-wrap items-center gap-3">
+   396→            <Button size="sm" onClick={startSim} disabled={status?.running} className="bg-white/20 hover:bg-white/30 text-white border-white/30">
+   397→              <Play className="h-3.5 w-3.5 mr-1" /> Start
+   398→            </Button>
+   399→            <Button size="sm" variant="outline" onClick={stopSim} disabled={!status?.running} className="border-white/30 text-white hover:bg-white/20">
+   400→              <Square className="h-3.5 w-3.5 mr-1" /> Stop
+   401→            </Button>
+   402→            <Button size="sm" variant="outline" onClick={resetSim} className="border-white/30 text-white hover:bg-white/20">
+   403→              <RotateCcw className="h-3.5 w-3.5 mr-1" /> Reset
+   404→            </Button>
+   405→            <div className="w-px h-6 bg-white/30" />
+   406→            <Button size="sm" onClick={sendToDmrv} disabled={sendingToDmrv || readings.length === 0}
+   407→              className="bg-emerald-500 hover:bg-emerald-400 text-white">
+   408→              <Send className="h-3.5 w-3.5 mr-1" /> Send to dMRV
+   409→            </Button>
+   410→            <div className="flex items-center gap-2 ml-auto text-xs text-white/70">
+   411→              <div className={`h-2 w-2 rounded-full ${connected ? 'bg-green-400 animate-pulse' : 'bg-red-400'}`} />
+   412→              {connected ? 'Connected' : 'Disconnected'}
+   413→              {status?.running && <Badge className="bg-green-500/50 text-white text-[9px] animate-pulse">LIVE</Badge>}
+   414→            </div>
+   415→          </div>
+   416→          {/* Year/Month Progress */}
+   417→          <div className="mt-3">
+   418→            <div className="flex items-center justify-between text-xs text-white/70 mb-1">
+   419→              <span>Year {currentYear} / {status?.totalYears ?? 5} &middot; Month {currentMonth}/12</span>
+   420→              <span>1 sec = 1 month simulated</span>
+   421→            </div>
+   422→            <Progress value={yearProgress} className="h-1.5 bg-white/20" />
+   423→          </div>
+   424→        </div>
+   425→      </div>
+   426→
+   427→      {/* KPI Cards */}
+   428→      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+   429→        {[
+   430→          { icon: Satellite, label: 'LIDAR Scans', value: totalReadings.toLocaleString(), color: 'text-cyan-600', bg: 'bg-cyan-50' },
+   431→          { icon: Clock, label: 'Survey Year', value: `${currentYear}/${status?.totalYears ?? 5}`, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+   432→          { icon: Trees, label: standardMode === 'tgo' ? 'Total Carbon (tC)' : 'Total Carbon (tC)', value: totalCarbonStock.toFixed(1), color: 'text-green-600', bg: 'bg-green-50' },
+   433→          { icon: Leaf, label: 'Total CO\u2082e', value: totalCO2eStock.toFixed(1), color: 'text-teal-600', bg: 'bg-teal-50' },
+   434→          { icon: AlertTriangle, label: 'Deforestation', value: deforestationAlerts, color: 'text-red-600', bg: 'bg-red-50' },
+   435→          { icon: Send, label: 'dMRV Sent', value: dMRVCount, color: 'text-purple-600', bg: 'bg-purple-50' },
+   436→        ].map(s => (
+   437→          <Card key={s.label} className="shadow-none">
+   438→            <CardContent className="p-3 flex items-center gap-3">
+   439→              <div className={`h-9 w-9 rounded-xl ${s.bg} flex items-center justify-center shrink-0`}>
+   440→                <s.icon className={`h-4 w-4 ${s.color}`} />
+   441→              </div>
+   442→              <div>
+   443→                <p className="text-[10px] text-muted-foreground font-medium">{s.label}</p>
+   444→                <p className="text-lg font-bold leading-none">{s.value}</p>
+   445→              </div>
+   446→            </CardContent>
+   447→          </Card>
+   448→        ))}
+   449→      </div>
+   450→
+   451→      {/* Methodology Reference Card */}
+   452→      <Card className={standardMode === 'tgo' ? 'border-amber-200 bg-amber-50/50' : 'border-blue-200 bg-blue-50/50'}>
+   453→        <CardContent className="p-4">
+   454→          <div className="flex items-start gap-3">
+   455→            <div className={`h-8 w-8 rounded-lg flex items-center justify-center shrink-0 ${standardMode === 'tgo' ? 'bg-amber-100' : 'bg-blue-100'}`}>
+   456→              <Shield className={`h-4 w-4 ${standardMode === 'tgo' ? 'text-amber-600' : 'text-blue-600'}`} />
+   457→            </div>
+   458→            <div className="flex-1 min-w-0">
+   459→              <div className="flex items-center gap-2 mb-1 flex-wrap">
+   460→                <p className={`text-sm font-bold ${standardMode === 'tgo' ? 'text-amber-800' : 'text-blue-800'}`}>
+   461→                  {standardMode === 'tgo' ? 'TGO/T-VER Methodology Reference' : 'International Standard Reference'}
+   462→                </p>
+   463→                <Badge className={`${standardMode === 'tgo' ? 'bg-amber-200 text-amber-800' : 'bg-blue-200 text-blue-800'} text-[9px] h-4`}>
+   464→                  {standardMode === 'tgo' ? 'T-VER-P-FOR-001' : 'IPCC 2006/VCS'}
+   465→                </Badge>
+   466→              </div>
+   467→              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[10px]">
+   468→                {standardMode === 'tgo' ? (
+   469→                  <div className="text-amber-700">
+   470→                    <p className="font-semibold mb-0.5">Allometric Equations (Thai)</p>
+   471→                    <p>Ogawa et al. (Evergreen forest)</p>
+   472→                    <p>Tsuji et al. (Deciduous forest)</p>
+   473→                    <p>Komiyama et al. (Mangrove)</p>
+   474→                  </div>
+   475→                ) : (
+   476→                  <div className="text-blue-700">
+   477→                    <p className="font-semibold mb-0.5">Allometric Equations (IPCC)</p>
+   478→                    <p>IPCC 2006 GL Vol. 4 Ch. 4</p>
+   479→                    <p>Generic tropical equations</p>
+   480→                    <p>Biomass expansion factor (BEF)</p>
+   481→                  </div>
+   482→                )}
+   483→                {standardMode === 'tgo' ? (
+   484→                  <div className="text-amber-700">
+   485→                    <p className="font-semibold mb-0.5">Carbon Fraction & GWP</p>
+   486→                    <p>CF: 0.47 (Evergreen), 0.49 (Mangrove)</p>
+   487→                    <p>Uncertainty deduction applied</p>
+   488→                    <p>Units: tC/ไร่, tCO\u2082e (1 ไร่ = 0.16 ha)</p>
+   489→                  </div>
+   490→                ) : (
+   491→                  <div className="text-blue-700">
+   492→                    <p className="font-semibold mb-0.5">Carbon Fraction & GWP</p>
+   493→                    <p>CF = 0.47 default (IPCC)</p>
+   494→                    <p>Verra VCS VM0047</p>
+   495→                    <p>Units: tC/ha, tCO\u2082e/ha</p>
+   496→                  </div>
+   497→                )}
+   498→                {standardMode === 'tgo' ? (
+   499→                  <div className="text-amber-700">
+   500→                    <p className="font-semibold mb-0.5">T-VER Credit Calculation</p>
+   501→                    <p>ΔC = (C_project - C_baseline) × Area</p>
+   502→                    <p>Deduction: uncertainty × buffer%</p>
+   503→                    <p>Blue Carbon: T-VER-BC-001 (mangrove)</p>
+   504→                  </div>
+   505→                ) : (
+   506→                  <div className="text-blue-700">
+   507→                    <p className="font-semibold mb-0.5">Carbon Credit Calculation</p>
+   508→                    <p>ΔC = (C_project - C_baseline) × Area</p>
+   509→                    <p>ISO 14064-2 quantification</p>
+   510→                    <p>Gold Standard LUF methodology</p>
+   511→                  </div>
+   512→                )}
+   513→              </div>
+   514→            </div>
+   515→          </div>
+   516→        </CardContent>
+   517→      </Card>
+   518→
+   519→      {/* Map + Forest Cards Layout */}
+   520→      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+   521→        {/* Map (3/5 width on large) */}
+   522→        <div className="lg:col-span-3">
+   523→          <Card className="shadow-sm overflow-hidden">
+   524→            <CardHeader className="pb-2">
+   525→              <CardTitle className="text-base flex items-center gap-2">
+   526→                <MapPin className="h-4 w-4 text-emerald-600" />
+   527→                LIDAR Forest Map
+   528→                <Badge variant="secondary" className="text-[9px] h-4">3 Sites</Badge>
+   529→                {selectedFieldId && (
+   530→                  <Badge className="text-[9px] h-4" style={{ background: FOREST_CONFIG[selectedFieldId]?.color + '20', color: FOREST_CONFIG[selectedFieldId]?.color }}>
+   531→                    {FOREST_CONFIG[selectedFieldId]?.shortLabel}
+   532→                  </Badge>
+   533→                )}
+   534→              </CardTitle>
+   535→            </CardHeader>
+   536→            <CardContent className="p-0">
+   537→              <div style={{ height: 440 }}>
+   538→                <LidarFieldMap
+   539→                  fields={(status?.fields || []).map(f => ({
+   540→                    ...f,
+   541→                    nameTh: f.nameTh || f.name,
+   542→                  }))}
+   543→                  latestReadings={latestByField}
+   544→                  selectedFieldId={selectedFieldId}
+   545→                  onFieldSelect={setSelectedFieldId}
+   546→                  standardMode={standardMode}
+   547→                />
+   548→              </div>
+   549→            </CardContent>
+   550→          </Card>
+   551→        </div>
+   552→
+   553→        {/* Forest Info Sidebar (2/5 width on large) */}
+   554→        <div className="lg:col-span-2 space-y-3">
+   555→          {fieldIds.map(fid => {
+   556→            const cfg = FOREST_CONFIG[fid];
+   557→            const field = status?.fields.find(f => f.id === fid);
+   558→            const latest = latestByField[fid];
+   559→            const surveyPhase = (latest?.surveyPhase || field?.surveyPhase || 'FLIGHT') as keyof typeof SURVEY_PHASE_CONFIG;
+   560→            const phaseCfg = SURVEY_PHASE_CONFIG[surveyPhase] || SURVEY_PHASE_CONFIG.FLIGHT;
+   561→            const yearProgressField = field ? Math.min((field.simMonth / 12) * 100, 100) : 0;
+   562→            const isSelected = selectedFieldId === fid;
+   563→            const hasDeforestation = (latest?.deforestationHa ?? field?.deforestationHa ?? 0) > 0;
+   564→
+   565→            // Carbon values based on standard mode
+   566→            const carbonTcPerHa = standardMode === 'tgo'
+   567→              ? (latest?.tverCarbonTcPerHa ?? field?.carbonTcPerHa ?? 0)
+   568→              : (latest?.carbonTcPerHa ?? field?.carbonTcPerHa ?? 0);
+   569→            const co2ePerHa = standardMode === 'tgo'
+   570→              ? (latest?.tverCo2eTonnePerHa ?? field?.co2eTonnePerHa ?? 0)
+   571→              : (latest?.co2eTonnePerHa ?? field?.co2eTonnePerHa ?? 0);
+   572→
+   573→            return (
+   574→              <Card
+   575→                key={fid}
+   576→                className={`shadow-sm border-l-4 cursor-pointer transition-all ${isSelected ? 'ring-2 ring-offset-1' : 'hover:shadow-md'}`}
+   577→                style={{ borderLeftColor: cfg.color, ...(isSelected ? { ringColor: cfg.color } : {}) }}
+   578→                onClick={() => setSelectedFieldId(isSelected ? null : fid)}
+   579→              >
+   580→                <CardContent className="p-3 space-y-2">
+   581→                  <div className="flex items-center gap-2">
+   582→                    <span className="text-lg">{cfg.forestEmoji}</span>
+   583→                    <div className="flex-1 min-w-0">
+   584→                      <p className="text-sm font-bold truncate">{cfg.label}</p>
+   585→                      <p className="text-[10px] text-muted-foreground">{field?.forestType} &middot; {standardMode === 'tgo' ? `${((field?.areaHa ?? 0) * 6.25).toLocaleString(undefined, {maximumFractionDigits: 1})} ไร่` : `${field?.areaHa?.toLocaleString() ?? '--'} ha`}</p>
+   586→                    </div>
+   587→                    <Badge className={`${phaseCfg.bg} ${phaseCfg.color} text-[9px] h-5 shrink-0`}>
+   588→                      {phaseCfg.icon} {phaseCfg.label}
+   589→                    </Badge>
+   590→                  </div>
+   591→
+   592→                  {/* Year Progress */}
+   593→                  <div>
+   594→                    <div className="flex items-center justify-between text-xs mb-1">
+   595→                      <span className="flex items-center gap-1">
+   596→                        <span className="font-medium text-[11px]">Year {field?.simYear ?? 0}</span>
+   597→                      </span>
+   598→                      <span className="text-muted-foreground text-[10px]">Month {field?.simMonth ?? 0}/12</span>
+   599→                    </div>
+   600→                    <Progress value={yearProgressField} className="h-1.5" />
+   601→                  </div>
+   602→
+   603→                  {/* Metrics Grid */}
+   604→                  <div className="grid grid-cols-4 gap-1.5 text-[10px]">
+   605→                    <div className="bg-muted/50 rounded p-1.5 text-center">
+   606→                      <Mountain className="h-2.5 w-2.5 mx-auto text-emerald-500" />
+   607→                      <div className="font-bold text-[11px]">{(latest?.chmMeanHeight ?? field?.chmMeanHeight ?? 0).toFixed(1)}</div>
+   608→                      <div className="text-[8px] text-muted-foreground">Height (m)</div>
+   609→                    </div>
+   610→                    <div className="bg-amber-50 rounded p-1.5 text-center">
+   611→                      <Leaf className="h-2.5 w-2.5 mx-auto text-amber-500" />
+   612→                      <div className="font-bold text-[11px] text-amber-700">{standardMode === 'tgo' ? ((latest?.agbTonnePerHa ?? field?.agbTonnePerHa ?? 0) * 0.16).toFixed(2) : (latest?.agbTonnePerHa ?? field?.agbTonnePerHa ?? 0).toFixed(1)}</div>
+   613→                      <div className="text-[8px] text-amber-600">{standardMode === 'tgo' ? 'AGB (t/ไร่)' : 'AGB (t/ha)'}</div>
+   614→                    </div>
+   615→                    <div className={standardMode === 'tgo' ? 'bg-green-50 rounded p-1.5 text-center' : 'bg-teal-50 rounded p-1.5 text-center'}>
+   616→                      <Trees className={`h-2.5 w-2.5 mx-auto ${standardMode === 'tgo' ? 'text-green-500' : 'text-teal-500'}`} />
+   617→                      <div className={`font-bold text-[11px] ${standardMode === 'tgo' ? 'text-green-700' : 'text-teal-700'}`}>
+   618→                        {standardMode === 'tgo' ? (carbonTcPerHa * 0.16).toFixed(3) : carbonTcPerHa.toFixed(2)}
+   619→                      </div>
+   620→                      <div className={`text-[8px] ${standardMode === 'tgo' ? 'text-green-600' : 'text-teal-600'}`}>
+   621→                        {standardMode === 'tgo' ? 'T-VER tC/ไร่' : 'tC/ha'}
+   622→                      </div>
+   623→                    </div>
+   624→                    <div className={standardMode === 'tgo' ? 'bg-amber-50 rounded p-1.5 text-center' : 'bg-cyan-50 rounded p-1.5 text-center'}>
+   625→                      <Gauge className={`h-2.5 w-2.5 mx-auto ${standardMode === 'tgo' ? 'text-amber-500' : 'text-cyan-500'}`} />
+   626→                      <div className={`font-bold text-[11px] ${standardMode === 'tgo' ? 'text-amber-700' : 'text-cyan-700'}`}>
+   627→                        {standardMode === 'tgo' ? (co2ePerHa * 0.16).toFixed(2) : co2ePerHa.toFixed(1)}
+   628→                      </div>
+   629→                      <div className={`text-[8px] ${standardMode === 'tgo' ? 'text-amber-600' : 'text-cyan-600'}`}>
+   630→                        {standardMode === 'tgo' ? 'tCO\u2082e/ไร่' : 'tCO\u2082e/ha'}
+   631→                      </div>
+   632→                    </div>
+   633→                  </div>
+   634→
+   635→                  {/* Deforestation alert */}
+   636→                  {hasDeforestation && (
+   637→                    <div className="flex items-center gap-1.5 bg-red-50 rounded-md px-2 py-1 text-[10px] text-red-700">
+   638→                      <AlertTriangle className="h-3 w-3 text-red-500 shrink-0" />
+   639→                      <span className="font-medium">Deforestation: {standardMode === 'tgo' ? `${((latest?.deforestationHa ?? field?.deforestationHa ?? 0) * 6.25).toFixed(2)} ไร่` : `${(latest?.deforestationHa ?? field?.deforestationHa ?? 0).toFixed(2)} ha`}</span>
+   640→                      {latest?.degradationPct != null && latest.degradationPct > 0 && (
+   641→                        <span className="text-red-500">&middot; Degradation: {latest.degradationPct.toFixed(1)}%</span>
+   642→                      )}
+   643→                    </div>
+   644→                  )}
+   645→
+   646→                  {/* Soil carbon for mangrove */}
+   647→                  {field?.isMangrove && (latest?.soilCarbonTcPerHa ?? field?.soilCarbonTcPerHa ?? 0) > 0 && (
+   648→                    <div className="flex items-center gap-1.5 bg-cyan-50 rounded-md px-2 py-1 text-[10px] text-cyan-700">
+   649→                      <Waves className="h-3 w-3 text-cyan-500 shrink-0" />
+   650→                      <span className="font-medium">Soil Carbon: {standardMode === 'tgo' ? `${((latest?.soilCarbonTcPerHa ?? field?.soilCarbonTcPerHa ?? 0) * 0.16).toFixed(3)} tC/ไร่` : `${(latest?.soilCarbonTcPerHa ?? field?.soilCarbonTcPerHa ?? 0).toFixed(2)} tC/ha`}</span>
+   651→                    </div>
+   652→                  )}
+   653→
+   654→                  {/* Footer */}
+   655→                  <div className="flex items-center gap-2 text-[9px] text-muted-foreground">
+   656→                    <MapPin className="h-2.5 w-2.5" />
+   657→                    <span>{field?.lat?.toFixed(2)}°N, {field?.lng?.toFixed(2)}°E</span>
+   658→                    <span className="ml-auto">{standardMode === 'tgo' ? `${((field?.areaHa ?? 0) * 6.25).toLocaleString(undefined, {maximumFractionDigits: 1})} ไร่` : `${field?.areaHa?.toLocaleString() ?? '--'} ha`}</span>
+   659→                    <span>&middot; Coverage: {(latest?.scanCoveragePct ?? field?.scanCoveragePct ?? 0).toFixed(0)}%</span>
+   660→                    {field?.surveyComplete && <span className="text-emerald-600 font-medium">✅ Complete</span>}
+   661→                  </div>
+   662→                </CardContent>
+   663→              </Card>
+   664→            );
+   665→          })}
+   666→        </div>
+   667→      </div>
+   668→
+   669→      {/* Charts */}
+   670→      <Card>
+   671→        <CardHeader className="pb-2">
+   672→          <CardTitle className="text-base flex items-center gap-2">
+   673→            <BarChart3 className="h-4 w-4 text-emerald-600" />
+   674→            LIDAR Simulation Analytics
+   675→          </CardTitle>
+   676→        </CardHeader>
+   677→        <CardContent>
+   678→          <Tabs defaultValue="carbon" className="space-y-4">
+   679→            <TabsList className="h-8">
+   680→              <TabsTrigger value="carbon" className="text-xs h-6 gap-1"><Trees className="h-3 w-3" /> Carbon Stock</TabsTrigger>
+   681→              <TabsTrigger value="biomass" className="text-xs h-6 gap-1"><Leaf className="h-3 w-3" /> Biomass</TabsTrigger>
+   682→              <TabsTrigger value="change" className="text-xs h-6 gap-1"><TrendingDown className="h-3 w-3" /> Change Detection</TabsTrigger>
+   683→              <TabsTrigger value="quality" className="text-xs h-6 gap-1"><Satellite className="h-3 w-3" /> LIDAR Quality</TabsTrigger>
+   684→              <TabsTrigger value="comparison" className="text-xs h-6 gap-1"><BarChart3 className="h-3 w-3" /> Comparison</TabsTrigger>
+   685→            </TabsList>
+   686→
+   687→            {/* Carbon Stock — Area Chart */}
+   688→            <TabsContent value="carbon">
+   689→              <ResponsiveContainer width="100%" height={350}>
+   690→                <AreaChart data={chartData}>
+   691→                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+   692→                  <XAxis dataKey="tick" tick={{ fontSize: 10 }} label={{ value: 'Tick (1 = 1 month)', position: 'insideBottom', offset: -2, fontSize: 10 }} />
+   693→                  <YAxis tick={{ fontSize: 10 }} label={{ value: standardMode === 'tgo' ? 'T-VER Carbon (tC/ไร่)' : 'Carbon (tC/ha)', angle: -90, position: 'insideLeft', fontSize: 10 }} />
+   694→                  <Tooltip contentStyle={{ fontSize: 11 }} />
+   695→                  <Legend wrapperStyle={{ fontSize: 10 }} />
+   696→                  {fieldIds.map(fid => {
+   697→                    const cfg = FOREST_CONFIG[fid];
+   698→                    return <Area key={fid} type="monotone" dataKey={`${cfg.shortLabel}_carbon`} name={`${cfg.shortLabel} Carbon`} fill={cfg.color} fillOpacity={0.15} stroke={cfg.color} strokeWidth={2} />;
+   699→                  })}
+   700→                </AreaChart>
+   701→              </ResponsiveContainer>
+   702→            </TabsContent>
+   703→
+   704→            {/* Biomass — Stacked Bar Chart */}
+   705→            <TabsContent value="biomass">
+   706→              <ResponsiveContainer width="100%" height={350}>
+   707→                <BarChart data={chartData}>
+   708→                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+   709→                  <XAxis dataKey="tick" tick={{ fontSize: 10 }} label={{ value: 'Tick', position: 'insideBottom', offset: -2, fontSize: 10 }} />
+   710→                  <YAxis tick={{ fontSize: 10 }} label={{ value: standardMode === 'tgo' ? 'Biomass (t/ไร่)' : 'Biomass (t/ha)', angle: -90, position: 'insideLeft', fontSize: 10 }} />
+   711→                  <Tooltip contentStyle={{ fontSize: 11 }} />
+   712→                  <Legend wrapperStyle={{ fontSize: 10 }} />
+   713→                  {fieldIds.map(fid => {
+   714→                    const cfg = FOREST_CONFIG[fid];
+   715→                    return (
+   716→                      <React.Fragment key={fid}>
+   717→                        <Bar dataKey={`${cfg.shortLabel}_agb`} name={`${cfg.shortLabel} AGB`} fill={cfg.color} fillOpacity={0.8} stackId={fid} radius={[0, 0, 0, 0]} />
+   718→                        <Bar dataKey={`${cfg.shortLabel}_bgb`} name={`${cfg.shortLabel} BGB`} fill={cfg.color} fillOpacity={0.4} stackId={fid} radius={[4, 4, 0, 0]} />
+   719→                      </React.Fragment>
+   720→                    );
+   721→                  })}
+   722→                </BarChart>
+   723→              </ResponsiveContainer>
+   724→            </TabsContent>
+   725→
+   726→            {/* Change Detection — Line + Bar */}
+   727→            <TabsContent value="change">
+   728→              <ResponsiveContainer width="100%" height={350}>
+   729→                <ComposedChart data={chartData}>
+   730→                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+   731→                  <XAxis dataKey="tick" tick={{ fontSize: 10 }} />
+   732→                  <YAxis yAxisId="change" tick={{ fontSize: 10 }} label={{ value: standardMode === 'tgo' ? 'Carbon Change (tC/ไร่/yr)' : 'Carbon Change (tC/ha/yr)', angle: -90, position: 'insideLeft', fontSize: 10 }} />
+   733→                  <YAxis yAxisId="deforest" orientation="right" tick={{ fontSize: 10 }} label={{ value: standardMode === 'tgo' ? 'Deforestation (ไร่)' : 'Deforestation (ha)', angle: 90, position: 'insideRight', fontSize: 10 }} />
+   734→                  <Tooltip contentStyle={{ fontSize: 11 }} />
+   735→                  <Legend wrapperStyle={{ fontSize: 10 }} />
+   736→                  <ReferenceLine yAxisId="change" y={0} stroke="#94a3b8" strokeDasharray="3 3" />
+   737→                  {fieldIds.map(fid => {
+   738→                    const cfg = FOREST_CONFIG[fid];
+   739→                    return <Line key={fid} yAxisId="change" type="monotone" dataKey={`${cfg.shortLabel}_change`} name={`${cfg.shortLabel} ΔC`} stroke={cfg.color} strokeWidth={2} dot={false} />;
+   740→                  })}
+   741→                  {fieldIds.map(fid => {
+   742→                    const cfg = FOREST_CONFIG[fid];
+   743→                    return <Bar key={`d-${fid}`} yAxisId="deforest" dataKey={`${cfg.shortLabel}_deforest`} name={`${cfg.shortLabel} Deforest`} fill={cfg.color} fillOpacity={0.3} />;
+   744→                  })}
+   745→                </ComposedChart>
+   746→              </ResponsiveContainer>
+   747→            </TabsContent>
+   748→
+   749→            {/* LIDAR Quality — Line Chart */}
+   750→            <TabsContent value="quality">
+   751→              <ResponsiveContainer width="100%" height={350}>
+   752→                <ComposedChart data={chartData}>
+   753→                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+   754→                  <XAxis dataKey="tick" tick={{ fontSize: 10 }} />
+   755→                  <YAxis yAxisId="density" tick={{ fontSize: 10 }} label={{ value: 'Point Density (pts/m²)', angle: -90, position: 'insideLeft', fontSize: 10 }} />
+   756→                  <YAxis yAxisId="coverage" orientation="right" tick={{ fontSize: 10 }} domain={[0, 100]} label={{ value: 'Scan Coverage %', angle: 90, position: 'insideRight', fontSize: 10 }} />
+   757→                  <Tooltip contentStyle={{ fontSize: 11 }} />
+   758→                  <Legend wrapperStyle={{ fontSize: 10 }} />
+   759→                  {fieldIds.map(fid => {
+   760→                    const cfg = FOREST_CONFIG[fid];
+   761→                    return <Line key={fid} yAxisId="density" type="monotone" dataKey={`${cfg.shortLabel}_pointDensity`} name={`${cfg.shortLabel} Density`} stroke={cfg.color} strokeWidth={2} dot={false} />;
+   762→                  })}
+   763→                  {fieldIds.map(fid => {
+   764→                    const cfg = FOREST_CONFIG[fid];
+   765→                    return <Line key={`c-${fid}`} yAxisId="coverage" type="monotone" dataKey={`${cfg.shortLabel}_scanCoverage`} name={`${cfg.shortLabel} Coverage`} stroke={cfg.color} strokeWidth={1.5} dot={false} strokeDasharray="5 3" />;
+   766→                  })}
+   767→                </ComposedChart>
+   768→              </ResponsiveContainer>
+   769→            </TabsContent>
+   770→
+   771→            {/* Comparison */}
+   772→            <TabsContent value="comparison">
+   773→              {status && (
+   774→                <div className="space-y-4">
+   775→                  {/* Comparison Table */}
+   776→                  <div className="overflow-x-auto">
+   777→                    <table className="w-full text-xs border-collapse">
+   778→                      <thead>
+   779→                        <tr className="bg-muted/50">
+   780→                          <th className="p-2 text-left font-medium">Parameter</th>
+   781→                          {status.fields.map(f => (
+   782→                            <th key={f.id} className="p-2 text-center font-medium" style={{ color: FOREST_CONFIG[f.id]?.color }}>
+   783→                              {FOREST_CONFIG[f.id]?.shortLabel}
+   784→                            </th>
+   785→                          ))}
+   786→                        </tr>
+   787→                      </thead>
+   788→                      <tbody>
+   789→                        {[
+   790→                          ['Forest Type', ...status.fields.map(f => f.forestType)],
+   791→                          [standardMode === 'tgo' ? 'Area (ไร่)' : 'Area (ha)', ...status.fields.map(f => standardMode === 'tgo' ? (f.areaHa * 6.25).toLocaleString(undefined, {maximumFractionDigits: 1}) : f.areaHa.toLocaleString())],
+   792→                          ['Province', ...status.fields.map(f => f.province)],
+   793→                          ['Survey Year', ...status.fields.map(f => f.simYear.toString())],
+   794→                          ['Survey Month', ...status.fields.map(f => f.simMonth.toString())],
+   795→                          ['Survey Phase', ...status.fields.map(f => f.surveyPhase)],
+   796→                          ['Canopy Height (m)', ...status.fields.map(f => f.chmMeanHeight.toFixed(1))],
+   797→                          ['Canopy Cover %', ...status.fields.map(f => f.canopyCoverPct.toFixed(1))],
+   798→                          [standardMode === 'tgo' ? 'AGB (t/ไร่)' : 'AGB (t/ha)', ...status.fields.map(f => standardMode === 'tgo' ? (f.agbTonnePerHa * 0.16).toFixed(2) : f.agbTonnePerHa.toFixed(1))],
+   799→                          [standardMode === 'tgo' ? 'Carbon (tC/ไร่)' : 'Carbon (tC/ha)', ...status.fields.map(f => standardMode === 'tgo' ? (f.carbonTcPerHa * 0.16).toFixed(3) : f.carbonTcPerHa.toFixed(2))],
+   800→                          ['CO\u2082e Stock', ...status.fields.map(f => f.totalCO2eStock.toFixed(1))],
+   801→                          ['Carbon Stock (tC)', ...status.fields.map(f => f.totalCarbonStockTc.toFixed(1))],
+   802→                          [standardMode === 'tgo' ? 'Deforestation (ไร่)' : 'Deforestation (ha)', ...status.fields.map(f => standardMode === 'tgo' ? (f.deforestationHa * 6.25).toFixed(2) : f.deforestationHa.toFixed(2))],
+   803→                          [standardMode === 'tgo' ? 'Carbon Change (tC/ไร่/yr)' : 'Carbon Change (tC/ha/yr)', ...status.fields.map(f => standardMode === 'tgo' ? (f.annualCarbonChangeTcPerHa * 0.16).toFixed(4) : f.annualCarbonChangeTcPerHa.toFixed(3))],
+   804→                          ['Point Density (pts/m\u00b2)', ...status.fields.map(f => f.pointDensityPerM2.toFixed(1))],
+   805→                          ['Scan Coverage %', ...status.fields.map(f => f.scanCoveragePct.toFixed(1))],
+   806→                          ['Mangrove', ...status.fields.map(f => f.isMangrove ? '🌊 Yes' : '—')],
+   807→                          [standardMode === 'tgo' ? 'Soil Carbon (tC/ไร่)' : 'Soil Carbon (tC/ha)', ...status.fields.map(f => f.isMangrove ? (standardMode === 'tgo' ? (f.soilCarbonTcPerHa * 0.16).toFixed(3) : f.soilCarbonTcPerHa.toFixed(2)) : '—')],
+   808→                          ['Survey', ...status.fields.map(f => f.surveyComplete ? '\u2705 Complete' : '\uD83D\uDD04 Active')],
+   809→                        ].map(([label, ...vals], i) => (
+   810→                          <tr key={i} className={i % 2 === 0 ? '' : 'bg-muted/30'}>
+   811→                            <td className="p-2 font-medium text-muted-foreground">{label}</td>
+   812→                            {vals.map((v, j) => (
+   813→                              <td key={j} className="p-2 text-center">{v}</td>
+   814→                            ))}
+   815→                          </tr>
+   816→                        ))}
+   817→                      </tbody>
+   818→                    </table>
+   819→                  </div>
+   820→
+   821→                  {/* Carbon Stock Comparison Bar Chart */}
+   822→                  <ResponsiveContainer width="100%" height={250}>
+   823→                    <BarChart data={status.fields.map(f => ({
+   824→                      name: FOREST_CONFIG[f.id]?.shortLabel || f.id,
+   825→                      totalCarbon: f.totalCarbonStockTc,
+   826→                      totalCO2e: f.totalCO2eStock,
+   827→                      agb: f.agbTonnePerHa * f.areaHa,
+   828→                      deforest: f.deforestationHa,
+   829→                      area: f.areaHa,
+   830→                    }))}>
+   831→                      <CartesianGrid strokeDasharray="3 3" />
+   832→                      <XAxis dataKey="name" tick={{ fontSize: 10 }} />
+   833→                      <YAxis tick={{ fontSize: 10 }} />
+   834→                      <Tooltip />
+   835→                      <Legend wrapperStyle={{ fontSize: 10 }} />
+   836→                      <Bar dataKey="totalCarbon" name="Total Carbon (tC)" fill="#059669" radius={[4, 4, 0, 0]} />
+   837→                      <Bar dataKey="totalCO2e" name="Total CO\u2082e" fill="#0891b2" radius={[4, 4, 0, 0]} />
+   838→                    </BarChart>
+   839→                  </ResponsiveContainer>
+   840→                </div>
+   841→              )}
+   842→            </TabsContent>
+   843→          </Tabs>
+   844→        </CardContent>
+   845→      </Card>
+   846→
+   847→      {/* dMRV Pipeline */}
+   848→      <Card>
+   849→        <CardHeader className="pb-2">
+   850→          <CardTitle className="text-base flex items-center gap-2">
+   851→            <Zap className="h-4 w-4 text-emerald-600" />
+   852→            dMRV Integration Pipeline
+   853→          </CardTitle>
+   854→        </CardHeader>
+   855→        <CardContent>
+   856→          <div className="flex items-center gap-4 overflow-x-auto pb-2">
+   857→            {[
+   858→              { icon: Satellite, label: 'LIDAR Scan', sub: `${totalReadings} readings`, color: 'bg-cyan-50 text-cyan-600' },
+   859→              { icon: Shield, label: 'Validate', sub: 'Integrity check', color: 'bg-emerald-50 text-emerald-600' },
+   860→              { icon: Trees, label: 'Quantify', sub: standardMode === 'tgo' ? 'T-VER Carbon' : 'IPCC Carbon', color: 'bg-green-50 text-green-600' },
+   861→              { icon: FileCheck, label: standardMode === 'tgo' ? 'T-VER Credit' : 'Carbon Credit', sub: `${totalCO2eStock.toFixed(1)} tCO\u2082e`, color: standardMode === 'tgo' ? 'bg-amber-50 text-amber-600' : 'bg-blue-50 text-blue-600' },
+   862→            ].map((step, i) => (
+   863→              <React.Fragment key={step.label}>
+   864→                <div className="flex flex-col items-center gap-1 min-w-[80px]">
+   865→                  <div className={`h-10 w-10 rounded-xl ${step.color} flex items-center justify-center`}>
+   866→                    <step.icon className="h-4 w-4" />
+   867→                  </div>
+   868→                  <span className="text-[10px] font-medium">{step.label}</span>
+   869→                  <span className="text-[9px] text-muted-foreground">{step.sub}</span>
+   870→                </div>
+   871→                {i < 3 && <ChevronDown className="h-4 w-4 text-muted-foreground rotate-[-90deg] shrink-0" />}
+   872→              </React.Fragment>
+   873→            ))}
+   874→          </div>
+   875→          <Separator className="my-3" />
+   876→          <div className="flex items-center justify-between">
+   877→            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+   878→              <span>{dMRVCount > 0 ? `${dMRVCount} records ingested` : 'No data sent yet'}</span>
+   879→            </div>
+   880→            <Button size="sm" onClick={sendToDmrv} disabled={sendingToDmrv || readings.length === 0}
+   881→              className="bg-emerald-600 hover:bg-emerald-500 text-white">
+   882→              <Send className="h-3.5 w-3.5 mr-1" /> Send to dMRV
+   883→            </Button>
+   884→          </div>
+   885→        </CardContent>
+   886→      </Card>
+   887→
+   888→      {/* Recent Readings Table */}
+   889→      <Card>
+   890→        <CardHeader className="pb-2">
+   891→          <CardTitle className="text-base flex items-center gap-2">
+   892→            <Clock className="h-4 w-4 text-emerald-600" />
+   893→            Recent LIDAR Readings
+   894→            <Badge variant="secondary" className="text-[9px] h-4">{readings.length}</Badge>
+   895→          </CardTitle>
+   896→        </CardHeader>
+   897→        <CardContent>
+   898→          <div className="max-h-96 overflow-y-auto">
+   899→            <table className="w-full text-[10px]">
+   900→              <thead className="sticky top-0 bg-background">
+   901→                <tr className="border-b">
+   902→                  <th className="p-1.5 text-left font-medium">Time</th>
+   903→                  <th className="p-1.5 text-left font-medium">Area</th>
+   904→                  <th className="p-1.5 text-left font-medium">Phase</th>
+   905→                  <th className="p-1.5 text-right font-medium">Yr/Mo</th>
+   906→                  <th className="p-1.5 text-right font-medium">AGB</th>
+   907→                  <th className="p-1.5 text-right font-medium">Carbon</th>
+   908→                  <th className="p-1.5 text-right font-medium">CO\u2082e</th>
+   909→                  <th className="p-1.5 text-right font-medium">Change</th>
+   910→                  <th className="p-1.5 text-right font-medium">Deforest</th>
+   911→                </tr>
+   912→              </thead>
+   913→              <tbody>
+   914→                {readings.slice(-30).reverse().map((r, i) => {
+   915→                  const cfg = FOREST_CONFIG[r.fieldId];
+   916→                  const phaseCfg = SURVEY_PHASE_CONFIG[r.surveyPhase];
+   917→                  return (
+   918→                    <tr key={i} className="border-b border-muted/50 hover:bg-muted/30">
+   919→                      <td className="p-1.5">{r.tick}</td>
+   920→                      <td className="p-1.5 font-medium" style={{ color: cfg?.color }}>{cfg?.emoji} {cfg?.shortLabel}</td>
+   921→                      <td className="p-1.5">
+   922→                        <Badge className={`${phaseCfg?.bg} ${phaseCfg?.color} text-[8px] h-3.5`}>
+   923→                          {phaseCfg?.icon} {phaseCfg?.label}
+   924→                        </Badge>
+   925→                      </td>
+   926→                      <td className="p-1.5 text-right">{r.simYear}/{r.simMonth}</td>
+   927→                      <td className="p-1.5 text-right text-amber-600">{standardMode === 'tgo' ? (r.agbTonnePerHa * 0.16).toFixed(2) : r.agbTonnePerHa.toFixed(1)}</td>
+   928→                      <td className="p-1.5 text-right text-green-600">
+   929→                        {standardMode === 'tgo' ? ((r.tverCarbonTcPerHa ?? r.carbonTcPerHa) * 0.16).toFixed(3) : r.carbonTcPerHa.toFixed(2)}
+   930→                      </td>
+   931→                      <td className="p-1.5 text-right">
+   932→                        {standardMode === 'tgo' ? ((r.tverCo2eTonnePerHa ?? r.co2eTonnePerHa) * 0.16).toFixed(2) : r.co2eTonnePerHa.toFixed(1)}
+   933→                      </td>
+   934→                      <td className={`p-1.5 text-right font-medium ${r.annualCarbonChangeTcPerHa >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+   935→                        {r.annualCarbonChangeTcPerHa >= 0 ? '+' : ''}{r.annualCarbonChangeTcPerHa.toFixed(3)}
+   936→                      </td>
+   937→                      <td className="p-1.5 text-right">
+   938→                        {r.deforestationHa > 0 ? (
+   939→                          <span className="text-red-600 font-medium">{r.deforestationHa.toFixed(2)}</span>
+   940→                        ) : (
+   941→                          <span className="text-muted-foreground">0</span>
+   942→                        )}
+   943→                      </td>
+   944→                    </tr>
+   945→                  );
+   946→                })}
+   947→              </tbody>
+   948→            </table>
+   949→          </div>
+   950→        </CardContent>
+   951→      </Card>
+   952→    </div>
+   953→  );
+   954→}
+   955→
