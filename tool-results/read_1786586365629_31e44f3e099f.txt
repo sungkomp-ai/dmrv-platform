@@ -1,0 +1,583 @@
+     1→'use client';
+     2→
+     3→import React, { useState, useEffect, useRef, useCallback, useSyncExternalStore } from 'react';
+     4→import L from 'leaflet';
+     5→
+     6→// ─── Types ──────────────────────────────────────────────────────────
+     7→interface LidarFieldMapData {
+     8→  id: string;
+     9→  name: string;
+    10→  nameTh: string;
+    11→  province: string;
+    12→  lat: number;
+    13→  lng: number;
+    14→  areaHa: number;
+    15→  forestType: string;
+    16→  boundary: number[][];
+    17→  simYear: number;
+    18→  simMonth: number;
+    19→  surveyPhase: 'FLIGHT' | 'PROCESSING' | 'VERIFIED';
+    20→  chmMeanHeight: number;
+    21→  canopyCoverPct: number;
+    22→  agbTonnePerHa: number;
+    23→  carbonTcPerHa: number;
+    24→  totalCO2eStock: number;
+    25→  deforestationHa: number;
+    26→  annualCarbonChangeTcPerHa: number;
+    27→  surveyComplete: boolean;
+    28→  pointDensityPerM2: number;
+    29→  scanCoveragePct: number;
+    30→  isMangrove: boolean;
+    31→  soilCarbonTcPerHa: number;
+    32→}
+    33→
+    34→interface LidarReading {
+    35→  tick: number;
+    36→  fieldId: string;
+    37→  pointDensityPerM2: number;
+    38→  scanCoveragePct: number;
+    39→  chmMaxHeight: number;
+    40→  chmMeanHeight: number;
+    41→  canopyCoverPct: number;
+    42→  lai: number;
+    43→  treeDensityPerHa: number;
+    44→  agbTonnePerHa: number;
+    45→  bgbTonnePerHa: number;
+    46→  carbonTcPerHa: number;
+    47→  co2eTonnePerHa: number;
+    48→  tverCarbonTcPerHa: number;
+    49→  tverCo2eTonnePerHa: number;
+    50→  totalCarbonStockTc: number;
+    51→  totalCO2eStock: number;
+    52→  annualCarbonChangeTcPerHa: number;
+    53→  deforestationHa: number;
+    54→  degradationPct: number;
+    55→  soilCarbonTcPerHa: number;
+    56→  surveyPhase: string;
+    57→}
+    58→
+    59→interface LidarFieldMapProps {
+    60→  fields: LidarFieldMapData[];
+    61→  latestReadings: Record<string, LidarReading | null>;
+    62→  selectedFieldId: string | null;
+    63→  onFieldSelect: (fieldId: string) => void;
+    64→  standardMode: 'international' | 'tgo';
+    65→}
+    66→
+    67→// ─── Config ─────────────────────────────────────────────────────────
+    68→const FIELD_COLORS: Record<string, { fill: string; stroke: string; label: string; icon: string }> = {
+    69→  'khao-yai': { fill: '#059669', stroke: '#047857', label: 'Khao Yai', icon: '🌴' },
+    70→  'mae-wong': { fill: '#d97706', stroke: '#b45309', label: 'Mae Wong', icon: '🍂' },
+    71→  'samut-mangrove': { fill: '#0891b2', stroke: '#0e7490', label: 'Mangrove', icon: '🌊' },
+    72→};
+    73→
+    74→const SURVEY_PHASE_COLORS: Record<string, string> = {
+    75→  FLIGHT: '#6366f1',
+    76→  PROCESSING: '#f59e0b',
+    77→  VERIFIED: '#10b981',
+    78→};
+    79→
+    80→const SURVEY_PHASE_LABELS: Record<string, string> = {
+    81→  FLIGHT: '🛩️ Flight Scanning',
+    82→  PROCESSING: '⚙️ Processing',
+    83→  VERIFIED: '✅ Verified',
+    84→};
+    85→
+    86→const SATELLITE_URL = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
+    87→const STREET_URL = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+    88→const SATELLITE_LABELS_URL = 'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}';
+    89→
+    90→const emptySubscribe = () => () => {};
+    91→function useMounted() {
+    92→  return useSyncExternalStore(emptySubscribe, () => true, () => false);
+    93→}
+    94→
+    95→export default function LidarFieldMap({
+    96→  fields, latestReadings, selectedFieldId, onFieldSelect, standardMode,
+    97→}: LidarFieldMapProps) {
+    98→  const mounted = useMounted();
+    99→  const containerRef = useRef<HTMLDivElement>(null);
+   100→  const mapRef = useRef<L.Map | null>(null);
+   101→  const tileLayerRef = useRef<L.TileLayer | null>(null);
+   102→  const labelLayerRef = useRef<L.TileLayer | null>(null);
+   103→  const fieldGroupRef = useRef<L.LayerGroup | null>(null);
+   104→  const markerGroupRef = useRef<L.LayerGroup | null>(null);
+   105→  const alertGroupRef = useRef<L.LayerGroup | null>(null);
+   106→  const prevFieldsJson = useRef<string>('');
+   107→  const [isSatellite, setIsSatellite] = useState(true);
+   108→
+   109→  // ─── CSS keyframes for animations ──────────────────────────────────
+   110→  useEffect(() => {
+   111→    const styleId = 'lidar-map-animations';
+   112→    if (document.getElementById(styleId)) return;
+   113→    const style = document.createElement('style');
+   114→    style.id = styleId;
+   115→    style.textContent = `
+   116→      @keyframes lidar-pulse {
+   117→        0% { transform: scale(1); opacity: 0.7; }
+   118→        50% { transform: scale(1.5); opacity: 0.2; }
+   119→        100% { transform: scale(1); opacity: 0.7; }
+   120→      }
+   121→      @keyframes lidar-scan {
+   122→        0% { stroke-dashoffset: 0; }
+   123→        100% { stroke-dashoffset: 40; }
+   124→      }
+   125→      @keyframes alert-pulse {
+   126→        0% { transform: scale(0.8); opacity: 0.9; }
+   127→        50% { transform: scale(1.4); opacity: 0.3; }
+   128→        100% { transform: scale(0.8); opacity: 0.9; }
+   129→      }
+   130→      .lidar-alert-marker {
+   131→        animation: alert-pulse 1.5s ease-in-out infinite;
+   132→      }
+   133→    `;
+   134→    document.head.appendChild(style);
+   135→    return () => { style.remove(); };
+   136→  }, []);
+   137→
+   138→  // ─── Initialize map ────────────────────────────────────────────────
+   139→  useEffect(() => {
+   140→    if (!containerRef.current || mapRef.current) return;
+   141→
+   142→    const map = L.map(containerRef.current, {
+   143→      center: [14.5, 100.5],
+   144→      zoom: 6,
+   145→      zoomControl: false,
+   146→    });
+   147→
+   148→    L.control.zoom({ position: 'topright' }).addTo(map);
+   149→
+   150→    tileLayerRef.current = L.tileLayer(SATELLITE_URL, {
+   151→      attribution: '© Esri',
+   152→      maxZoom: 19,
+   153→    }).addTo(map);
+   154→
+   155→    labelLayerRef.current = L.tileLayer(SATELLITE_LABELS_URL, {
+   156→      maxZoom: 19,
+   157→    }).addTo(map);
+   158→
+   159→    fieldGroupRef.current = L.layerGroup().addTo(map);
+   160→    markerGroupRef.current = L.layerGroup().addTo(map);
+   161→    alertGroupRef.current = L.layerGroup().addTo(map);
+   162→
+   163→    mapRef.current = map;
+   164→
+   165→    return () => {
+   166→      map.remove();
+   167→      mapRef.current = null;
+   168→    };
+   169→  }, []);
+   170→
+   171→  // ─── Toggle satellite/street ───────────────────────────────────────
+   172→  useEffect(() => {
+   173→    if (!mapRef.current || !tileLayerRef.current) return;
+   174→
+   175→    mapRef.current.removeLayer(tileLayerRef.current);
+   176→    if (labelLayerRef.current) mapRef.current.removeLayer(labelLayerRef.current);
+   177→
+   178→    if (isSatellite) {
+   179→      tileLayerRef.current = L.tileLayer(SATELLITE_URL, {
+   180→        attribution: '© Esri',
+   181→        maxZoom: 19,
+   182→      }).addTo(mapRef.current);
+   183→      labelLayerRef.current = L.tileLayer(SATELLITE_LABELS_URL, {
+   184→        maxZoom: 19,
+   185→      }).addTo(mapRef.current);
+   186→    } else {
+   187→      tileLayerRef.current = L.tileLayer(STREET_URL, {
+   188→        attribution: '© OpenStreetMap',
+   189→        maxZoom: 19,
+   190→      }).addTo(mapRef.current);
+   191→      labelLayerRef.current = null;
+   192→    }
+   193→  }, [isSatellite]);
+   194→
+   195→  // ─── Update fields on map ──────────────────────────────────────────
+   196→  useEffect(() => {
+   197→    if (!fieldGroupRef.current || !markerGroupRef.current || !alertGroupRef.current) return;
+   198→
+   199→    const fieldsJson = JSON.stringify(fields.map(f => ({
+   200→      id: f.id, boundary: f.boundary, surveyPhase: f.surveyPhase,
+   201→      chmMeanHeight: f.chmMeanHeight, canopyCoverPct: f.canopyCoverPct,
+   202→      agbTonnePerHa: f.agbTonnePerHa, carbonTcPerHa: f.carbonTcPerHa,
+   203→      totalCO2eStock: f.totalCO2eStock, deforestationHa: f.deforestationHa,
+   204→      annualCarbonChangeTcPerHa: f.annualCarbonChangeTcPerHa,
+   205→      surveyComplete: f.surveyComplete, pointDensityPerM2: f.pointDensityPerM2,
+   206→      scanCoveragePct: f.scanCoveragePct, isMangrove: f.isMangrove,
+   207→      soilCarbonTcPerHa: f.soilCarbonTcPerHa, simYear: f.simYear, simMonth: f.simMonth,
+   208→      selected: f.id === selectedFieldId,
+   209→    })));
+   210→
+   211→    if (fieldsJson === prevFieldsJson.current) return;
+   212→    prevFieldsJson.current = fieldsJson;
+   213→
+   214→    fieldGroupRef.current.clearLayers();
+   215→    markerGroupRef.current.clearLayers();
+   216→    alertGroupRef.current.clearLayers();
+   217→
+   218→    fields.forEach(field => {
+   219→      const cfg = FIELD_COLORS[field.id] || FIELD_COLORS['khao-yai'];
+   220→      const phaseColor = SURVEY_PHASE_COLORS[field.surveyPhase] || '#6b7280';
+   221→      const isSelected = field.id === selectedFieldId;
+   222→      const reading = latestReadings[field.id];
+   223→
+   224→      // ─── Draw boundary polygon ────────────────────────────────────
+   225→      if (field.boundary && field.boundary.length >= 3) {
+   226→        const latLngs: L.LatLngExpression[] = field.boundary.map(
+   227→          (c: number[]) => [c[0], c[1]] as L.LatLngExpression
+   228→        );
+   229→
+   230→        // Fill style depends on survey phase
+   231→        let fillOpacity: number;
+   232→        let dashArray: string;
+   233→        let fillColor: string;
+   234→        let weight: number;
+   235→        let borderColor: string;
+   236→
+   237→        if (field.surveyPhase === 'FLIGHT') {
+   238→          fillOpacity = 0.15;
+   239→          dashArray = '12, 6';
+   240→          fillColor = cfg.fill;
+   241→          weight = isSelected ? 4 : 2.5;
+   242→          borderColor = isSelected ? phaseColor : cfg.stroke;
+   243→        } else if (field.surveyPhase === 'PROCESSING') {
+   244→          fillOpacity = 0.25;
+   245→          dashArray = '8, 4';
+   246→          fillColor = cfg.fill;
+   247→          weight = isSelected ? 3.5 : 2;
+   248→          borderColor = isSelected ? phaseColor : cfg.stroke;
+   249→        } else {
+   250→          // VERIFIED
+   251→          fillOpacity = 0.40;
+   252→          dashArray = '';
+   253→          fillColor = cfg.fill;
+   254→          weight = isSelected ? 4 : 2.5;
+   255→          borderColor = isSelected ? '#10b981' : cfg.stroke;
+   256→        }
+   257→
+   258→        const polygon = L.polygon(latLngs, {
+   259→          color: borderColor,
+   260→          weight,
+   261→          opacity: 0.9,
+   262→          fillColor,
+   263→          fillOpacity,
+   264→          dashArray,
+   265→        });
+   266→
+   267→        // ─── Build popup HTML ──────────────────────────────────────
+   268→        const progress = Math.min((field.simMonth / 12) * 100, 100);
+   269→        const hasDeforestation = field.deforestationHa > 0;
+   270→        const isTgo = standardMode === 'tgo';
+   271→        const carbonLabel = isTgo ? 'T-VER Carbon' : 'IPCC Carbon';
+   272→        const carbonValue = isTgo
+   273→          ? (reading?.tverCarbonTcPerHa?.toFixed(2) ?? field.carbonTcPerHa.toFixed(2))
+   274→          : (reading?.carbonTcPerHa?.toFixed(2) ?? field.carbonTcPerHa.toFixed(2));
+   275→        const co2eValue = isTgo
+   276→          ? (reading?.tverCo2eTonnePerHa?.toFixed(1) ?? field.totalCO2eStock.toFixed(0))
+   277→          : (reading?.co2eTonnePerHa?.toFixed(1) ?? field.totalCO2eStock.toFixed(0));
+   278→        const methodology = isTgo ? 'T-VER (Thailand Verified Emission Reduction)' : 'IPCC 2006 GL Vol 4';
+   279→        const carbonChange = reading?.annualCarbonChangeTcPerHa ?? field.annualCarbonChangeTcPerHa;
+   280→        const carbonChangeSign = carbonChange >= 0 ? '+' : '';
+   281→        const carbonChangeColor = carbonChange >= 0 ? '#059669' : '#dc2626';
+   282→
+   283→        const popupHtml = `
+   284→          <div style="min-width: 280px; font-family: system-ui, -apple-system, sans-serif;">
+   285→            <!-- Header -->
+   286→            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+   287→              <div style="
+   288→                width: 40px; height: 40px; border-radius: 10px;
+   289→                background: ${cfg.fill}18; display: flex; align-items: center;
+   290→                justify-content: center; font-size: 22px; flex-shrink: 0;
+   291→              ">${cfg.icon}</div>
+   292→              <div style="min-width: 0;">
+   293→                <h4 style="font-size: 14px; font-weight: 700; margin: 0; color: #1f2937; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${field.nameTh}</h4>
+   294→                <p style="font-size: 12px; color: #6b7280; margin: 2px 0 0;">${field.name}</p>
+   295→                <p style="font-size: 11px; color: #9ca3af; margin: 0;">${field.province} · ${standardMode === 'tgo' ? `${(field.areaHa * 6.25).toLocaleString(undefined, {maximumFractionDigits: 1})} ไร่` : `${field.areaHa.toLocaleString()} ha`}</p>
+   296→              </div>
+   297→            </div>
+   298→
+   299→            <!-- Badges -->
+   300→            <div style="display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 10px;">
+   301→              <span style="background: ${phaseColor}18; color: ${phaseColor}; padding: 3px 10px; border-radius: 99px; font-size: 10px; font-weight: 600; border: 1px solid ${phaseColor}30;">${SURVEY_PHASE_LABELS[field.surveyPhase] || field.surveyPhase}</span>
+   302→              ${field.surveyComplete ? '<span style="background: #ecfdf5; color: #047857; padding: 3px 10px; border-radius: 99px; font-size: 10px; font-weight: 600; border: 1px solid #a7f3d0;">✅ Complete</span>' : ''}
+   303→              ${field.isMangrove ? '<span style="background: #ecfeff; color: #0e7490; padding: 3px 10px; border-radius: 99px; font-size: 10px; font-weight: 600; border: 1px solid #a5f3fc;">🌊 Mangrove</span>' : ''}
+   304→              ${hasDeforestation ? '<span style="background: #fef2f2; color: #dc2626; padding: 3px 10px; border-radius: 99px; font-size: 10px; font-weight: 600; border: 1px solid #fecaca;">⚠️ Deforestation</span>' : ''}
+   305→            </div>
+   306→
+   307→            <!-- Year/Month progress bar -->
+   308→            <div style="background: #f9fafb; border-radius: 8px; padding: 8px 10px; margin-bottom: 10px;">
+   309→              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+   310→                <span style="font-size: 10px; color: #6b7280; font-weight: 500;">Survey Progress (Y${field.simYear})</span>
+   311→                <span style="font-size: 10px; font-weight: 700; color: #374151;">Month ${field.simMonth}/12</span>
+   312→              </div>
+   313→              <div style="background: #e5e7eb; border-radius: 99px; height: 6px; overflow: hidden;">
+   314→                <div style="background: linear-gradient(90deg, ${cfg.fill}, ${phaseColor}); height: 100%; border-radius: 99px; width: ${progress}%; transition: width 0.5s;"></div>
+   315→              </div>
+   316→            </div>
+   317→
+   318→            <!-- LIDAR metrics grid -->
+   319→            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 8px;">
+   320→              <div style="background: #f0fdf4; padding: 7px 8px; border-radius: 8px; text-align: center; border: 1px solid #bbf7d0;">
+   321→                <div style="color: #15803d; font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Canopy Height</div>
+   322→                <div style="font-weight: 800; color: #15803d; font-size: 16px; margin-top: 2px;">${(reading?.chmMeanHeight ?? field.chmMeanHeight).toFixed(1)}<span style="font-size: 10px; font-weight: 600;"> m</span></div>
+   323→              </div>
+   324→              <div style="background: #fffbeb; padding: 7px 8px; border-radius: 8px; text-align: center; border: 1px solid #fde68a;">
+   325→                <div style="color: #92400e; font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">AGB</div>
+   326→                <div style="font-weight: 800; color: #92400e; font-size: 16px; margin-top: 2px;">${standardMode === 'tgo' ? ((reading?.agbTonnePerHa ?? field.agbTonnePerHa) * 0.16).toFixed(2) : (reading?.agbTonnePerHa ?? field.agbTonnePerHa).toFixed(1)}<span style="font-size: 10px; font-weight: 600;"> ${standardMode === 'tgo' ? 't/ไร่' : 't/ha'}</span></div>
+   327→              </div>
+   328→              <div style="background: #eff6ff; padding: 7px 8px; border-radius: 8px; text-align: center; border: 1px solid #bfdbfe;">
+   329→                <div style="color: #1d4ed8; font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">${carbonLabel}</div>
+   330→                <div style="font-weight: 800; color: #1d4ed8; font-size: 16px; margin-top: 2px;">${standardMode === 'tgo' ? (Number(carbonValue) * 0.16).toFixed(3) : carbonValue}<span style="font-size: 10px; font-weight: 600;"> ${standardMode === 'tgo' ? 'tC/ไร่' : 'tC/ha'}</span></div>
+   331→              </div>
+   332→              <div style="background: #f5f3ff; padding: 7px 8px; border-radius: 8px; text-align: center; border: 1px solid #ddd6fe;">
+   333→                <div style="color: #7c3aed; font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">CO₂e Stock</div>
+   334→                <div style="font-weight: 800; color: #7c3aed; font-size: 16px; margin-top: 2px;">${Number(co2eValue).toLocaleString()}<span style="font-size: 10px; font-weight: 600;"> t</span></div>
+   335→              </div>
+   336→            </div>
+   337→
+   338→            <!-- Canopy cover & scan info row -->
+   339→            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 8px;">
+   340→              <div style="background: #f0fdf4; padding: 5px 8px; border-radius: 6px; text-align: center;">
+   341→                <div style="color: #047857; font-size: 9px; font-weight: 600;">Canopy Cover</div>
+   342→                <div style="font-weight: 700; color: #047857; font-size: 13px;">${(reading?.canopyCoverPct ?? field.canopyCoverPct).toFixed(1)}%</div>
+   343→              </div>
+   344→              <div style="background: #f8fafc; padding: 5px 8px; border-radius: 6px; text-align: center;">
+   345→                <div style="color: #475569; font-size: 9px; font-weight: 600;">Scan Coverage</div>
+   346→                <div style="font-weight: 700; color: #475569; font-size: 13px;">${(reading?.scanCoveragePct ?? field.scanCoveragePct).toFixed(1)}%</div>
+   347→              </div>
+   348→            </div>
+   349→
+   350→            ${hasDeforestation ? `
+   351→            <!-- Deforestation alert -->
+   352→            <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 8px 10px; margin-bottom: 8px;">
+   353→              <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
+   354→                <span style="font-size: 14px;">🔴</span>
+   355→                <span style="font-size: 11px; font-weight: 700; color: #dc2626;">Deforestation Alert</span>
+   356→              </div>
+   357→              <div style="font-size: 12px; color: #991b1b; font-weight: 600;">${standardMode === 'tgo' ? `${(field.deforestationHa * 6.25).toFixed(2)} ไร่` : `${field.deforestationHa.toFixed(2)} ha`} affected</div>
+   358→              ${reading?.degradationPct ? `<div style="font-size: 10px; color: #b91c1c; margin-top: 2px;">Degradation: ${reading.degradationPct.toFixed(1)}%</div>` : ''}
+   359→            </div>
+   360→            ` : ''}
+   361→
+   362→            <!-- Carbon change indicator -->
+   363→            <div style="display: flex; align-items: center; justify-content: space-between; background: #f9fafb; padding: 7px 10px; border-radius: 8px; margin-bottom: 8px; border: 1px solid #e5e7eb;">
+   364→              <div style="display: flex; align-items: center; gap: 6px;">
+   365→                <span style="font-size: 13px;">${carbonChange >= 0 ? '📈' : '📉'}</span>
+   366→                <span style="font-size: 10px; font-weight: 600; color: #374151;">Annual Carbon Change</span>
+   367→              </div>
+   368→              <span style="font-weight: 800; color: ${carbonChangeColor}; font-size: 14px;">${carbonChangeSign}${standardMode === 'tgo' ? (carbonChange * 0.16).toFixed(4) : carbonChange.toFixed(3)} ${standardMode === 'tgo' ? 'tC/ไร่/yr' : 'tC/ha/yr'}</span>
+   369→            </div>
+   370→
+   371→            ${field.isMangrove && field.soilCarbonTcPerHa > 0 ? `
+   372→            <!-- Soil carbon for mangroves -->
+   373→            <div style="background: #ecfeff; border: 1px solid #a5f3fc; border-radius: 8px; padding: 6px 10px; margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between;">
+   374→              <div style="display: flex; align-items: center; gap: 6px;">
+   375→                <span style="font-size: 13px;">🧪</span>
+   376→                <span style="font-size: 10px; font-weight: 600; color: #0e7490;">Soil Carbon</span>
+   377→              </div>
+   378→              <span style="font-weight: 700; color: #0e7490; font-size: 13px;">${standardMode === 'tgo' ? `${((reading?.soilCarbonTcPerHa ?? field.soilCarbonTcPerHa) * 0.16).toFixed(3)} tC/ไร่` : `${(reading?.soilCarbonTcPerHa ?? field.soilCarbonTcPerHa).toFixed(2)} tC/ha`}</span>
+   379→            </div>
+   380→            ` : ''}
+   381→
+   382→            <!-- Methodology reference -->
+   383→            <div style="font-size: 9px; color: #9ca3af; text-align: center; padding-top: 6px; border-top: 1px solid #f3f4f6;">
+   384→              📋 ${methodology} · LIDAR Point Density: ${field.pointDensityPerM2.toFixed(1)} pts/m²
+   385→            </div>
+   386→          </div>
+   387→        `;
+   388→
+   389→        polygon.bindPopup(popupHtml, { className: 'custom-popup', maxWidth: 320 });
+   390→        polygon.on('click', () => onFieldSelect(field.id));
+   391→        fieldGroupRef.current!.addLayer(polygon);
+   392→      }
+   393→
+   394→      // ─── Deforestation alert overlay ──────────────────────────────
+   395→      if (field.deforestationHa > 0) {
+   396→        const alertRadius = Math.max(500, Math.sqrt(field.deforestationHa * 10000) * 2);
+   397→        const alertCircle = L.circle([field.lat, field.lng], {
+   398→          radius: alertRadius,
+   399→          color: '#dc2626',
+   400→          weight: 2,
+   401→          opacity: 0.7,
+   402→          fillColor: '#dc2626',
+   403→          fillOpacity: 0.12,
+   404→          dashArray: '6, 4',
+   405→          className: 'lidar-alert-marker',
+   406→        });
+   407→        alertCircle.bindTooltip(`⚠️ ${standardMode === 'tgo' ? `${(field.deforestationHa * 6.25).toFixed(2)} ไร่` : `${field.deforestationHa.toFixed(2)} ha`} deforested`, {
+   408→          permanent: false,
+   409→          direction: 'top',
+   410→          className: 'custom-tooltip',
+   411→        });
+   412→        alertGroupRef.current!.addLayer(alertCircle);
+   413→
+   414→        // Pulsing alert marker at center
+   415→        const alertIcon = L.divIcon({
+   416→          className: 'lidar-alert-marker',
+   417→          html: `
+   418→            <div style="
+   419→              width: 28px; height: 28px; border-radius: 50%;
+   420→              background: radial-gradient(circle, #dc2626 30%, transparent 70%);
+   421→              animation: alert-pulse 1.5s ease-in-out infinite;
+   422→              display: flex; align-items: center; justify-content: center;
+   423→              font-size: 14px; font-weight: bold; color: white;
+   424→            ">⚠️</div>
+   425→          `,
+   426→          iconSize: [28, 28],
+   427→          iconAnchor: [14, 14],
+   428→        });
+   429→        const alertMarker = L.marker([field.lat, field.lng], { icon: alertIcon, interactive: false });
+   430→        alertGroupRef.current!.addLayer(alertMarker);
+   431→      }
+   432→
+   433→      // ─── Field center marker ───────────────────────────────────────
+   434→      const markerIcon = L.divIcon({
+   435→        className: 'custom-marker',
+   436→        html: `
+   437→          <div style="
+   438→            width: ${isSelected ? '56px' : '44px'};
+   439→            height: ${isSelected ? '56px' : '44px'};
+   440→            border-radius: 50%;
+   441→            background: ${cfg.fill};
+   442→            border: 3px solid ${isSelected ? phaseColor : 'white'};
+   443→            box-shadow: 0 2px 12px rgba(0,0,0,0.35), 0 0 0 ${isSelected ? '5px' : '0px'} ${phaseColor}40;
+   444→            display: flex; align-items: center; justify-content: center;
+   445→            color: white; font-weight: bold;
+   446→            cursor: pointer; transition: transform 0.15s;
+   447→            flex-direction: column; line-height: 1;
+   448→          " onmouseover="this.style.transform='scale(1.12)'" onmouseout="this.style.transform='scale(1)'">
+   449→            <span style="font-size: ${isSelected ? '18px' : '14px'}; line-height: 1;">${cfg.icon}</span>
+   450→            <span style="font-size: ${isSelected ? '8px' : '7px'}; margin-top: 1px; letter-spacing: -0.2px;">${cfg.label}</span>
+   451→          </div>
+   452→        `,
+   453→        iconSize: [isSelected ? 56 : 44, isSelected ? 56 : 44],
+   454→        iconAnchor: [isSelected ? 28 : 22, isSelected ? 28 : 22],
+   455→        popupAnchor: [0, -(isSelected ? 30 : 24)],
+   456→      });
+   457→
+   458→      const marker = L.marker([field.lat, field.lng], { icon: markerIcon });
+   459→      marker.on('click', () => onFieldSelect(field.id));
+   460→      markerGroupRef.current!.addLayer(marker);
+   461→
+   462→      // ─── Flight scanning ring (animated) for FLIGHT phase ──────────
+   463→      if (field.surveyPhase === 'FLIGHT') {
+   464→        const scanRing = L.circle([field.lat, field.lng], {
+   465→          radius: Math.sqrt(field.areaHa * 10000) * 0.6,
+   466→          color: phaseColor,
+   467→          weight: 1.5,
+   468→          opacity: 0.5,
+   469→          fillColor: phaseColor,
+   470→          fillOpacity: 0.05,
+   471→          dashArray: '10, 8',
+   472→          className: 'lidar-scan-ring',
+   473→        });
+   474→        fieldGroupRef.current!.addLayer(scanRing);
+   475→
+   476→        // Outer pulsing ring for FLIGHT phase
+   477→        const pulseRing = L.circle([field.lat, field.lng], {
+   478→          radius: Math.sqrt(field.areaHa * 10000) * 0.8,
+   479→          color: phaseColor,
+   480→          weight: 1,
+   481→          opacity: 0.25,
+   482→          fillColor: 'transparent',
+   483→          fillOpacity: 0,
+   484→          dashArray: '4, 6',
+   485→        });
+   486→        fieldGroupRef.current!.addLayer(pulseRing);
+   487→      }
+   488→    });
+   489→  }, [fields, latestReadings, selectedFieldId, onFieldSelect, standardMode]);
+   490→
+   491→  // ─── Fly to selected field ─────────────────────────────────────────
+   492→  useEffect(() => {
+   493→    if (!selectedFieldId || !mapRef.current) return;
+   494→    const field = fields.find(f => f.id === selectedFieldId);
+   495→    if (!field) return;
+   496→    mapRef.current.flyTo([field.lat, field.lng], 10, { duration: 1.2 });
+   497→  }, [selectedFieldId, fields]);
+   498→
+   499→  if (!mounted) {
+   500→    return <div className="w-full h-full bg-muted/30 animate-pulse rounded-xl" />;
+   501→  }
+   502→
+   503→  return (
+   504→    <div className="relative w-full h-full">
+   505→      <div ref={containerRef} className="w-full h-full rounded-xl" style={{ minHeight: 380, background: '#0f172a' }} />
+   506→
+   507→      {/* ─── Map style toggle ────────────────────────────────────────── */}
+   508→      <button
+   509→        onClick={() => setIsSatellite(prev => !prev)}
+   510→        className="absolute top-3 left-3 z-[1000] h-8 px-3 bg-background/95 backdrop-blur-xl rounded-lg shadow-md border text-xs font-medium flex items-center gap-1.5 hover:bg-background transition-colors"
+   511→      >
+   512→        {isSatellite ? '🛰️ Satellite' : '🗺️ Street'}
+   513→      </button>
+   514→
+   515→      {/* ─── Standard mode badge ──────────────────────────────────────── */}
+   516→      <div className="absolute top-3 right-14 z-[1000] h-8 px-3 bg-background/95 backdrop-blur-xl rounded-lg shadow-md border text-xs font-medium flex items-center gap-1.5">
+   517→        {standardMode === 'tgo' ? '🇹🇭 T-VER' : '🌍 IPCC'}
+   518→      </div>
+   519→
+   520→      {/* ─── Legend ────────────────────────────────────────────────────── */}
+   521→      <div className="absolute bottom-3 left-3 z-[1000] bg-background/95 backdrop-blur-xl rounded-lg shadow-lg border p-3 text-xs max-w-[200px]">
+   522→        <p className="font-semibold text-muted-foreground mb-2 text-[10px] uppercase tracking-wider">LIDAR Forest Areas</p>
+   523→        <div className="space-y-1.5">
+   524→          {fields.map(field => {
+   525→            const cfg = FIELD_COLORS[field.id];
+   526→            if (!cfg) return null;
+   527→            return (
+   528→              <button
+   529→                key={field.id}
+   530→                className="flex items-center gap-2 hover:bg-muted/50 rounded px-1 py-0.5 w-full text-left transition-colors"
+   531→                onClick={() => onFieldSelect(field.id)}
+   532→              >
+   533→                <div className="h-3 w-3 rounded-full shadow-sm shrink-0" style={{ background: cfg.fill }} />
+   534→                <span className="text-muted-foreground text-[11px] truncate">{cfg.label}</span>
+   535→                <span className="ml-auto text-[9px] font-medium" style={{ color: SURVEY_PHASE_COLORS[field.surveyPhase] }}>
+   536→                  {field.surveyPhase}
+   537→                </span>
+   538→              </button>
+   539→            );
+   540→          })}
+   541→        </div>
+   542→
+   543→        <div className="mt-2 pt-2 border-t space-y-1">
+   544→          <p className="font-semibold text-muted-foreground text-[10px] uppercase tracking-wider">Area</p>
+   545→          {fields.map(field => {
+   546→            const cfg = FIELD_COLORS[field.id];
+   547→            if (!cfg) return null;
+   548→            return (
+   549→              <div key={field.id} className="flex items-center gap-2">
+   550→                <div className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: cfg.fill }} />
+   551→                <span className="text-muted-foreground text-[10px]">{cfg.label}: {standardMode === 'tgo' ? `${(field.areaHa * 6.25).toLocaleString(undefined, {maximumFractionDigits: 1})} ไร่` : `${field.areaHa.toLocaleString()} ha`}</span>
+   552→              </div>
+   553→            );
+   554→          })}
+   555→        </div>
+   556→
+   557→        <div className="mt-2 pt-2 border-t space-y-1">
+   558→          <p className="font-semibold text-muted-foreground text-[10px] uppercase tracking-wider">Survey Phase</p>
+   559→          {Object.entries(SURVEY_PHASE_COLORS).map(([phase, color]) => (
+   560→            <div key={phase} className="flex items-center gap-2">
+   561→              <div className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: color }} />
+   562→              <span className="text-muted-foreground text-[10px]">{SURVEY_PHASE_LABELS[phase]}</span>
+   563→            </div>
+   564→          ))}
+   565→        </div>
+   566→
+   567→        <div className="mt-2 pt-2 border-t">
+   568→          <div className="flex items-center gap-2">
+   569→            <div className="h-2.5 w-2.5 rounded-full shrink-0 bg-red-500" style={{ animation: 'alert-pulse 1.5s ease-in-out infinite' }} />
+   570→            <span className="text-muted-foreground text-[10px]">Deforestation Alert</span>
+   571→          </div>
+   572→        </div>
+   573→
+   574→        <div className="mt-2 pt-2 border-t">
+   575→          <p className="text-[9px] text-muted-foreground/70">
+   576→            {standardMode === 'tgo' ? '🇹🇭 T-VER Standard' : '🌍 IPCC 2006 GL'}
+   577→          </p>
+   578→        </div>
+   579→      </div>
+   580→    </div>
+   581→  );
+   582→}
+   583→
