@@ -486,3 +486,33 @@ Stage Summary:
 - Full verification via Agent Browser + VLM confirms: page renders correctly, button is visible and functional, no errors
 - PDF covers the complete tokenization lifecycle: MRV → Quantification → Certification → Buffer Pool → Minting → Marketplace (Mint/Trade/Retire) → Forward Contracts → Cross-Chain Bridge → Public Registry (Merkle Tree Audit Trail)
 - Dev server running on port 3000, accessible via preview panel
+
+---
+Task ID: 11
+Agent: Main Agent
+Task: ปรับการแสดงผลหน้า Marketplace — Complete visual redesign of MarketplaceView
+
+Work Log:
+- Analyzed current Marketplace UI via Agent Browser + VLM: identified issues (plain stats, subtle PDF button, dense table, sterile design)
+- Completely rewrote `/home/z/my-project/src/components/dmrv/MarketplaceView.tsx` (492 → ~480 lines, full rewrite)
+- **Hero Banner**: Dark gradient (slate-900 → emerald-950) with decorative blur blobs, Coins icon, Thai description, status counts, and PDF document card (red file icon, title, 17-page metadata, download link with arrow animation)
+- **Stat Cards**: 4 cards with colored left borders (emerald/sky/slate/teal), matching icons (Layers/ArrowRightLeft/ShieldCheck/TrendingUp), background icon containers, bold numbers with tabular-nums
+- **Table Redesign**: Truncated token IDs in monospaced gray pills (title=full ID), colored methodology badges (violet for IPCC-2023, green for T-VER-FOREST), status badges with colored dots, right-aligned amounts, header with refresh button
+- **Tabs**: Icons on each tab (Layers/Plus/ArrowRightLeft/Briefcase), responsive short names on mobile (Listing/Mint/Trade/Portfolio), styled tabslist with bg-slate-100
+- **Mint Tab**: Emerald-themed header with Plus icon in emerald-100 container, Thai descriptions, shadow-sm button
+- **Trade/Retire Tab**: Sky-themed Trade card, Slate-themed Retire card with ⚠️ retirement warning
+- **Portfolio Tab**: Stacked progress bar (emerald/sky/slate segments), percentage legend, 3 colored detail cards (emerald-50/sky-50/slate-50 backgrounds), circular icon containers, individual progress bars per card
+- Added new imports: Coins, TrendingUp, ShieldCheck, Layers, FileText, ArrowUpRight, RefreshCw, Progress
+- Added useMemo for percentage calculations (availablePct, tradedPct, retiredPct)
+- Added helper functions: getMethodologyClass(), truncateTokenId(), statusConfig with dot colors
+- Created StatCard reusable sub-component with left border, icon, label, value, sub-text
+- Lint passed (only pre-existing script require() errors)
+- Verified via Agent Browser: page loads, no errors, all tabs navigable
+- VLM verification (marketplace-after.png): "visually much more polished", "professional, app-like, enterprise-grade", "purpose-built dashboard experience"
+- VLM verification (marketplace-portfolio.png): confirmed stacked progress bar (41%/17%/29%), 3 colored cards with icons/numbers/progress, "high-quality enterprise SaaS dashboard"
+
+Stage Summary:
+- Complete visual redesign of MarketplaceView from plain white layout to professional dark-hero dashboard
+- Key improvements: gradient hero banner, PDF document card, icon stat cards with left borders, clean table with truncated IDs and color-coded badges, portfolio with stacked progress bar
+- All verified via Agent Browser + VLM analysis
+- No functional changes — all existing Mint/Trade/Retire/Portfolio logic preserved
