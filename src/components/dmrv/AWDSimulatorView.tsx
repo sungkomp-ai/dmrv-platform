@@ -70,6 +70,10 @@ cumulativeN2OtCO2e?: number;  // tCO₂e from N₂O
   tverMethodology?: string;
   tverGwpCH4?: number;
   tverGwpN2O?: number;
+  // Calculation mode
+  calcMode?: 'full' | 'simplified';
+  sfAWD?: number;        // Scaling factor applied (simplified mode only)
+  baselineEFKgHaDay?: number;  // Baseline EF used (simplified mode only)
 }
 
 interface AWDFieldStatus {
@@ -112,6 +116,7 @@ interface SimStatus {
   tickCounter: number;
   speedFactor: number;
   intervalMs: number;
+  calcMode?: 'full' | 'simplified';
   fields: AWDFieldStatus[];
 }
 
@@ -156,6 +161,8 @@ export default function AWDSimulatorView() {
   const [dMRVCount, setDMRVCount] = useState(0);
   const [selectedFieldId, setSelectedFieldId] = useState<string | null>(null);
   const [standardMode, setStandardMode] = useState<'international' | 'tgo'>('tgo');
+  const [calcMode, setCalcMode] = useState<'full' | 'simplified'>('full');
+  const [switchingMode, setSwitchingMode] = useState(false);
 
   // Connect to simulator via Next.js proxy routes (HTTP polling)
   useEffect(() => {
@@ -171,6 +178,7 @@ export default function AWDSimulatorView() {
           const data = await res.json();
           setStatus(data);
           setConnected(true);
+          if (data.calcMode) setCalcMode(data.calcMode);
           isRunning = data.running;
         } else {
           setConnected(false);
@@ -210,6 +218,7 @@ export default function AWDSimulatorView() {
           const data = await statusRes.json();
           setStatus(data);
           setConnected(true);
+          if (data.calcMode) setCalcMode(data.calcMode);
           isRunning = data.running;
         }
         if (readingsRes.ok) {
@@ -252,6 +261,28 @@ export default function AWDSimulatorView() {
       await fetch('/api/awd/reset', { method: 'POST' });
     } catch { /* ignore */ }
   }, []);
+
+  // Switch calculation mode (Full Sensor ↔ Simplified)
+  const switchMode = useCallback(async (mode: 'full' | 'simplified') => {
+    if (mode === calcMode || switchingMode) return;
+    setSwitchingMode(true);
+    try {
+      const res = await fetch('/api/awd/mode', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ calcMode: mode }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.calcMode) setCalcMode(data.calcMode);
+        // Reset simulation when switching mode so cumulative values are consistent
+        setReadings([]);
+        hasAutoStartedRef.current = false;
+        await fetch('/api/awd/reset', { method: 'POST' });
+      }
+    } catch { /* ignore */ }
+    finally { setSwitchingMode(false); }
+  }, [calcMode, switchingMode]);
 
   // Auto-start on initial connection only (not after manual stop)
   const hasAutoStartedRef = useRef(false);
@@ -389,12 +420,45 @@ export default function AWDSimulatorView() {
           <p className="text-sm text-white/80 mb-1">
             Alternate Wetting & Drying (AWD) simulation for 3 rice fields with different environments in Thailand
           </p>
-          <p className="text-[10px] text-white/60 mb-4">
+          <p className="text-[10px] text-white/60 mb-3">
             {standardMode === 'tgo'
               ? 'อ้างอิงมาตรฐาน: T-VER-P-AG-001 (การลดการปล่อยก๊าซมีเทนจากการปลูกข้าวโดยวิธี AWD) | TGO Guidelines 2566 | GWP: CH₄=28, N₂O=265 (IPCC AR5) | หน่วย: kg CH₄/ha/day, tCO₂e'
               : 'Reference: IPCC 2006 Guidelines Vol. 4 Ch. 5 | IPCC AR5 GWP: CH₄=28, N₂O=265 | ISO 14064-2 | Units: mg CH₄/m²/hr, g CH₄ cumulative'
             }
           </p>
+          {/* Calculation Mode Toggle — Full Sensor vs Simplified (water level only) */}
+          <div className="flex flex-wrap items-center gap-2 mb-4">
+            <span className="text-[10px] text-white/70 font-medium">โหมดคำนวณ:</span>
+            <div className="flex items-center gap-0.5 bg-white/10 rounded-lg p-0.5 text-[10px]">
+              <button
+                onClick={() => switchMode('full')}
+                disabled={switchingMode}
+                title="Full Sensor Mode — empirical model using 10+ sensor variables (CH₄, N₂O, CO₂, temperature, soil moisture, pH, etc.)"
+                className={`px-3 py-1.5 rounded-md transition-all flex items-center gap-1 ${calcMode === 'full' ? 'bg-white/25 font-bold text-white' : 'hover:bg-white/10 text-white/70'} ${switchingMode ? 'opacity-50 cursor-not-allowed' : ''}`}
+              >
+                <Gauge className="h-3 w-3" /> Full Sensor (10+ sensors)
+              </button>
+              <button
+                onClick={() => switchMode('simplified')}
+                disabled={switchingMode}
+                title="Simplified Mode — IPCC Tier 1 default method, water level sensor only. CH₄ = baseline EF × SF_AWD × Area × Period"
+                className={`px-3 py-1.5 rounded-md transition-all flex items-center gap-1 ${calcMode === 'simplified' ? 'bg-amber-400/40 font-bold text-amber-50' : 'hover:bg-white/10 text-white/70'} ${switchingMode ? 'opacity-50 cursor-not-allowed' : ''}`}
+              >
+                <Droplets className="h-3 w-3" /> Simplified (water level only)
+              </button>
+            </div>
+            {switchingMode && <RefreshCw className="h-3 w-3 animate-spin text-white/60" />}
+            {calcMode === 'simplified' && (
+              <Badge className="bg-amber-400/30 text-amber-50 border-amber-300/40 text-[9px]">
+                IPCC Tier 1 · SF_AWD: 0 AWD=1.00 · 1 cycle=0.60 · 2+ cycles=0.52
+              </Badge>
+            )}
+            {calcMode === 'full' && (
+              <Badge className="bg-cyan-400/30 text-cyan-50 border-cyan-300/40 text-[9px]">
+                Empirical Model · CH₄+N₂O+CO₂ flux
+              </Badge>
+            )}
+          </div>
           <div className="flex flex-wrap items-center gap-3">
             <Button size="sm" onClick={startSim} disabled={status?.running} className="bg-white/20 hover:bg-white/30 text-white border-white/30">
               <Play className="h-3.5 w-3.5 mr-1" /> Start
@@ -418,6 +482,68 @@ export default function AWDSimulatorView() {
           </div>
         </div>
       </div>
+
+      {/* Simplified Mode Info Banner — shows methodology & SF_AWD table */}
+      {calcMode === 'simplified' && (
+        <div className="rounded-xl border-2 border-amber-400/40 bg-amber-50/80 p-4">
+          <div className="flex items-start gap-3">
+            <div className="h-9 w-9 rounded-lg bg-amber-400/30 flex items-center justify-center shrink-0">
+              <Droplets className="h-5 w-5 text-amber-700" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h3 className="text-sm font-bold text-amber-900 mb-1">
+                Simplified Mode — IPCC Tier 1 (Water Level Only)
+              </h3>
+              <p className="text-xs text-amber-800 mb-3 leading-relaxed">
+                โหมดนี้ใช้ sensor วัดระดับน้ำเพียงตัวเดียว และคำนวณ CH₄ จากค่าเริ่มต้น IPCC 2019 Refinement:
+                <code className="bg-amber-100/80 px-1.5 py-0.5 rounded text-[11px] ml-1">CH₄ = EF_baseline × SF_AWD × Area × Period</code>
+                <br/>
+                จำนวนรอบ AWD (drainage cycles) นับจากการที่ระดับน้ำลดลงต่ำกว่าผิวดิน แล้วกลับมาท่วมอีกครั้ง — ไม่ต้องวัด gas flux โดยตรง
+              </p>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[10px]">
+                <div className="bg-white/70 rounded-lg p-2 border border-amber-300/50">
+                  <div className="font-semibold text-amber-900">0 cycles</div>
+                  <div className="text-amber-700">SF_AWD = 1.00</div>
+                  <div className="text-amber-600/80">continuous flooding (baseline)</div>
+                </div>
+                <div className="bg-white/70 rounded-lg p-2 border border-amber-300/50">
+                  <div className="font-semibold text-amber-900">1 cycle</div>
+                  <div className="text-amber-700">SF_AWD = 0.60</div>
+                  <div className="text-amber-600/80">ลด CH₄ ~40%</div>
+                </div>
+                <div className="bg-white/70 rounded-lg p-2 border border-amber-300/50">
+                  <div className="font-semibold text-amber-900">2+ cycles</div>
+                  <div className="text-amber-700">SF_AWD = 0.52</div>
+                  <div className="text-amber-600/80">ลด CH₄ ~48%</div>
+                </div>
+                <div className="bg-white/70 rounded-lg p-2 border border-amber-300/50">
+                  <div className="font-semibold text-amber-900">Baseline EF</div>
+                  <div className="text-amber-700">1.30 / 1.00 / 0.70</div>
+                  <div className="text-amber-600/80">kg CH₄/ha/day (นาชลประทาน/ฝน/แล้ง)</div>
+                </div>
+              </div>
+              <p className="text-[10px] text-amber-700/80 mt-2">
+                ⚠️ โหมดนี้ไม่คำนวณ N₂O และ CO₂ (IPCC Tier 1 สำหรับ AWD พิจารณาเฉพาะ CH₄) — ค่าที่แสดงเป็น 0 หรือ "not measured"
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Full Sensor Mode Info Banner */}
+      {calcMode === 'full' && (
+        <div className="rounded-xl border border-cyan-400/30 bg-cyan-50/50 p-3">
+          <div className="flex items-center gap-3">
+            <div className="h-8 w-8 rounded-lg bg-cyan-400/30 flex items-center justify-center shrink-0">
+              <Gauge className="h-4 w-4 text-cyan-700" />
+            </div>
+            <p className="text-xs text-cyan-900">
+              <span className="font-semibold">Full Sensor Mode:</span>{' '}
+              คำนวณ CH₄, N₂O, และ CO₂ flux จาก empirical model ที่ใช้ตัวแปร 10+ ตัว (ระดับน้ำ, อุณหภูมิ, ความชื้นดิน, pH, ระยะการเจริญเติบโต ฯลฯ) — แม่นยำกว่าแต่ต้องการฮาร์ดแวร์เซนเซอร์มากกว่า
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">

@@ -394,3 +394,60 @@ Stage Summary:
 - All 4 main user flows verified via Agent Browser + VLM: Overview, Plots (with expanded row showing terrace cross-section + vetiver/check-dam cards), Calculator (with 6 result cards in 6 different vivid colors + summary cards), Certification (with workflow steps + checklist)
 - Lint passes with zero errors; no console errors; no runtime errors
 - User can preview at the right-side Preview Panel; click "Open in New Tab" for full-page view
+
+---
+Task ID: 9
+Agent: main (Z.ai Code)
+Task: เพิ่ม "Simplified AWD Mode" (วัด water level อย่างเดียว, IPCC Tier 1) พร้อม toggle สำหรับสลับ Full Sensor / Simplified
+
+Work Log:
+- Read /home/z/my-project/worklog.md to understand context (Task 1-8: AWD simulator, Soil Carbon, IoT Gateway, edge auth, PDF generation)
+- Read architecture: frontend uses embedded engine in src/lib/awd-simulation.ts (NOT the port 3032 mini-service); API routes in /api/awd/* proxy to getAWDSimulation() singleton
+- Read awd-simulation.ts (705 lines): understood AWDFieldInternal interface, SimStatus, AWDReading, createFields(), calculation functions (getCH4Emission, getN2OEmission, getCO2Flux, getSoilMoisture, updateWaterLevel), AWDSimulationEngine class, simTick(), getStatus(), singleton pattern with ENGINE_VERSION
+- Backend changes to src/lib/awd-simulation.ts:
+  - Added CalcMode type ('full' | 'simplified') and 3 IPCC 2019 Refinement SF_AWD constants: SF_AWD_CONTINUOUS=1.00, SF_AWD_SINGLE=0.60, SF_AWD_MULTIPLE=0.52
+  - Added getSfAWD(cycles) helper function and getBaselineEF(field) helper function
+  - Added calcMode field to SimStatus interface and AWDReading interface (calcMode, sfAWD, baselineEFKgHaDay optional fields)
+  - Added calcMode private field to AWDSimulationEngine class (default 'full')
+  - Added setCalcMode(mode) method returning {success, calcMode, message}
+  - Added getCalcMode() method
+  - Added calcMode to getStatus() return value
+  - Refactored simTick() emission calculation into two branches:
+    - Simplified: CH₄ = baselineEF × SF_AWD × areaHa / 24 per hour; N₂O=0, CO₂=0; sensor values (soilMoisture, pH, soilTemp) set to 0; emissionReductionPct = (1-SF_AWD)×100
+    - Full: unchanged empirical model (CH₄/N₂O/CO₂ flux from 10+ sensor variables)
+  - Bumped ENGINE_VERSION from 2 to 3 (forces fresh engine instance)
+- Created /home/z/my-project/src/app/api/awd/mode/route.ts: GET returns current calcMode, POST accepts {calcMode:'full'|'simplified'} and calls setCalcMode()
+- Frontend changes to src/components/dmrv/AWDSimulatorView.tsx:
+  - Added calcMode? field to SimStatus interface and AWDReading interface
+  - Added calcMode and switchingMode state variables
+  - Added calcMode sync from /api/awd/status polling (both initial fetch and 2-second poll)
+  - Added switchMode(mode) callback: POSTs to /api/awd/mode, updates calcMode state, resets sim (so cumulative values are consistent with new mode)
+  - Added "โหมดคำนวณ" toggle UI in hero header with 2 buttons: "Full Sensor (10+ sensors)" with Gauge icon, "Simplified (water level only)" with Droplets icon; active state styling (white/25 for full, amber/40 for simplified); disabled state during switching
+  - Added mode badge next to toggle: amber for simplified (showing SF_AWD values), cyan for full
+  - Added Simplified Mode info banner below hero header: amber border-2, shows IPCC Tier 1 formula (CH₄ = EF_baseline × SF_AWD × Area × Period), 4-column table with SF_AWD values (0 cycles=1.00, 1 cycle=0.60, 2+ cycles=0.52, Baseline EF=1.30/1.00/0.70), warning note about N₂O/CO₂ not measured
+  - Added Full Sensor Mode info banner: cyan border, concise explanation of empirical model
+- Ran `bun run lint` — passes with zero errors (only pre-existing require() errors in scripts/generate-awd-docx.js)
+- API endpoint tests (all passed):
+  - GET /api/awd/mode → {"calcMode":"full"}
+  - POST /api/awd/mode {"calcMode":"simplified"} → {"success":true,"calcMode":"simplified","message":"Switched to Simplified Mode (IPCC Tier 1, water level only)"}
+  - GET /api/awd/mode after switch → {"calcMode":"simplified"}
+  - GET /api/awd/status → calcMode field present
+  - Sim readings in simplified mode: N₂O=0.00, CO₂=0.00, soilMoisture=0.0, soilPH=0, mode='simplified', sfAWD=1, baselineEFKgHaDay correct per field (1.3/1.0/0.7)
+  - Sim readings in full mode after switching back: N₂O, CO₂, soilMoisture, pH all non-zero (empirical model), mode='full'
+- Agent Browser + VLM verification:
+  - Opened http://localhost:3000/, clicked "AWD Rice Simulator" sidebar button
+  - VLM confirmed Full Sensor mode: toggle visible with "Full Sensor (10+ sensors)" active (green), badge "Empirical Model · CH₄+N₂O+CO₂ flux", cyan info banner
+  - Clicked "Simplified (water level only)" button [ref=e62]
+  - VLM confirmed Simplified mode: button active (amber), IPCC Tier 1 info banner with formula "CH₄ = EF_baseline × SF_AWD × Area × Period", 4-column SF_AWD table (0 cycles=1.00, 1 cycle=0.60, 2+ cycles=0.52, Baseline EF), warning about N₂O/CO₂ not calculated
+  - KPI cards verified: IoT Readings=39, AWD Cycles=0, ER=0.000 (correct at 0 cycles, SF_AWD=1.0), Est. Yield=2.4
+  - API confirmed sim running in simplified mode with correct cumulative CH₄ = baseline (72.80kg for korat at ~tick 28, matching baseline EF × area × hours)
+- Cleaned up screenshots, closed browser, reset sim
+
+Stage Summary:
+- Added "Simplified AWD Mode" using IPCC Tier 1 default method (water level sensor only)
+- Backend: src/lib/awd-simulation.ts — CalcMode type, SF_AWD constants (IPCC 2019 Refinement), getSfAWD()/getBaselineEF() helpers, setCalcMode()/getCalcMode() methods, branched simTick() calculation, calcMode in SimStatus + AWDReading, ENGINE_VERSION bumped to 3
+- API: new /api/awd/mode route (GET + POST) for mode switching
+- Frontend: AWDSimulatorView.tsx — calcMode state + switchingMode state, switchMode() callback (POST + reset), "โหมดคำนวณ" toggle in hero header (Full Sensor / Simplified), mode badge, Simplified Mode info banner (amber, IPCC Tier 1 formula + SF_AWD 4-column table + N₂O/CO₂ warning), Full Sensor Mode info banner (cyan)
+- IPCC Tier 1 calculation: CH₄ = EF_baseline × SF_AWD × Area × Period; SF_AWD = 1.00 (0 cycles), 0.60 (1 cycle), 0.52 (2+ cycles); N₂O and CO₂ not measured (set to 0); emissionReductionPct = (1 - SF_AWD) × 100
+- Full mode calculation: unchanged empirical model with 10+ sensor variables (CH₄, N₂O, CO₂, temperature, soil moisture, pH, growth stage, etc.)
+- All lint passes (zero errors in modified files), API endpoints tested, Agent Browser + VLM verified both modes render and function correctly

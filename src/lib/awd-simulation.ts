@@ -26,6 +26,21 @@ const GWP_N2O = 265; // IPCC AR5 per TGO 2566
 const KG_CH4_TO_TCO2E = GWP_CH4 / 1000;
 const KG_N2O_TO_TCO2E = GWP_N2O / 1000;
 
+// ─── Calculation Mode ───────────────────────────────────────────────
+// 'full'        = Full Sensor Mode (empirical model, 10+ sensor variables)
+//                CH₄/N₂O/CO₂ flux computed from water level, temperature,
+//                soil moisture, soil pH, growth stage, etc.
+// 'simplified'  = Simplified Mode (IPCC Tier 1, water level only)
+//                CH₄ = baseline EF × SF_AWD × Area × Period
+//                Only water level sensor needed; N₂O/CO₂ not measured.
+export type CalcMode = 'full' | 'simplified';
+
+// IPCC 2019 Refinement Vol. 4 Ch. 5, Table 5.12 — AWD Scaling Factors (SF_AWD)
+// SF_AWD adjusts the baseline CH₄ emission factor based on number of drainage cycles.
+const SF_AWD_CONTINUOUS = 1.00;  // 0 cycles (continuous flooding) — baseline
+const SF_AWD_SINGLE = 0.60;     // 1 aeration/drying cycle — ~40% CH₄ reduction
+const SF_AWD_MULTIPLE = 0.52;  // 2+ aeration cycles — ~48% CH₄ reduction
+
 // ─── Types ──────────────────────────────────────────────────────────
 interface AWDFieldInternal {
   id: string;
@@ -151,6 +166,10 @@ export interface AWDReading {
   tverMethodology?: string;
   tverGwpCH4?: number;
   tverGwpN2O?: number;
+  // Calculation mode
+  calcMode?: CalcMode;
+  sfAWD?: number;        // Scaling factor applied (simplified mode only)
+  baselineEFKgHaDay?: number;  // Baseline EF used (simplified mode only)
 }
 
 export interface SimStatus {
@@ -158,6 +177,7 @@ export interface SimStatus {
   tickCounter: number;
   speedFactor: number;
   intervalMs: number;
+  calcMode: CalcMode;
   fields: AWDFieldStatus[];
 }
 
@@ -406,6 +426,23 @@ function updateWaterLevel(field: AWDFieldInternal, rainfall: number): void {
   field.waterLevelCm = Math.max(-25, Math.min(20, field.waterLevelCm));
 }
 
+// ─── IPCC Tier 1: AWD Scaling Factor ─────────────────────────────────
+// Returns SF_AWD based on number of completed AWD cycles (drainage events).
+// Reference: IPCC 2019 Refinement Vol. 4 Ch. 5, Table 5.12
+function getSfAWD(cycles: number): number {
+  if (cycles <= 0) return SF_AWD_CONTINUOUS;  // 0 cycles = continuous flooding
+  if (cycles === 1) return SF_AWD_SINGLE;       // 1 aeration
+  return SF_AWD_MULTIPLE;                       // 2+ aeration cycles
+}
+
+// Returns the baseline emission factor (kg CH₄/ha/day) for a field
+// based on its water source type (T-VER-P-AG-001 default values).
+function getBaselineEF(field: AWDFieldInternal): number {
+  if (field.waterSource.includes('Irrigated')) return 1.30;
+  if (field.waterSource.includes('Only')) return 0.70;     // rainfed only (drought-prone)
+  return 1.00;                                             // rainfed + backup
+}
+
 // ─── Simulation Engine ──────────────────────────────────────────────
 class AWDSimulationEngine {
   private fields: AWDFieldInternal[];
@@ -413,9 +450,25 @@ class AWDSimulationEngine {
   private simTimer: ReturnType<typeof setInterval> | null = null;
   private simTickCounter: number = 0;
   private readings: AWDReading[] = [];
+  private calcMode: CalcMode = 'full';
 
   constructor() {
     this.fields = createFields();
+  }
+
+  setCalcMode(mode: CalcMode): { success: boolean; calcMode: CalcMode; message: string } {
+    this.calcMode = mode;
+    return {
+      success: true,
+      calcMode: mode,
+      message: mode === 'simplified'
+        ? 'Switched to Simplified Mode (IPCC Tier 1, water level only)'
+        : 'Switched to Full Sensor Mode (empirical model, 10+ sensors)',
+    };
+  }
+
+  getCalcMode(): CalcMode {
+    return this.calcMode;
   }
 
   getStatus(): SimStatus {
@@ -424,6 +477,7 @@ class AWDSimulationEngine {
       tickCounter: this.simTickCounter,
       speedFactor: SPEED_FACTOR,
       intervalMs: INTERVAL_MS,
+      calcMode: this.calcMode,
       fields: this.fields.map((f) => ({
         id: f.id,
         name: f.name,
@@ -532,48 +586,88 @@ class AWDSimulationEngine {
       const rainfall = getRainfallMm(field, field.currentDAP, field.currentHour);
       updateWaterLevel(field, rainfall);
 
-      const ch4Flux = getCH4Emission(field, field.currentHour);
-      const n2oFlux = getN2OEmission(field);
-      const co2Flux = getCO2Flux(field, field.currentHour);
-      const soilMoisture = getSoilMoisture(field);
-      const soilPH = 5.5 + Math.sin(field.currentDAP * 0.1) * 0.3;
-      const soilTempC = temp - 2 + Math.sin(field.currentDAP * 0.3) * 0.5;
       const growthStage = getGrowthStage(field.currentDAP, field.totalDays);
       const yieldKgPerHa = estimateYieldKgPerHa(field);
 
       // T-VER standard calculations
       const areaM2 = field.areaHa * 10000;
+      const baselineEF = getBaselineEF(field);
 
-      // Legacy (g)
-      field.totalCH4g += (ch4Flux * areaM2) / 1e6;
-      field.totalN2Og += (n2oFlux * areaM2) / 1e6;
+      // ─── Branch on calculation mode ───────────────────────────────
+      // FULL mode: empirical flux model using 10+ sensor variables
+      // SIMPLIFIED mode: IPCC Tier 1 default method using water level only
+      let ch4Flux = 0, n2oFlux = 0, co2Flux = 0;
+      let soilMoisture = 0, soilPH = 0, soilTempC = 0;
+      let ch4CO2e = 0, n2oCO2e = 0, totalGHGCO2e = 0, emissionReductionPct = 0;
+      let sfAWD = 1.0;
 
-      // T-VER standard (kg, tCO2e)
-      const ch4KgPerHaThisHour = (ch4Flux * MG_M2_HR_TO_KG_HA_DAY) / 24;
-      const n2oKgPerHaThisHour = (n2oFlux * MG_M2_HR_TO_KG_HA_DAY) / 24;
-      field.totalCH4kg += ch4KgPerHaThisHour * field.areaHa;
-      field.totalN2Okg += n2oKgPerHaThisHour * field.areaHa;
-      field.totalCH4tCO2e = field.totalCH4kg * KG_CH4_TO_TCO2E;
-      field.totalN2OtCO2e = field.totalN2Okg * KG_N2O_TO_TCO2E;
-      const co2KgThisHour = (co2Flux * areaM2) / 1e6;
-      field.totalNettCO2e = field.totalCH4tCO2e + field.totalN2OtCO2e - (co2KgThisHour / 1000) * 0.3;
-      field.totalYieldKg = yieldKgPerHa * field.areaHa;
+      if (this.calcMode === 'simplified') {
+        // ── Simplified Mode (IPCC Tier 1) ──────────────────────────
+        // CH₄ = baseline EF × SF_AWD × Area × Period
+        // Only water level + AWD cycle count are used.
+        // N₂O and CO₂ are NOT measured in this mode.
+        sfAWD = getSfAWD(field.totalAWDCycles);
+        const projectCH4KgPerHour = (baselineEF * sfAWD * field.areaHa) / 24; // kg CH₄ this hour
+        field.totalCH4kg += projectCH4KgPerHour;
+        field.totalCH4tCO2e = field.totalCH4kg * KG_CH4_TO_TCO2E;
+        // N₂O not calculated in simplified mode
+        field.totalNettCO2e = field.totalCH4tCO2e;
+        field.totalYieldKg = yieldKgPerHa * field.areaHa;
 
-      // T-VER Baseline (continuous flooding)
-      const baselineEF = field.waterSource.includes('Irrigated')
-        ? 1.30
-        : field.waterSource.includes('Only')
-          ? 0.70
-          : 1.00;
-      const baselineCH4KgThisHour = (baselineEF * field.areaHa) / 24;
-      field.baselineEmissiontCO2e += baselineCH4KgThisHour * KG_CH4_TO_TCO2E;
-      field.emissionReductiontCO2e = Math.max(0, field.baselineEmissiontCO2e - field.totalNettCO2e);
+        // Baseline (continuous flooding, SF_AWD = 1.0)
+        const baselineCH4KgThisHour = (baselineEF * field.areaHa) / 24;
+        field.baselineEmissiontCO2e += baselineCH4KgThisHour * KG_CH4_TO_TCO2E;
+        field.emissionReductiontCO2e = Math.max(0, field.baselineEmissiontCO2e - field.totalNettCO2e);
 
-      const ch4CO2e = ch4Flux * GWP_CH4;
-      const n2oCO2e = n2oFlux * GWP_N2O;
-      const totalGHGCO2e = ch4CO2e + n2oCO2e - co2Flux;
-      const baselineCH4Flux = ch4Flux / 0.6;
-      const emissionReductionPct = ((baselineCH4Flux - ch4Flux) / baselineCH4Flux) * 100;
+        // Back-calculate display flux from kg/ha/day for chart compatibility
+        ch4Flux = projectCH4KgPerHour / field.areaHa * 24 / MG_M2_HR_TO_KG_HA_DAY; // kg/ha/day → mg/m²/hr
+        n2oFlux = 0;
+        co2Flux = 0;
+        // Sensor values not measured — set to 0 (UI will show "not measured")
+        soilMoisture = 0;
+        soilPH = 0;
+        soilTempC = 0;
+
+        ch4CO2e = ch4Flux * GWP_CH4;
+        n2oCO2e = 0;
+        totalGHGCO2e = ch4CO2e;
+        // Reduction % = (1 - SF_AWD) × 100
+        emissionReductionPct = Math.round((1 - sfAWD) * 1000) / 10;
+      } else {
+        // ── Full Sensor Mode (empirical model) ─────────────────────
+        ch4Flux = getCH4Emission(field, field.currentHour);
+        n2oFlux = getN2OEmission(field);
+        co2Flux = getCO2Flux(field, field.currentHour);
+        soilMoisture = getSoilMoisture(field);
+        soilPH = 5.5 + Math.sin(field.currentDAP * 0.1) * 0.3;
+        soilTempC = temp - 2 + Math.sin(field.currentDAP * 0.3) * 0.5;
+
+        // Legacy (g)
+        field.totalCH4g += (ch4Flux * areaM2) / 1e6;
+        field.totalN2Og += (n2oFlux * areaM2) / 1e6;
+
+        // T-VER standard (kg, tCO2e)
+        const ch4KgPerHaThisHour = (ch4Flux * MG_M2_HR_TO_KG_HA_DAY) / 24;
+        const n2oKgPerHaThisHour = (n2oFlux * MG_M2_HR_TO_KG_HA_DAY) / 24;
+        field.totalCH4kg += ch4KgPerHaThisHour * field.areaHa;
+        field.totalN2Okg += n2oKgPerHaThisHour * field.areaHa;
+        field.totalCH4tCO2e = field.totalCH4kg * KG_CH4_TO_TCO2E;
+        field.totalN2OtCO2e = field.totalN2Okg * KG_N2O_TO_TCO2E;
+        const co2KgThisHour = (co2Flux * areaM2) / 1e6;
+        field.totalNettCO2e = field.totalCH4tCO2e + field.totalN2OtCO2e - (co2KgThisHour / 1000) * 0.3;
+        field.totalYieldKg = yieldKgPerHa * field.areaHa;
+
+        // T-VER Baseline (continuous flooding)
+        const baselineCH4KgThisHour = (baselineEF * field.areaHa) / 24;
+        field.baselineEmissiontCO2e += baselineCH4KgThisHour * KG_CH4_TO_TCO2E;
+        field.emissionReductiontCO2e = Math.max(0, field.baselineEmissiontCO2e - field.totalNettCO2e);
+
+        ch4CO2e = ch4Flux * GWP_CH4;
+        n2oCO2e = n2oFlux * GWP_N2O;
+        totalGHGCO2e = ch4CO2e + n2oCO2e - co2Flux;
+        const baselineCH4Flux = ch4Flux / 0.6;
+        emissionReductionPct = ((baselineCH4Flux - ch4Flux) / baselineCH4Flux) * 100;
+      }
 
       newReadings.push({
         tick: this.simTickCounter,
@@ -618,6 +712,10 @@ class AWDSimulationEngine {
         tverMethodology: 'T-VER-P-AG-001',
         tverGwpCH4: GWP_CH4,
         tverGwpN2O: GWP_N2O,
+        // Calculation mode metadata
+        calcMode: this.calcMode,
+        sfAWD: this.calcMode === 'simplified' ? Math.round(sfAWD * 100) / 100 : undefined,
+        baselineEFKgHaDay: this.calcMode === 'simplified' ? Math.round(baselineEF * 100) / 100 : undefined,
       });
     }
 
@@ -630,7 +728,7 @@ class AWDSimulationEngine {
 
 // ─── Singleton via globalThis ───────────────────────────────────────
 // Bump this version when making code changes that require a fresh engine
-const ENGINE_VERSION = 2;
+const ENGINE_VERSION = 3;
 
 const globalForSim = globalThis as typeof globalThis & {
   awdSimulation?: AWDSimulationEngine;
