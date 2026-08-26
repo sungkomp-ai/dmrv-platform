@@ -1,0 +1,872 @@
+     1→'use client';
+     2→
+     3→import React, { useState, useEffect, useCallback } from 'react';
+     4→import {
+     5→  Landmark,
+     6→  RefreshCw,
+     7→  ShieldCheck,
+     8→  TrendingUp,
+     9→  Percent,
+    10→  BarChart3,
+    11→  List,
+    12→  Unlock,
+    13→  AlertTriangle,
+    14→  Loader2,
+    15→  ArrowRight,
+    16→  Info,
+    17→} from 'lucide-react';
+    18→import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+    19→import { Button } from '@/components/ui/button';
+    20→import { Skeleton } from '@/components/ui/skeleton';
+    21→import { Badge } from '@/components/ui/badge';
+    22→import { Progress } from '@/components/ui/progress';
+    23→import { Separator } from '@/components/ui/separator';
+    24→import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
+    25→import {
+    26→  Table,
+    27→  TableBody,
+    28→  TableCell,
+    29→  TableHead,
+    30→  TableHeader,
+    31→  TableRow,
+    32→} from '@/components/ui/table';
+    33→import {
+    34→  Dialog,
+    35→  DialogContent,
+    36→  DialogDescription,
+    37→  DialogFooter,
+    38→  DialogHeader,
+    39→  DialogTitle,
+    40→  DialogTrigger,
+    41→} from '@/components/ui/dialog';
+    42→import {
+    43→  Select,
+    44→  SelectContent,
+    45→  SelectItem,
+    46→  SelectTrigger,
+    47→  SelectValue,
+    48→} from '@/components/ui/select';
+    49→import { Textarea } from '@/components/ui/textarea';
+    50→import { Label } from '@/components/ui/label';
+    51→import { toast } from 'sonner';
+    52→import {
+    53→  PieChart,
+    54→  Pie,
+    55→  Cell,
+    56→  BarChart,
+    57→  Bar,
+    58→  XAxis,
+    59→  YAxis,
+    60→  CartesianGrid,
+    61→  Tooltip,
+    62→  ResponsiveContainer,
+    63→  Legend,
+    64→} from 'recharts';
+    65→
+    66→// ---------------------------------------------------------------------------
+    67→// Types
+    68→// ---------------------------------------------------------------------------
+    69→
+    70→interface BufferEntry {
+    71→  id: string;
+    72→  projectId: string;
+    73→  creditId: string;
+    74→  amount: number;
+    75→  uncertaintyPct: number;
+    76→  bufferPct: number;
+    77→  riskCategory: 'LOW' | 'MEDIUM' | 'HIGH' | 'VERY_HIGH';
+    78→  reason: string;
+    79→  releasedAt: string | null;
+    80→  createdAt: string;
+    81→  project: {
+    82→    id: string;
+    83→    name: string;
+    84→    province: string;
+    85→  };
+    86→  credit: {
+    87→    id: string;
+    88→    tokenId: string;
+    89→    amount: number;
+    90→    status: string;
+    91→  };
+    92→}
+    93→
+    94→interface ByRiskCategory {
+    95→  LOW: number;
+    96→  MEDIUM: number;
+    97→  HIGH: number;
+    98→  VERY_HIGH: number;
+    99→}
+   100→
+   101→interface ByProjectEntry {
+   102→  projectName: string;
+   103→  province: string;
+   104→  amount: number;
+   105→  count: number;
+   106→}
+   107→
+   108→interface BufferSummary {
+   109→  total: number;
+   110→  totalBuffered: number;
+   111→  byRiskCategory: ByRiskCategory;
+   112→  byProject: Record<string, ByProjectEntry>;
+   113→}
+   114→
+   115→interface BufferResponse {
+   116→  entries: BufferEntry[];
+   117→  summary: BufferSummary;
+   118→}
+   119→
+   120→// ---------------------------------------------------------------------------
+   121→// Constants
+   122→// ---------------------------------------------------------------------------
+   123→
+   124→const RISK_COLORS: Record<string, string> = {
+   125→  LOW: '#22c55e',
+   126→  MEDIUM: '#f59e0b',
+   127→  HIGH: '#f97316',
+   128→  VERY_HIGH: '#ef4444',
+   129→};
+   130→
+   131→const RISK_THRESHOLDS = [
+   132→  { category: 'LOW', label: 'LOW', uncertaintyRange: '< 15%', bufferPct: 10, color: '#22c55e', bgColor: 'bg-green-100 dark:bg-green-900/30', textColor: 'text-green-700 dark:text-green-400' },
+   133→  { category: 'MEDIUM', label: 'MEDIUM', uncertaintyRange: '15-30%', bufferPct: 15, color: '#f59e0b', bgColor: 'bg-amber-100 dark:bg-amber-900/30', textColor: 'text-amber-700 dark:text-amber-400' },
+   134→  { category: 'HIGH', label: 'HIGH', uncertaintyRange: '30-45%', bufferPct: 20, color: '#f97316', bgColor: 'bg-orange-100 dark:bg-orange-900/30', textColor: 'text-orange-700 dark:text-orange-400' },
+   135→  { category: 'VERY_HIGH', label: 'VERY HIGH', uncertaintyRange: '> 45%', bufferPct: 30, color: '#ef4444', bgColor: 'bg-red-100 dark:bg-red-900/30', textColor: 'text-red-700 dark:text-red-400' },
+   136→];
+   137→
+   138→// ---------------------------------------------------------------------------
+   139→// Sub-components
+   140→// ---------------------------------------------------------------------------
+   141→
+   142→function StatCardSkeleton() {
+   143→  return (
+   144→    <Card className="min-w-[160px]">
+   145→      <CardContent className="p-4 flex items-center gap-3">
+   146→        <Skeleton className="h-10 w-10 rounded-lg" />
+   147→        <div className="space-y-1.5">
+   148→          <Skeleton className="h-6 w-16" />
+   149→          <Skeleton className="h-3 w-24" />
+   150→        </div>
+   151→      </CardContent>
+   152→    </Card>
+   153→  );
+   154→}
+   155→
+   156→function ChartSkeleton() {
+   157→  return (
+   158→    <Card>
+   159→      <CardHeader>
+   160→        <Skeleton className="h-5 w-40" />
+   161→        <Skeleton className="h-3 w-56" />
+   162→      </CardHeader>
+   163→      <CardContent>
+   164→        <div className="flex items-center justify-center h-[260px]">
+   165→          <Skeleton className="h-[240px] w-[240px] rounded-full" />
+   166→        </div>
+   167→      </CardContent>
+   168→    </Card>
+   169→  );
+   170→}
+   171→
+   172→function TableSkeleton() {
+   173→  return (
+   174→    <Card>
+   175→      <CardHeader>
+   176→        <Skeleton className="h-5 w-48" />
+   177→      </CardHeader>
+   178→      <CardContent>
+   179→        <div className="space-y-3">
+   180→          <div className="flex gap-4">
+   181→            {Array.from({ length: 8 }).map((_, i) => (
+   182→              <Skeleton key={i} className="h-8 w-20" />
+   183→            ))}
+   184→          </div>
+   185→          {Array.from({ length: 5 }).map((_, i) => (
+   186→            <div key={i} className="flex gap-4">
+   187→              {Array.from({ length: 8 }).map((_, j) => (
+   188→                <Skeleton key={j} className="h-8 w-20" />
+   189→              ))}
+   190→            </div>
+   191→          ))}
+   192→        </div>
+   193→      </CardContent>
+   194→    </Card>
+   195→  );
+   196→}
+   197→
+   198→function RiskCategoryBadge({ category }: { category: string }) {
+   199→  const colorMap: Record<string, string> = {
+   200→    LOW: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300 border-green-200 dark:border-green-800',
+   201→    MEDIUM: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 border-amber-200 dark:border-amber-800',
+   202→    HIGH: 'bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300 border-orange-200 dark:border-orange-800',
+   203→    VERY_HIGH: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300 border-red-200 dark:border-red-800',
+   204→  };
+   205→  return (
+   206→    <Badge variant="outline" className={colorMap[category] || ''}>
+   207→      {category === 'VERY_HIGH' ? 'VERY HIGH' : category}
+   208→    </Badge>
+   209→  );
+   210→}
+   211→
+   212→function StatusBadge({ releasedAt }: { releasedAt: string | null }) {
+   213→  if (releasedAt) {
+   214→    return (
+   215→      <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+   216→        Released
+   217→      </Badge>
+   218→    );
+   219→  }
+   220→  return (
+   221→    <Badge variant="secondary" className="bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+   222→      Held
+   223→    </Badge>
+   224→  );
+   225→}
+   226→
+   227→// ---------------------------------------------------------------------------
+   228→// Main Component
+   229→// ---------------------------------------------------------------------------
+   230→
+   231→export default function BufferPoolView() {
+   232→  const [data, setData] = useState<BufferResponse | null>(null);
+   233→  const [loading, setLoading] = useState(true);
+   234→  const [error, setError] = useState<string | null>(null);
+   235→  const [refreshing, setRefreshing] = useState(false);
+   236→  const [releaseDialogOpen, setReleaseDialogOpen] = useState(false);
+   237→  const [selectedEntryId, setSelectedEntryId] = useState<string>('');
+   238→  const [releaseReason, setReleaseReason] = useState('');
+   239→  const [submitting, setSubmitting] = useState(false);
+   240→
+   241→  // -----------------------------------------------------------------------
+   242→  // Data fetching
+   243→  // -----------------------------------------------------------------------
+   244→
+   245→  const fetchData = useCallback(async () => {
+   246→    try {
+   247→      setError(null);
+   248→      const res = await fetch('/api/dmrv/buffer');
+   249→      if (!res.ok) throw new Error(`Failed to fetch buffer data: ${res.status}`);
+   250→      const json: BufferResponse = await res.json();
+   251→      setData(json);
+   252→    } catch (err) {
+   253→      setError(err instanceof Error ? err.message : 'Unknown error');
+   254→    } finally {
+   255→      setLoading(false);
+   256→      setRefreshing(false);
+   257→    }
+   258→  }, []);
+   259→
+   260→  useEffect(() => {
+   261→    setLoading(true);
+   262→    fetchData();
+   263→  }, [fetchData]);
+   264→
+   265→  const handleRefresh = () => {
+   266→    setRefreshing(true);
+   267→    fetchData();
+   268→  };
+   269→
+   270→  // -----------------------------------------------------------------------
+   271→  // Derived data
+   272→  // -----------------------------------------------------------------------
+   273→
+   274→  const entries = data?.entries ?? [];
+   275→  const summary = data?.summary;
+   276→
+   277→  const totalBuffered = summary?.totalBuffered ?? 0;
+   278→  const totalCredits = entries.reduce((sum, e) => sum + e.credit.amount, 0);
+   279→  const bufferPoolPct = totalCredits > 0 ? (totalBuffered / totalCredits) * 100 : 0;
+   280→  const avgUncertainty =
+   281→    entries.length > 0
+   282→      ? entries.reduce((sum, e) => sum + e.uncertaintyPct, 0) / entries.length
+   283→      : 0;
+   284→  const entriesCount = summary?.total ?? entries.length;
+   285→
+   286→  const heldEntries = entries.filter((e) => !e.releasedAt);
+   287→
+   288→  // Pie chart data
+   289→  const riskCategoryData = summary
+   290→    ? Object.entries(summary.byRiskCategory).map(([key, value]) => ({
+   291→        name: key === 'VERY_HIGH' ? 'VERY HIGH' : key,
+   292→        value,
+   293→        color: RISK_COLORS[key] || '#94a3b8',
+   294→      }))
+   295→    : [];
+   296→
+   297→  // Bar chart data
+   298→  const projectBarData = summary
+   299→    ? Object.entries(summary.byProject).map(([, proj]) => {
+   300→        const projectEntries = entries.filter((e) => e.project.name === proj.projectName);
+   301→        const buffered = projectEntries.reduce((s, e) => s + e.amount, 0);
+   302→        const creditTotal = projectEntries.reduce((s, e) => s + e.credit.amount, 0);
+   303→        const available = creditTotal - buffered;
+   304→        return {
+   305→          name: proj.projectName.length > 16 ? proj.projectName.substring(0, 14) + '...' : proj.projectName,
+   306→          Available: Math.round(available * 100) / 100,
+   307→          Buffered: Math.round(buffered * 100) / 100,
+   308→        };
+   309→      })
+   310→    : [];
+   311→
+   312→  // -----------------------------------------------------------------------
+   313→  // Release handler
+   314→  // -----------------------------------------------------------------------
+   315→
+   316→  const handleRelease = async () => {
+   317→    if (!selectedEntryId) {
+   318→      toast.error('Please select an entry to release.');
+   319→      return;
+   320→    }
+   321→    setSubmitting(true);
+   322→    try {
+   323→      const res = await fetch('/api/dmrv/buffer', {
+   324→        method: 'POST',
+   325→        headers: { 'Content-Type': 'application/json' },
+   326→        body: JSON.stringify({ action: 'release', entryId: selectedEntryId }),
+   327→      });
+   328→      if (!res.ok) {
+   329→        const body = await res.json().catch(() => ({}));
+   330→        throw new Error(body.error || `Release failed with status ${res.status}`);
+   331→      }
+   332→      toast.success('Buffer credits released successfully.');
+   333→      setReleaseDialogOpen(false);
+   334→      setSelectedEntryId('');
+   335→      setReleaseReason('');
+   336→      fetchData();
+   337→    } catch (err) {
+   338→      toast.error(err instanceof Error ? err.message : 'Failed to release buffer credits.');
+   339→    } finally {
+   340→      setSubmitting(false);
+   341→    }
+   342→  };
+   343→
+   344→  // -----------------------------------------------------------------------
+   345→  // Render: Loading
+   346→  // -----------------------------------------------------------------------
+   347→
+   348→  if (loading) {
+   349→    return (
+   350→      <div className="space-y-6">
+   351→        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+   352→          <div>
+   353→            <Skeleton className="h-8 w-64" />
+   354→            <Skeleton className="h-4 w-80 mt-2" />
+   355→          </div>
+   356→          <Skeleton className="h-9 w-24" />
+   357→        </div>
+   358→        <div className="flex gap-4 overflow-x-auto pb-2">
+   359→          {Array.from({ length: 5 }).map((_, i) => (
+   360→            <StatCardSkeleton key={i} />
+   361→          ))}
+   362→        </div>
+   363→        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+   364→          <ChartSkeleton />
+   365→          <ChartSkeleton />
+   366→        </div>
+   367→        <TableSkeleton />
+   368→      </div>
+   369→    );
+   370→  }
+   371→
+   372→  // -----------------------------------------------------------------------
+   373→  // Render: Error
+   374→  // -----------------------------------------------------------------------
+   375→
+   376→  if (error) {
+   377→    return (
+   378→      <div className="space-y-6">
+   379→        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+   380→          <div>
+   381→            <h2 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+   382→              <Landmark className="h-6 w-6 text-emerald-600" />
+   383→              Uncertainty &amp; Buffer Pool
+   384→            </h2>
+   385→            <p className="text-muted-foreground text-sm mt-1">
+   386→              Risk reserve management per Verra/Gold Standard
+   387→            </p>
+   388→          </div>
+   389→        </div>
+   390→        <Card className="border-red-200 dark:border-red-800">
+   391→          <CardContent className="py-12 flex flex-col items-center gap-4">
+   392→            <AlertTriangle className="h-10 w-10 text-red-500" />
+   393→            <div className="text-center">
+   394→              <p className="font-semibold text-red-700 dark:text-red-400">Failed to load buffer pool data</p>
+   395→              <p className="text-sm text-muted-foreground mt-1">{error}</p>
+   396→            </div>
+   397→            <Button variant="outline" onClick={handleRefresh} className="gap-2">
+   398→              <RefreshCw className="h-4 w-4" />
+   399→              Retry
+   400→            </Button>
+   401→          </CardContent>
+   402→        </Card>
+   403→      </div>
+   404→    );
+   405→  }
+   406→
+   407→  // -----------------------------------------------------------------------
+   408→  // Render: Main
+   409→  // -----------------------------------------------------------------------
+   410→
+   411→  return (
+   412→    <div className="space-y-6">
+   413→      {/* ----------------------------------------------------------------- */}
+   414→      {/* 1. Header                                                         */}
+   415→      {/* ----------------------------------------------------------------- */}
+   416→      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+   417→        <div>
+   418→          <h2 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+   419→            <Landmark className="h-6 w-6 text-emerald-600" />
+   420→            Uncertainty &amp; Buffer Pool
+   421→          </h2>
+   422→          <p className="text-muted-foreground text-sm mt-1">
+   423→            Risk reserve management per Verra/Gold Standard
+   424→          </p>
+   425→        </div>
+   426→        <Button variant="outline" size="sm" className="gap-2 self-start" onClick={handleRefresh} disabled={refreshing}>
+   427→          <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />
+   428→          Refresh
+   429→        </Button>
+   430→      </div>
+   431→
+   432→      {/* ----------------------------------------------------------------- */}
+   433→      {/* 2. Summary Stat Cards                                             */}
+   434→      {/* ----------------------------------------------------------------- */}
+   435→      <ScrollArea className="w-full whitespace-nowrap">
+   436→        <div className="flex gap-4 pb-2">
+   437→          {/* Total Buffered */}
+   438→          <Card className="min-w-[170px] flex-1">
+   439→            <CardContent className="p-4 flex items-center gap-3">
+   440→              <div className="h-10 w-10 rounded-lg bg-emerald-100 dark:bg-emerald-900/40 flex items-center justify-center">
+   441→                <ShieldCheck className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+   442→              </div>
+   443→              <div>
+   444→                <p className="text-2xl font-bold">{totalBuffered.toLocaleString()}</p>
+   445→                <p className="text-xs text-muted-foreground">Total Buffered (tCO2e)</p>
+   446→              </div>
+   447→            </CardContent>
+   448→          </Card>
+   449→
+   450→          {/* Total Credits Generated */}
+   451→          <Card className="min-w-[170px] flex-1">
+   452→            <CardContent className="p-4 flex items-center gap-3">
+   453→              <div className="h-10 w-10 rounded-lg bg-emerald-100 dark:bg-emerald-900/40 flex items-center justify-center">
+   454→                <TrendingUp className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+   455→              </div>
+   456→              <div>
+   457→                <p className="text-2xl font-bold">{totalCredits.toLocaleString()}</p>
+   458→                <p className="text-xs text-muted-foreground">Total Credits Generated</p>
+   459→              </div>
+   460→            </CardContent>
+   461→          </Card>
+   462→
+   463→          {/* Buffer Pool % */}
+   464→          <Card className="min-w-[170px] flex-1">
+   465→            <CardContent className="p-4 flex items-center gap-3">
+   466→              <div className="h-10 w-10 rounded-lg bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center">
+   467→                <Percent className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+   468→              </div>
+   469→              <div>
+   470→                <p className="text-2xl font-bold">{bufferPoolPct.toFixed(1)}%</p>
+   471→                <p className="text-xs text-muted-foreground">Buffer Pool %</p>
+   472→              </div>
+   473→            </CardContent>
+   474→          </Card>
+   475→
+   476→          {/* Avg Uncertainty % */}
+   477→          <Card className="min-w-[170px] flex-1">
+   478→            <CardContent className="p-4 flex items-center gap-3">
+   479→              <div className="h-10 w-10 rounded-lg bg-orange-100 dark:bg-orange-900/40 flex items-center justify-center">
+   480→                <BarChart3 className="h-5 w-5 text-orange-600 dark:text-orange-400" />
+   481→              </div>
+   482→              <div>
+   483→                <p className="text-2xl font-bold">{avgUncertainty.toFixed(1)}%</p>
+   484→                <p className="text-xs text-muted-foreground">Avg Uncertainty %</p>
+   485→              </div>
+   486→            </CardContent>
+   487→          </Card>
+   488→
+   489→          {/* Entries Count */}
+   490→          <Card className="min-w-[170px] flex-1">
+   491→            <CardContent className="p-4 flex items-center gap-3">
+   492→              <div className="h-10 w-10 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
+   493→                <List className="h-5 w-5 text-slate-600 dark:text-slate-400" />
+   494→              </div>
+   495→              <div>
+   496→                <p className="text-2xl font-bold">{entriesCount}</p>
+   497→                <p className="text-xs text-muted-foreground">Entries Count</p>
+   498→              </div>
+   499→            </CardContent>
+   500→          </Card>
+   501→        </div>
+   502→        <ScrollBar orientation="horizontal" />
+   503→      </ScrollArea>
+   504→
+   505→      {/* ----------------------------------------------------------------- */}
+   506→      {/* 3. Uncertainty Gauge                                              */}
+   507→      {/* ----------------------------------------------------------------- */}
+   508→      <Card>
+   509→        <CardHeader className="pb-2">
+   510→          <CardTitle className="text-base flex items-center gap-2">
+   511→            <Info className="h-4 w-4 text-muted-foreground" />
+   512→            System Uncertainty Level
+   513→          </CardTitle>
+   514→          <CardDescription>Average uncertainty across all buffer entries</CardDescription>
+   515→        </CardHeader>
+   516→        <CardContent className="pb-6">
+   517→          <div className="space-y-3">
+   518→            {/* Gradient bar */}
+   519→            <div className="relative h-6 w-full rounded-full overflow-hidden">
+   520→              <div
+   521→                className="h-full w-full rounded-full"
+   522→                style={{
+   523→                  background: 'linear-gradient(to right, #22c55e, #84cc16, #f59e0b, #f97316, #ef4444)',
+   524→                }}
+   525→              />
+   526→              {/* Pointer */}
+   527→              <div
+   528→                className="absolute top-0 h-full flex flex-col items-center"
+   529→                style={{
+   530→                  left: `${Math.min(Math.max(avgUncertainty, 0), 60) / 60 * 100}%`,
+   531→                  transform: 'translateX(-50%)',
+   532→                }}
+   533→              >
+   534→                <div className="w-0.5 h-full bg-white dark:bg-gray-900 shadow-sm" />
+   535→              </div>
+   536→            </div>
+   537→            {/* Scale labels */}
+   538→            <div className="flex justify-between text-xs text-muted-foreground px-0.5">
+   539→              <span>0%</span>
+   540→              <span>15%</span>
+   541→              <span>30%</span>
+   542→              <span>45%</span>
+   543→              <span>60%+</span>
+   544→            </div>
+   545→            {/* Current value label */}
+   546→            <div className="flex items-center justify-center gap-2">
+   547→              <span className="text-sm font-medium">
+   548→                Current Average: {avgUncertainty.toFixed(1)}%
+   549→              </span>
+   550→              <Badge
+   551→                variant="outline"
+   552→                className={
+   553→                  avgUncertainty < 15
+   554→                    ? 'border-green-300 text-green-700 dark:text-green-400 dark:border-green-700'
+   555→                    : avgUncertainty < 30
+   556→                      ? 'border-amber-300 text-amber-700 dark:text-amber-400 dark:border-amber-700'
+   557→                      : avgUncertainty < 45
+   558→                        ? 'border-orange-300 text-orange-700 dark:text-orange-400 dark:border-orange-700'
+   559→                        : 'border-red-300 text-red-700 dark:text-red-400 dark:border-red-700'
+   560→                }
+   561→              >
+   562→                {avgUncertainty < 15 ? 'LOW' : avgUncertainty < 30 ? 'MEDIUM' : avgUncertainty < 45 ? 'HIGH' : 'VERY HIGH'}
+   563→              </Badge>
+   564→            </div>
+   565→          </div>
+   566→        </CardContent>
+   567→      </Card>
+   568→
+   569→      {/* ----------------------------------------------------------------- */}
+   570→      {/* 4 & 5. Charts Row                                                 */}
+   571→      {/* ----------------------------------------------------------------- */}
+   572→      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+   573→        {/* 4. Risk Category Breakdown — Donut Chart */}
+   574→        <Card>
+   575→          <CardHeader>
+   576→            <CardTitle className="text-base">Risk Category Breakdown</CardTitle>
+   577→            <CardDescription>Buffer allocation by risk category</CardDescription>
+   578→          </CardHeader>
+   579→          <CardContent>
+   580→            {riskCategoryData.length === 0 ? (
+   581→              <div className="flex items-center justify-center h-[260px] text-muted-foreground text-sm">
+   582→                No data available
+   583→              </div>
+   584→            ) : (
+   585→              <div className="flex flex-col items-center">
+   586→                <ResponsiveContainer width="100%" height={260}>
+   587→                  <PieChart>
+   588→                    <Pie
+   589→                      data={riskCategoryData}
+   590→                      cx="50%"
+   591→                      cy="50%"
+   592→                      innerRadius={60}
+   593→                      outerRadius={100}
+   594→                      paddingAngle={3}
+   595→                      dataKey="value"
+   596→                      nameKey="name"
+   597→                      stroke="none"
+   598→                    >
+   599→                      {riskCategoryData.map((entry, index) => (
+   600→                        <Cell key={`cell-${index}`} fill={entry.color} />
+   601→                      ))}
+   602→                    </Pie>
+   603→                    <Tooltip
+   604→                      formatter={(value: number, name: string) => [
+   605→                        `${value.toLocaleString()} tCO2e`,
+   606→                        name,
+   607→                      ]}
+   608→                    />
+   609→                    <Legend
+   610→                      formatter={(value: string, entry) => {
+   611→                        const item = riskCategoryData.find((d) => d.name === value);
+   612→                        const total = riskCategoryData.reduce((s, d) => s + d.value, 0);
+   613→                        const pct = item && total > 0 ? ((item.value / total) * 100).toFixed(1) : '0';
+   614→                        return `${value}: ${item?.value.toLocaleString() ?? 0} tCO2e (${pct}%)`;
+   615→                      }}
+   616→                    />
+   617→                  </PieChart>
+   618→                </ResponsiveContainer>
+   619→              </div>
+   620→            )}
+   621→          </CardContent>
+   622→        </Card>
+   623→
+   624→        {/* 5. Buffer Allocation by Project — Bar Chart */}
+   625→        <Card>
+   626→          <CardHeader>
+   627→            <CardTitle className="text-base">Buffer Allocation by Project</CardTitle>
+   628→            <CardDescription>Available vs buffered credits per project</CardDescription>
+   629→          </CardHeader>
+   630→          <CardContent>
+   631→            {projectBarData.length === 0 ? (
+   632→              <div className="flex items-center justify-center h-[260px] text-muted-foreground text-sm">
+   633→                No data available
+   634→              </div>
+   635→            ) : (
+   636→              <ResponsiveContainer width="100%" height={260}>
+   637→                <BarChart data={projectBarData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+   638→                  <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
+   639→                  <XAxis
+   640→                    dataKey="name"
+   641→                    tick={{ fontSize: 11 }}
+   642→                    interval={0}
+   643→                    angle={-20}
+   644→                    textAnchor="end"
+   645→                    height={60}
+   646→                  />
+   647→                  <YAxis
+   648→                    tick={{ fontSize: 11 }}
+   649→                    tickFormatter={(v: number) => `${v}`}
+   650→                    label={{ value: 'tCO2e', angle: -90, position: 'insideLeft', style: { fontSize: 11 } }}
+   651→                  />
+   652→                  <Tooltip
+   653→                    formatter={(value: number, name: string) => [
+   654→                      `${value.toLocaleString()} tCO2e`,
+   655→                      name,
+   656→                    ]}
+   657→                  />
+   658→                  <Legend />
+   659→                  <Bar dataKey="Available" fill="#10b981" radius={[2, 2, 0, 0]} />
+   660→                  <Bar dataKey="Buffered" fill="#64748b" radius={[2, 2, 0, 0]} />
+   661→                </BarChart>
+   662→              </ResponsiveContainer>
+   663→            )}
+   664→          </CardContent>
+   665→        </Card>
+   666→      </div>
+   667→
+   668→      {/* ----------------------------------------------------------------- */}
+   669→      {/* 6. Risk Threshold Reference Panel                                 */}
+   670→      {/* ----------------------------------------------------------------- */}
+   671→      <Card>
+   672→        <CardHeader>
+   673→          <CardTitle className="text-base flex items-center gap-2">
+   674→            <ShieldCheck className="h-4 w-4 text-emerald-600" />
+   675→            Risk Threshold Reference
+   676→          </CardTitle>
+   677→          <CardDescription>Governance-defined buffer deduction thresholds</CardDescription>
+   678→        </CardHeader>
+   679→        <CardContent>
+   680→          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+   681→            {RISK_THRESHOLDS.map((threshold) => {
+   682→              const categoryAmount = summary?.byRiskCategory[threshold.category as keyof ByRiskCategory] ?? 0;
+   683→              const maxBuffer = 30; // VERY_HIGH is max
+   684→              return (
+   685→                <div
+   686→                  key={threshold.category}
+   687→                  className={`rounded-lg border p-4 ${threshold.bgColor}`}
+   688→                >
+   689→                  <div className="flex items-center justify-between mb-2">
+   690→                    <div className={`text-sm font-semibold ${threshold.textColor}`}>
+   691→                      {threshold.label}
+   692→                    </div>
+   693→                    <Badge
+   694→                      variant="outline"
+   695→                      style={{
+   696→                        borderColor: threshold.color,
+   697→                        color: threshold.color,
+   698→                      }}
+   699→                    >
+   700→                      {threshold.bufferPct}%
+   701→                    </Badge>
+   702→                  </div>
+   703→                  <p className="text-xs text-muted-foreground mb-3">
+   704→                    Uncertainty {threshold.uncertaintyRange}
+   705→                    <ArrowRight className="inline h-3 w-3 mx-1" />
+   706→                    {threshold.bufferPct}% buffer deduction
+   707→                  </p>
+   708→                  <Progress
+   709→                    value={(threshold.bufferPct / maxBuffer) * 100}
+   710→                    className="h-2"
+   711→                    style={
+   712→                      {
+   713→                        '--tw-progress-color': threshold.color,
+   714→                      } as React.CSSProperties
+   715→                    }
+   716→                  />
+   717→                  {categoryAmount > 0 && (
+   718→                    <p className="text-xs mt-2 text-muted-foreground">
+   719→                      Allocated: {categoryAmount.toLocaleString()} tCO2e
+   720→                    </p>
+   721→                  )}
+   722→                </div>
+   723→              );
+   724→            })}
+   725→          </div>
+   726→        </CardContent>
+   727→      </Card>
+   728→
+   729→      {/* ----------------------------------------------------------------- */}
+   730→      {/* 7. Entries Table                                                  */}
+   731→      {/* ----------------------------------------------------------------- */}
+   732→      <Card>
+   733→        <CardHeader className="flex flex-row items-center justify-between space-y-0">
+   734→          <div>
+   735→            <CardTitle className="text-base">Buffer Entries</CardTitle>
+   736→            <CardDescription>All buffer pool allocation records</CardDescription>
+   737→          </div>
+   738→          <Dialog open={releaseDialogOpen} onOpenChange={setReleaseDialogOpen}>
+   739→            <DialogTrigger asChild>
+   740→              <Button size="sm" className="gap-2">
+   741→                <Unlock className="h-3.5 w-3.5" />
+   742→                Release Buffer
+   743→              </Button>
+   744→            </DialogTrigger>
+   745→            {/* 8. Release Buffer Dialog */}
+   746→            <DialogContent>
+   747→              <DialogHeader>
+   748→                <DialogTitle>Release Buffer Credits</DialogTitle>
+   749→                <DialogDescription>
+   750→                  Select a held entry to release its buffer credits back to the project.
+   751→                </DialogDescription>
+   752→              </DialogHeader>
+   753→              <div className="space-y-4 py-2">
+   754→                <div className="space-y-2">
+   755→                  <Label htmlFor="entry-select">Select Entry</Label>
+   756→                  <Select value={selectedEntryId} onValueChange={setSelectedEntryId}>
+   757→                    <SelectTrigger className="w-full" id="entry-select">
+   758→                      <SelectValue placeholder="Choose a held entry..." />
+   759→                    </SelectTrigger>
+   760→                    <SelectContent>
+   761→                      {heldEntries.length === 0 ? (
+   762→                        <SelectItem value="__none" disabled>
+   763→                          No held entries available
+   764→                        </SelectItem>
+   765→                      ) : (
+   766→                        heldEntries.map((entry) => (
+   767→                          <SelectItem key={entry.id} value={entry.id}>
+   768→                            {entry.project.name} - {entry.amount.toLocaleString()} tCO2e ({entry.credit.tokenId})
+   769→                          </SelectItem>
+   770→                        ))
+   771→                      )}
+   772→                    </SelectContent>
+   773→                  </Select>
+   774→                </div>
+   775→                <div className="space-y-2">
+   776→                  <Label htmlFor="release-reason">Reason for Release</Label>
+   777→                  <Textarea
+   778→                    id="release-reason"
+   779→                    placeholder="Explain why this buffer is being released..."
+   780→                    value={releaseReason}
+   781→                    onChange={(e) => setReleaseReason(e.target.value)}
+   782→                    rows={3}
+   783→                  />
+   784→                </div>
+   785→              </div>
+   786→              <DialogFooter>
+   787→                <Button
+   788→                  variant="outline"
+   789→                  onClick={() => setReleaseDialogOpen(false)}
+   790→                  disabled={submitting}
+   791→                >
+   792→                  Cancel
+   793→                </Button>
+   794→                <Button onClick={handleRelease} disabled={submitting || !selectedEntryId} className="gap-2">
+   795→                  {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
+   796→                  Release
+   797→                </Button>
+   798→              </DialogFooter>
+   799→            </DialogContent>
+   800→          </Dialog>
+   801→        </CardHeader>
+   802→        <CardContent>
+   803→          {entries.length === 0 ? (
+   804→            <div className="py-12 text-center text-muted-foreground text-sm">
+   805→              No buffer entries found.
+   806→            </div>
+   807→          ) : (
+   808→            <ScrollArea className="max-h-96">
+   809→              <Table>
+   810→                <TableHeader>
+   811→                  <TableRow>
+   812→                    <TableHead>Project</TableHead>
+   813→                    <TableHead>Credit Token</TableHead>
+   814→                    <TableHead className="text-right">Amount (tCO2e)</TableHead>
+   815→                    <TableHead className="text-right">Uncertainty %</TableHead>
+   816→                    <TableHead className="text-right">Buffer %</TableHead>
+   817→                    <TableHead>Risk Category</TableHead>
+   818→                    <TableHead className="max-w-[200px]">Reason</TableHead>
+   819→                    <TableHead>Status</TableHead>
+   820→                  </TableRow>
+   821→                </TableHeader>
+   822→                <TableBody>
+   823→                  {entries.map((entry) => (
+   824→                    <TableRow key={entry.id}>
+   825→                      <TableCell>
+   826→                        <div>
+   827→                          <p className="font-medium text-sm">{entry.project.name}</p>
+   828→                          <p className="text-xs text-muted-foreground">{entry.project.province}</p>
+   829→                        </div>
+   830→                      </TableCell>
+   831→                      <TableCell>
+   832→                        <code className="text-xs bg-muted px-1.5 py-0.5 rounded">
+   833→                          {entry.credit.tokenId}
+   834→                        </code>
+   835→                      </TableCell>
+   836→                      <TableCell className="text-right font-medium">
+   837→                        {entry.amount.toLocaleString()}
+   838→                      </TableCell>
+   839→                      <TableCell className="text-right">{entry.uncertaintyPct}%</TableCell>
+   840→                      <TableCell className="text-right">{entry.bufferPct}%</TableCell>
+   841→                      <TableCell>
+   842→                        <RiskCategoryBadge category={entry.riskCategory} />
+   843→                      </TableCell>
+   844→                      <TableCell className="max-w-[200px]">
+   845→                        <p className="text-xs text-muted-foreground truncate" title={entry.reason}>
+   846→                          {entry.reason}
+   847→                        </p>
+   848→                      </TableCell>
+   849→                      <TableCell>
+   850→                        {entry.releasedAt ? (
+   851→                          <div className="flex flex-col gap-1">
+   852→                            <StatusBadge releasedAt={entry.releasedAt} />
+   853→                            <span className="text-xs text-muted-foreground">
+   854→                              {new Date(entry.releasedAt).toLocaleDateString()}
+   855→                            </span>
+   856→                          </div>
+   857→                        ) : (
+   858→                          <StatusBadge releasedAt={null} />
+   859→                        )}
+   860→                      </TableCell>
+   861→                    </TableRow>
+   862→                  ))}
+   863→                </TableBody>
+   864→              </Table>
+   865→            </ScrollArea>
+   866→          )}
+   867→        </CardContent>
+   868→      </Card>
+   869→    </div>
+   870→  );
+   871→}
+   872→

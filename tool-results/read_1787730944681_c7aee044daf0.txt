@@ -1,0 +1,905 @@
+     1→'use client';
+     2→
+     3→import React, { useState, useEffect, useCallback } from 'react';
+     4→import {
+     5→  Search,
+     6→  Shield,
+     7→  FileCheck,
+     8→  Clock,
+     9→  Link2,
+    10→  Download,
+    11→  Eye,
+    12→  CheckCircle2,
+    13→  Lock,
+    14→  Database,
+    15→  Hash,
+    16→  ArrowRight,
+    17→  RefreshCw,
+    18→  Loader2,
+    19→  ChevronRight,
+    20→  AlertTriangle,
+    21→  Copy,
+    22→  Check,
+    23→  AlertCircle,
+    24→  MapPin,
+    25→  CalendarDays,
+    26→  FileBadge,
+    27→  ChevronDown,
+    28→  ChevronUp,
+    29→  XCircle,
+    30→  Layers,
+    31→} from 'lucide-react';
+    32→import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+    33→import { Button } from '@/components/ui/button';
+    34→import { Badge } from '@/components/ui/badge';
+    35→import { Input } from '@/components/ui/input';
+    36→import { ScrollArea } from '@/components/ui/scroll-area';
+    37→import { Separator } from '@/components/ui/separator';
+    38→import { Skeleton } from '@/components/ui/skeleton';
+    39→import {
+    40→  Table,
+    41→  TableBody,
+    42→  TableCell,
+    43→  TableHead,
+    44→  TableHeader,
+    45→  TableRow,
+    46→} from '@/components/ui/table';
+    47→import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
+    48→import { useToast } from '@/hooks/use-toast';
+    49→
+    50→// ─── Types ────────────────────────────────────────────────────────────────
+    51→
+    52→interface AuditTrailNode {
+    53→  eventType: string;
+    54→  previousHash: string;
+    55→  dataHash: string;
+    56→  merkleRoot: string;
+    57→  metadata: string;
+    58→  timestamp: string;
+    59→}
+    60→
+    61→interface CertificateInfo {
+    62→  id: string;
+    63→  certificateNumber: string;
+    64→  status: string;
+    65→  issuedBy: string;
+    66→  validFrom: string;
+    67→  validUntil: string;
+    68→  project: {
+    69→    id: string;
+    70→    name: string;
+    71→    methodology: string;
+    72→    province: string;
+    73→    status?: string;
+    74→  };
+    75→}
+    76→
+    77→interface ChainIntegrity {
+    78→  valid: boolean;
+    79→  totalEntries: number;
+    80→  genesisHash?: string | null;
+    81→  latestRoot?: string | null;
+    82→}
+    83→
+    84→interface RecentEntry {
+    85→  id: string;
+    86→  certificateNumber: string;
+    87→  status: string;
+    88→  issuedBy: string;
+    89→  validFrom: string;
+    90→  validUntil: string;
+    91→  project: {
+    92→    id: string;
+    93→    name: string;
+    94→    methodology: string;
+    95→    province: string;
+    96→  };
+    97→  latestAuditEvent: {
+    98→    eventType: string;
+    99→    timestamp: string;
+   100→    merkleRoot: string;
+   101→  } | null;
+   102→}
+   103→
+   104→interface SearchResult {
+   105→  certificate: CertificateInfo;
+   106→  auditTrail: AuditTrailNode[];
+   107→  chainIntegrity: ChainIntegrity;
+   108→}
+   109→
+   110→// ─── Event type config ────────────────────────────────────────────────────
+   111→
+   112→const eventConfig: Record<string, { color: string; bgColor: string; borderColor: string; icon: React.ElementType; label: string }> = {
+   113→  ORIGIN: { color: 'text-emerald-700', bgColor: 'bg-emerald-100', borderColor: 'border-emerald-400', icon: Database, label: 'ORIGIN' },
+   114→  QUANTIFY: { color: 'text-blue-700', bgColor: 'bg-blue-100', borderColor: 'border-blue-400', icon: Hash, label: 'QUANTIFY' },
+   115→  VERIFY: { color: 'text-amber-700', bgColor: 'bg-amber-100', borderColor: 'border-amber-400', icon: Shield, label: 'VERIFY' },
+   116→  CERTIFY: { color: 'text-emerald-700', bgColor: 'bg-emerald-50', borderColor: 'border-emerald-500', icon: FileCheck, label: 'CERTIFY' },
+   117→  MINT: { color: 'text-purple-700', bgColor: 'bg-purple-100', borderColor: 'border-purple-400', icon: Lock, label: 'MINT' },
+   118→  TRADE: { color: 'text-teal-700', bgColor: 'bg-teal-100', borderColor: 'border-teal-400', icon: ArrowRight, label: 'TRADE' },
+   119→  RETIRE: { color: 'text-rose-700', bgColor: 'bg-rose-100', borderColor: 'border-rose-400', icon: CheckCircle2, label: 'RETIRE' },
+   120→  BUFFER: { color: 'text-orange-700', bgColor: 'bg-orange-100', borderColor: 'border-orange-400', icon: Shield, label: 'BUFFER' },
+   121→};
+   122→
+   123→const statusConfig: Record<string, { color: string; bgColor: string; hoverBg: string }> = {
+   124→  APPROVED: { color: 'text-emerald-700', bgColor: 'bg-emerald-100', hoverBg: 'hover:bg-emerald-100' },
+   125→  SUBMITTED: { color: 'text-amber-700', bgColor: 'bg-amber-100', hoverBg: 'hover:bg-amber-100' },
+   126→  REJECTED: { color: 'text-red-700', bgColor: 'bg-red-100', hoverBg: 'hover:bg-red-100' },
+   127→  REVOKED: { color: 'text-red-700', bgColor: 'bg-red-100', hoverBg: 'hover:bg-red-100' },
+   128→};
+   129→
+   130→// ─── Helpers ──────────────────────────────────────────────────────────────
+   131→
+   132→function truncateHash(hash: string, chars = 8): string {
+   133→  if (!hash || hash.length <= chars * 2 + 3) return hash;
+   134→  return `${hash.slice(0, chars)}...${hash.slice(-chars)}`;
+   135→}
+   136→
+   137→function truncateHashShort(hash: string): string {
+   138→  if (!hash || hash.length <= 16) return hash;
+   139→  return `${hash.slice(0, 8)}...${hash.slice(-4)}`;
+   140→}
+   141→
+   142→function formatRelativeTime(dateStr: string): string {
+   143→  const now = new Date();
+   144→  const date = new Date(dateStr);
+   145→  const diffMs = now.getTime() - date.getTime();
+   146→  const diffSecs = Math.floor(diffMs / 1000);
+   147→  const diffMins = Math.floor(diffSecs / 60);
+   148→  const diffHours = Math.floor(diffMins / 60);
+   149→  const diffDays = Math.floor(diffHours / 24);
+   150→
+   151→  if (diffSecs < 60) return `${diffSecs}s ago`;
+   152→  if (diffMins < 60) return `${diffMins}m ago`;
+   153→  if (diffHours < 24) return `${diffHours}h ago`;
+   154→  if (diffDays < 30) return `${diffDays}d ago`;
+   155→  return date.toLocaleDateString();
+   156→}
+   157→
+   158→function getActorFromMetadata(metadataStr: string): string {
+   159→  try {
+   160→    const meta = JSON.parse(metadataStr) as { source?: string };
+   161→    return meta.source || 'System';
+   162→  } catch {
+   163→    return 'System';
+   164→  }
+   165→}
+   166→
+   167→// ─── Component ────────────────────────────────────────────────────────────
+   168→
+   169→export default function PublicRegistryView() {
+   170→  const { toast } = useToast();
+   171→  const [loading, setLoading] = useState(true);
+   172→  const [error, setError] = useState<string | null>(null);
+   173→  const [recentEntries, setRecentEntries] = useState<RecentEntry[]>([]);
+   174→  const [summary, setSummary] = useState<{ totalCertificates: number; totalTrailEntries: number } | null>(null);
+   175→  const [searchQuery, setSearchQuery] = useState('');
+   176→  const [searching, setSearching] = useState(false);
+   177→  const [searchResult, setSearchResult] = useState<SearchResult | null>(null);
+   178→  const [expandHashes, setExpandHashes] = useState(false);
+   179→  const [searchHistory, setSearchHistory] = useState<string[]>([]);
+   180→  const [noResults, setNoResults] = useState(false);
+   181→  const [copiedHash, setCopiedHash] = useState<string | null>(null);
+   182→  const [showSearchHistory, setShowSearchHistory] = useState(false);
+   183→
+   184→  const fetchData = useCallback(async () => {
+   185→    try {
+   186→      setLoading(true);
+   187→      setError(null);
+   188→
+   189→      const res = await fetch('/api/dmrv/registry');
+   190→      if (!res.ok) throw new Error('Failed to fetch registry data');
+   191→      const data = (await res.json()) as {
+   192→        recentEntries: RecentEntry[];
+   193→        summary: { totalCertificates: number; totalTrailEntries: number };
+   194→      };
+   195→
+   196→      setRecentEntries(data.recentEntries || []);
+   197→      setSummary(data.summary || null);
+   198→    } catch (err) {
+   199→      setError(err instanceof Error ? err.message : 'Failed to load registry data');
+   200→      toast({ title: 'Error', description: 'Failed to load registry data', variant: 'destructive' });
+   201→    } finally {
+   202→      setLoading(false);
+   203→    }
+   204→  }, [toast]);
+   205→
+   206→  useEffect(() => {
+   207→    fetchData();
+   208→  }, [fetchData]);
+   209→
+   210→  const handleSearch = async () => {
+   211→    if (!searchQuery.trim()) {
+   212→      setSearchResult(null);
+   213→      setNoResults(false);
+   214→      return;
+   215→    }
+   216→    setSearching(true);
+   217→    setNoResults(false);
+   218→    setShowSearchHistory(false);
+   219→    try {
+   220→      const q = searchQuery.trim();
+   221→      // Determine if it looks like a certId (cuid) or certNumber
+   222→      const isCertId = q.startsWith('cmpo') || q.startsWith('cert-') || q.length > 25;
+   223→      const url = isCertId
+   224→        ? `/api/dmrv/registry?certId=${encodeURIComponent(q)}`
+   225→        : `/api/dmrv/registry?certNumber=${encodeURIComponent(q)}`;
+   226→
+   227→      const res = await fetch(url);
+   228→      if (!res.ok) {
+   229→        if (res.status === 404) {
+   230→          setNoResults(true);
+   231→          setSearchResult(null);
+   232→          // Add to search history
+   233→          setSearchHistory((prev) => [q, ...prev.filter((s) => s !== q)].slice(0, 5));
+   234→          return;
+   235→        }
+   236→        throw new Error('Search failed');
+   237→      }
+   238→      const data = (await res.json()) as SearchResult | { results: SearchResult[]; total: number };
+   239→
+   240→      if ('results' in data) {
+   241→        // certNumber search returns { results, total }
+   242→        const results = data.results as SearchResult[];
+   243→        if (results.length > 0) {
+   244→          setSearchResult(results[0]);
+   245→          setSearchHistory((prev) => [q, ...prev.filter((s) => s !== q)].slice(0, 5));
+   246→        } else {
+   247→          setNoResults(true);
+   248→          setSearchResult(null);
+   249→          setSearchHistory((prev) => [q, ...prev.filter((s) => s !== q)].slice(0, 5));
+   250→        }
+   251→      } else {
+   252→        // certId search returns single result
+   253→        setSearchResult(data as SearchResult);
+   254→        setSearchHistory((prev) => [q, ...prev.filter((s) => s !== q)].slice(0, 5));
+   255→      }
+   256→    } catch (err) {
+   257→      toast({ title: 'Search Error', description: err instanceof Error ? err.message : 'Search failed', variant: 'destructive' });
+   258→      setSearchResult(null);
+   259→    } finally {
+   260→      setSearching(false);
+   261→    }
+   262→  };
+   263→
+   264→  const handleViewTrail = async (entry: RecentEntry) => {
+   265→    setSearching(true);
+   266→    try {
+   267→      const res = await fetch(`/api/dmrv/registry?certId=${encodeURIComponent(entry.id)}`);
+   268→      if (!res.ok) throw new Error('Failed to load audit trail');
+   269→      const data = (await res.json()) as SearchResult;
+   270→      setSearchResult(data);
+   271→    } catch (err) {
+   272→      toast({ title: 'Error', description: 'Failed to load audit trail', variant: 'destructive' });
+   273→    } finally {
+   274→      setSearching(false);
+   275→    }
+   276→  };
+   277→
+   278→  const handleCopyHash = async (hash: string, label: string) => {
+   279→    try {
+   280→      await navigator.clipboard.writeText(hash);
+   281→      setCopiedHash(label);
+   282→      toast({ title: 'Copied', description: `${label} copied to clipboard` });
+   283→      setTimeout(() => setCopiedHash(null), 2000);
+   284→    } catch {
+   285→      toast({ title: 'Copy Failed', description: 'Could not copy to clipboard', variant: 'destructive' });
+   286→    }
+   287→  };
+   288→
+   289→  const handleExportTrail = () => {
+   290→    if (!searchResult) return;
+   291→    const exportData = {
+   292→      certificateId: searchResult.certificate.id,
+   293→      certificateNumber: searchResult.certificate.certificateNumber,
+   294→      status: searchResult.certificate.status,
+   295→      chainIntegrity: searchResult.chainIntegrity,
+   296→      auditTrail: searchResult.auditTrail.map((node) => ({
+   297→        eventType: node.eventType,
+   298→        dataHash: node.dataHash,
+   299→        merkleRoot: node.merkleRoot,
+   300→        previousHash: node.previousHash,
+   301→        actor: getActorFromMetadata(node.metadata),
+   302→        timestamp: node.timestamp,
+   303→      })),
+   304→    };
+   305→    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+   306→    const url = URL.createObjectURL(blob);
+   307→    const a = document.createElement('a');
+   308→    a.href = url;
+   309→    a.download = `audit-trail-${searchResult.certificate.certificateNumber || searchResult.certificate.id}.json`;
+   310→    a.click();
+   311→    URL.revokeObjectURL(url);
+   312→    toast({ title: 'Exported', description: 'Audit trail exported as JSON' });
+   313→  };
+   314→
+   315→  // ─── Loading State ────────────────────────────────────────────────────
+   316→
+   317→  if (loading) {
+   318→    return (
+   319→      <div className="space-y-6">
+   320→        <div>
+   321→          <Skeleton className="h-8 w-72" />
+   322→          <Skeleton className="h-4 w-96 mt-2" />
+   323→        </div>
+   324→        <Skeleton className="h-12 w-full" />
+   325→        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+   326→          {[1, 2, 3, 4].map((i) => (
+   327→            <Card key={i}>
+   328→              <CardContent className="p-4 flex items-center gap-3">
+   329→                <Skeleton className="h-10 w-10 rounded-lg" />
+   330→                <div>
+   331→                  <Skeleton className="h-6 w-16" />
+   332→                  <Skeleton className="h-3 w-24 mt-1" />
+   333→                </div>
+   334→              </CardContent>
+   335→            </Card>
+   336→          ))}
+   337→        </div>
+   338→        <Card>
+   339→          <CardContent className="p-6">
+   340→            <Skeleton className="h-64" />
+   341→          </CardContent>
+   342→        </Card>
+   343→      </div>
+   344→    );
+   345→  }
+   346→
+   347→  const approvedCount = recentEntries.filter((e) => e.status === 'APPROVED').length;
+   348→  const pendingCount = recentEntries.filter((e) => e.status === 'SUBMITTED').length;
+   349→
+   350→  // ─── Render ────────────────────────────────────────────────────────────
+   351→
+   352→  return (
+   353→    <div className="space-y-6">
+   354→      {/* Header */}
+   355→      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+   356→        <div>
+   357→          <h2 className="text-2xl font-bold tracking-tight text-gray-900 flex items-center gap-2">
+   358→            <Search className="h-6 w-6 text-emerald-600" />
+   359→            Public Registry & Explorer
+   360→          </h2>
+   361→          <p className="text-muted-foreground text-sm mt-1">Transparent carbon credit traceability</p>
+   362→        </div>
+   363→        <Button variant="outline" size="sm" onClick={fetchData} className="gap-2 self-start">
+   364→          <RefreshCw className="h-3.5 w-3.5" />
+   365→          Refresh
+   366→        </Button>
+   367→      </div>
+   368→
+   369→      {/* Error Banner */}
+   370→      {error && (
+   371→        <Card className="border-red-200 bg-red-50">
+   372→          <CardContent className="p-4 text-sm text-red-700">
+   373→            Failed to load data.{' '}
+   374→            <Button variant="link" className="h-auto p-0 text-red-700 underline" onClick={fetchData}>
+   375→              Retry
+   376→            </Button>
+   377→          </CardContent>
+   378→        </Card>
+   379→      )}
+   380→
+   381→      {/* Search Bar */}
+   382→      <Card>
+   383→        <CardContent className="p-4">
+   384→          <div className="flex gap-2">
+   385→            <div className="relative flex-1">
+   386→              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+   387→              <Input
+   388→                placeholder="Search by Certificate ID or Certificate Number..."
+   389→                value={searchQuery}
+   390→                onChange={(e) => { setSearchQuery(e.target.value); setShowSearchHistory(false); setNoResults(false); }}
+   391→                onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+   392→                onFocus={() => searchHistory.length > 0 && setShowSearchHistory(true)}
+   393→                className="pl-10"
+   394→              />
+   395→              {/* Search History Dropdown */}
+   396→              {showSearchHistory && searchHistory.length > 0 && (
+   397→                <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg z-10 max-h-48 overflow-y-auto">
+   398→                  <div className="p-2 text-[10px] text-muted-foreground font-medium uppercase tracking-wider">Recent Searches</div>
+   399→                  {searchHistory.map((term) => (
+   400→                    <button
+   401→                      key={term}
+   402→                      className="w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center gap-2"
+   403→                      onClick={() => { setSearchQuery(term); setShowSearchHistory(false); }}
+   404→                    >
+   405→                      <Clock className="h-3 w-3 text-muted-foreground" />
+   406→                      <span className="truncate">{term}</span>
+   407→                    </button>
+   408→                  ))}
+   409→                </div>
+   410→              )}
+   411→            </div>
+   412→            <Button
+   413→              onClick={handleSearch}
+   414→              disabled={searching}
+   415→              className="bg-emerald-600 hover:bg-emerald-700 gap-2"
+   416→            >
+   417→              {searching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+   418→              Search
+   419→            </Button>
+   420→          </div>
+   421→          {/* No Results Message */}
+   422→          {noResults && (
+   423→            <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg flex flex-col gap-2">
+   424→              <div className="flex items-center gap-2 text-sm text-amber-700">
+   425→                <AlertCircle className="h-4 w-4 shrink-0" />
+   426→                <span className="font-medium">No certificates found for &quot;{searchQuery}&quot;</span>
+   427→              </div>
+   428→              <div className="text-xs text-amber-600 ml-6">
+   429→                Tips: Try searching by certificate number (e.g., TGO-CERT-001) or certificate ID. Make sure the ID format is correct.
+   430→              </div>
+   431→              <Button
+   432→                variant="outline"
+   433→                size="sm"
+   434→                className="ml-6 w-fit text-xs gap-1 border-amber-300 text-amber-700 hover:bg-amber-100"
+   435→                onClick={() => { setSearchResult(null); setNoResults(false); setSearchQuery(''); }}
+   436→              >
+   437→                <Layers className="h-3 w-3" />
+   438→                Browse All Certificates
+   439→              </Button>
+   440→            </div>
+   441→          )}
+   442→        </CardContent>
+   443→      </Card>
+   444→
+   445→      {/* Summary Cards */}
+   446→      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+   447→        <Card>
+   448→          <CardContent className="p-4 flex items-center gap-3">
+   449→            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-100">
+   450→              <Database className="h-5 w-5 text-slate-600" />
+   451→            </div>
+   452→            <div>
+   453→              <p className="text-xl font-bold">{summary?.totalCertificates ?? 0}</p>
+   454→              <p className="text-xs text-muted-foreground">Total Certificates</p>
+   455→            </div>
+   456→          </CardContent>
+   457→        </Card>
+   458→        <Card>
+   459→          <CardContent className="p-4 flex items-center gap-3">
+   460→            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-50">
+   461→              <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+   462→            </div>
+   463→            <div>
+   464→              <p className="text-xl font-bold text-emerald-600">{approvedCount}</p>
+   465→              <p className="text-xs text-muted-foreground">Approved</p>
+   466→            </div>
+   467→          </CardContent>
+   468→        </Card>
+   469→        <Card>
+   470→          <CardContent className="p-4 flex items-center gap-3">
+   471→            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-50">
+   472→              <Clock className="h-5 w-5 text-amber-600" />
+   473→            </div>
+   474→            <div>
+   475→              <p className="text-xl font-bold text-amber-600">{pendingCount}</p>
+   476→              <p className="text-xs text-muted-foreground">Pending / Submitted</p>
+   477→            </div>
+   478→          </CardContent>
+   479→        </Card>
+   480→        <Card>
+   481→          <CardContent className="p-4 flex items-center gap-3">
+   482→            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50">
+   483→              <Link2 className="h-5 w-5 text-blue-600" />
+   484→            </div>
+   485→            <div>
+   486→              <p className="text-xl font-bold text-blue-600">{summary?.totalTrailEntries ?? 0}</p>
+   487→              <p className="text-xs text-muted-foreground">Audit Trail Entries</p>
+   488→            </div>
+   489→          </CardContent>
+   490→        </Card>
+   491→      </div>
+   492→
+   493→      {/* Search Result: Certificate Detail + Audit Trail Timeline */}
+   494→      {searchResult && (
+   495→        <div className="space-y-4">
+   496→          {/* Certificate Details Card */}
+   497→          <Card>
+   498→            <CardHeader className="pb-3">
+   499→              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+   500→                <div>
+   501→                  <CardTitle className="text-base flex items-center gap-2">
+   502→                    <FileCheck className="h-4 w-4 text-emerald-600" />
+   503→                    Certificate Details
+   504→                  </CardTitle>
+   505→                  <CardDescription className="mt-1">
+   506→                    {searchResult.certificate.certificateNumber || searchResult.certificate.id}
+   507→                  </CardDescription>
+   508→                </div>
+   509→                <div className="flex flex-wrap gap-2">
+   510→                  {statusConfig[searchResult.certificate.status] && (
+   511→                    <Badge
+   512→                      variant="secondary"
+   513→                      className={`${statusConfig[searchResult.certificate.status].bgColor} ${statusConfig[searchResult.certificate.status].color} ${statusConfig[searchResult.certificate.status].hoverBg}`}
+   514→                    >
+   515→                      {searchResult.certificate.status}
+   516→                    </Badge>
+   517→                  )}
+   518→                  {searchResult.chainIntegrity.valid && (
+   519→                    <Badge variant="secondary" className="bg-emerald-50 text-emerald-700 hover:bg-emerald-50 gap-1">
+   520→                      <CheckCircle2 className="h-3 w-3" />
+   521→                      No Double Counting
+   522→                    </Badge>
+   523→                  )}
+   524→                  <Tooltip>
+   525→                    <TooltipTrigger asChild>
+   526→                      <Badge variant="secondary" className="bg-blue-50 text-blue-700 hover:bg-blue-50 gap-1 cursor-help">
+   527→                        <Lock className="h-3 w-3" />
+   528→                        PDPA Compliant
+   529→                      </Badge>
+   530→                    </TooltipTrigger>
+   531→                    <TooltipContent>
+   532→                      <p>Personal data has been de-identified in compliance with PDPA.</p>
+   533→                      <p className="text-[10px] mt-0.5 opacity-80">No personally identifiable information is stored on-chain.</p>
+   534→                    </TooltipContent>
+   535→                  </Tooltip>
+   536→                  {searchResult.certificate.project?.methodology && (
+   537→                    <Badge variant="secondary" className="bg-violet-50 text-violet-700 hover:bg-violet-50 gap-1">
+   538→                      <FileBadge className="h-3 w-3" />
+   539→                      {searchResult.certificate.project.methodology}
+   540→                    </Badge>
+   541→                  )}
+   542→                </div>
+   543→              </div>
+   544→            </CardHeader>
+   545→            <CardContent>
+   546→              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+   547→                <div>
+   548→                  <p className="text-xs text-muted-foreground">Certificate Number</p>
+   549→                  <p className="text-sm font-medium">{searchResult.certificate.certificateNumber || 'N/A'}</p>
+   550→                </div>
+   551→                <div>
+   552→                  <p className="text-xs text-muted-foreground">Project</p>
+   553→                  <p className="text-sm font-medium">{searchResult.certificate.project?.name || 'N/A'}</p>
+   554→                </div>
+   555→                <div>
+   556→                  <p className="text-xs text-muted-foreground">Methodology</p>
+   557→                  <p className="text-sm font-medium">{searchResult.certificate.project?.methodology || 'N/A'}</p>
+   558→                </div>
+   559→                <div>
+   560→                  <p className="text-xs text-muted-foreground">Issued By</p>
+   561→                  <p className="text-sm font-medium">{searchResult.certificate.issuedBy || 'TGO'}</p>
+   562→                </div>
+   563→                <div>
+   564→                  <p className="text-xs text-muted-foreground">Project Location</p>
+   565→                  <p className="text-sm font-medium flex items-center gap-1">
+   566→                    <MapPin className="h-3 w-3 text-slate-400" />
+   567→                    {searchResult.certificate.project?.province || 'N/A'}
+   568→                  </p>
+   569→                </div>
+   570→                <div>
+   571→                  <p className="text-xs text-muted-foreground">Valid Period</p>
+   572→                  <div className="mt-1">
+   573→                    <div className="flex items-center gap-1 text-xs text-muted-foreground mb-1">
+   574→                      <CalendarDays className="h-3 w-3" />
+   575→                      <span>{searchResult.certificate.validFrom ? new Date(searchResult.certificate.validFrom).toLocaleDateString() : 'N/A'}</span>
+   576→                      <span>-</span>
+   577→                      <span>{searchResult.certificate.validUntil ? new Date(searchResult.certificate.validUntil).toLocaleDateString() : 'N/A'}</span>
+   578→                    </div>
+   579→                    {searchResult.certificate.validFrom && searchResult.certificate.validUntil && (() => {
+   580→                      const start = new Date(searchResult.certificate.validFrom).getTime();
+   581→                      const end = new Date(searchResult.certificate.validUntil).getTime();
+   582→                      const now = Date.now();
+   583→                      const total = end - start;
+   584→                      const elapsed = now - start;
+   585→                      const pct = total > 0 ? Math.min(100, Math.max(0, (elapsed / total) * 100)) : 0;
+   586→                      const isExpired = now > end;
+   587→                      return (
+   588→                        <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+   589→                          <div
+   590→                            className={`h-full rounded-full transition-all ${isExpired ? 'bg-red-400' : pct > 80 ? 'bg-amber-400' : 'bg-emerald-400'}`}
+   591→                            style={{ width: `${pct}%` }}
+   592→                          />
+   593→                        </div>
+   594→                      );
+   595→                    })()}
+   596→                  </div>
+   597→                </div>
+   598→              </div>
+   599→            </CardContent>
+   600→          </Card>
+   601→
+   602→          {/* Chain Integrity Summary Card */}
+   603→          {searchResult.chainIntegrity && (() => {
+   604→            const trail = searchResult.auditTrail;
+   605→            const hasDuplicates = (() => {
+   606→              const tokenIds = trail.map((n) => n.dataHash);
+   607→              return new Set(tokenIds).size !== tokenIds.length;
+   608→            })();
+   609→            return (
+   610→              <Card className="border-slate-200">
+   611→                <CardContent className="p-4">
+   612→                  <div className="flex items-center gap-4 flex-wrap text-xs">
+   613→                    <div className="flex items-center gap-1.5">
+   614→                      {searchResult.chainIntegrity.valid ? (
+   615→                        <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+   616→                      ) : (
+   617→                        <AlertTriangle className="h-4 w-4 text-red-500" />
+   618→                      )}
+   619→                      <span className={`font-medium ${searchResult.chainIntegrity.valid ? 'text-emerald-700' : 'text-red-700'}`}>
+   620→                        Chain: {searchResult.chainIntegrity.valid ? 'Valid' : 'Broken'}
+   621→                      </span>
+   622→                    </div>
+   623→                    <Separator orientation="vertical" className="h-4" />
+   624→                    <span className="text-muted-foreground">Entries: <span className="font-semibold text-slate-700">{searchResult.chainIntegrity.totalEntries}</span></span>
+   625→                    {searchResult.chainIntegrity.genesisHash && (
+   626→                      <>
+   627→                        <Separator orientation="vertical" className="h-4" />
+   628→                        <span className="text-muted-foreground">Genesis: <code className="font-mono text-[10px]">{truncateHash(searchResult.chainIntegrity.genesisHash, 6)}</code></span>
+   629→                      </>
+   630→                    )}
+   631→                    {searchResult.chainIntegrity.latestRoot && (
+   632→                      <>
+   633→                        <Separator orientation="vertical" className="h-4" />
+   634→                        <span className="text-muted-foreground">Root: <code className="font-mono text-[10px]">{truncateHash(searchResult.chainIntegrity.latestRoot, 6)}</code></span>
+   635→                      </>
+   636→                    )}
+   637→                    {!hasDuplicates && (
+   638→                      <>
+   639→                        <Separator orientation="vertical" className="h-4" />
+   640→                        <Badge variant="secondary" className="bg-emerald-50 text-emerald-700 hover:bg-emerald-50 text-[10px] h-5 gap-0.5">
+   641→                          <CheckCircle2 className="h-2.5 w-2.5" />
+   642→                          No Double Counting
+   643→                        </Badge>
+   644→                      </>
+   645→                    )}
+   646→                  </div>
+   647→                </CardContent>
+   648→              </Card>
+   649→            );
+   650→          })()}
+   651→
+   652→          {/* Merkle Tree / Audit Trail Timeline */}
+   653→          <Card>
+   654→            <CardHeader className="pb-3">
+   655→              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+   656→                <div>
+   657→                  <CardTitle className="text-base flex items-center gap-2">
+   658→                    <Link2 className="h-4 w-4 text-blue-600" />
+   659→                    Merkle Tree / Audit Trail
+   660→                  </CardTitle>
+   661→                  <CardDescription>{searchResult.auditTrail.length} entries in the chain</CardDescription>
+   662→                </div>
+   663→                <div className="flex items-center gap-2">
+   664→                  <Button
+   665→                    variant="outline"
+   666→                    size="sm"
+   667→                    onClick={() => setExpandHashes(!expandHashes)}
+   668→                    className="gap-1 text-xs"
+   669→                  >
+   670→                    {expandHashes ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+   671→                    {expandHashes ? 'Collapse Hashes' : 'Expand Hashes'}
+   672→                  </Button>
+   673→                  <Button variant="outline" size="sm" onClick={handleExportTrail} className="gap-2">
+   674→                    <Download className="h-3.5 w-3.5" />
+   675→                    Export JSON
+   676→                  </Button>
+   677→                </div>
+   678→              </div>
+   679→            </CardHeader>
+   680→            <CardContent>
+   681→              {searchResult.auditTrail.length === 0 ? (
+   682→                <div className="py-8 text-center text-sm text-muted-foreground">
+   683→                  No audit trail entries found for this certificate.
+   684→                </div>
+   685→              ) : (
+   686→                <ScrollArea className="max-h-[500px]">
+   687→                  <div className="space-y-0">
+   688→                    {searchResult.auditTrail.map((node, idx) => {
+   689→                      const config = eventConfig[node.eventType] || eventConfig.ORIGIN;
+   690→                      const Icon = config.icon;
+   691→                      const actor = getActorFromMetadata(node.metadata);
+   692→                      // Chain verification: check if previousHash matches prior entry's dataHash
+   693→                      const prevNode = idx > 0 ? searchResult.auditTrail[idx - 1] : null;
+   694→                      const chainLinkValid = idx === 0
+   695→                        ? node.previousHash === '0'.repeat(64) || node.previousHash === '' || node.previousHash === 'GENESIS'
+   696→                        : prevNode !== null && node.previousHash === prevNode.dataHash;
+   697→
+   698→                      return (
+   699→                        <React.Fragment key={`${node.eventType}-${idx}`}>
+   700→                          <div className="flex gap-4">
+   701→                            {/* Timeline connector */}
+   702→                            <div className="flex flex-col items-center">
+   703→                              <div
+   704→                                className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 ${config.bgColor} ${config.borderColor}`}
+   705→                              >
+   706→                                <Icon className={`h-4 w-4 ${config.color}`} />
+   707→                              </div>
+   708→                              {idx < searchResult.auditTrail.length - 1 && (
+   709→                                <div className="w-0.5 flex-1 my-1 min-h-[24px] relative">
+   710→                                  <div className={`absolute inset-0 ${chainLinkValid ? 'bg-emerald-300' : 'bg-red-300'}`} style={{ width: '2px', left: '50%', transform: 'translateX(-50%)' }} />
+   711→                                  {chainLinkValid ? (
+   712→                                    <div className="absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 bg-white rounded-full p-0.5">
+   713→                                      <CheckCircle2 className="h-3 w-3 text-emerald-500" />
+   714→                                    </div>
+   715→                                  ) : (
+   716→                                    <div className="absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 bg-white rounded-full p-0.5">
+   717→                                      <XCircle className="h-3 w-3 text-red-500" />
+   718→                                    </div>
+   719→                                  )}
+   720→                                </div>
+   721→                              )}
+   722→                            </div>
+   723→
+   724→                            {/* Node content */}
+   725→                            <div className="flex-1 pb-6 min-w-0">
+   726→                              <div className="flex items-center gap-2 flex-wrap mb-1">
+   727→                                <Badge variant="secondary" className={`${config.bgColor} ${config.color} hover:bg-opacity-80 text-xs font-bold`}>
+   728→                                  {config.label}
+   729→                                </Badge>
+   730→                                <span className="text-xs text-muted-foreground">{formatRelativeTime(node.timestamp)}</span>
+   731→                                {idx > 0 && (
+   732→                                  chainLinkValid ? (
+   733→                                    <Tooltip>
+   734→                                      <TooltipTrigger asChild>
+   735→                                        <CheckCircle2 className="h-3 w-3 text-emerald-500 cursor-help" />
+   736→                                      </TooltipTrigger>
+   737→                                      <TooltipContent>Hash chain verified: previousHash matches prior dataHash</TooltipContent>
+   738→                                    </Tooltip>
+   739→                                  ) : (
+   740→                                    <Tooltip>
+   741→                                      <TooltipTrigger asChild>
+   742→                                        <AlertTriangle className="h-3 w-3 text-red-500 cursor-help" />
+   743→                                      </TooltipTrigger>
+   744→                                      <TooltipContent>Chain link broken: previousHash does not match prior dataHash</TooltipContent>
+   745→                                    </Tooltip>
+   746→                                  )
+   747→                                )}
+   748→                              </div>
+   749→
+   750→                              <div className="rounded-lg bg-slate-50 border border-slate-200 p-3 space-y-1.5">
+   751→                                <div className="flex items-center gap-2 text-xs">
+   752→                                  <Hash className="h-3 w-3 text-slate-400 shrink-0" />
+   753→                                  <span className="text-muted-foreground">dataHash:</span>
+   754→                                  <code className="font-mono text-[11px] bg-white px-1.5 py-0.5 rounded border border-slate-200 break-all">
+   755→                                    {expandHashes ? node.dataHash : truncateHashShort(node.dataHash)}
+   756→                                  </code>
+   757→                                  <button
+   758→                                    className="shrink-0 p-0.5 rounded hover:bg-slate-200 transition-colors"
+   759→                                    onClick={() => handleCopyHash(node.dataHash, `dataHash-${idx}`)}
+   760→                                    title="Copy hash"
+   761→                                  >
+   762→                                    {copiedHash === `dataHash-${idx}` ? <Check className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3 text-slate-400" />}
+   763→                                  </button>
+   764→                                </div>
+   765→                                <div className="flex items-center gap-2 text-xs">
+   766→                                  <Link2 className="h-3 w-3 text-slate-400 shrink-0" />
+   767→                                  <span className="text-muted-foreground">prevHash:</span>
+   768→                                  <code className="font-mono text-[11px] bg-white px-1.5 py-0.5 rounded border border-slate-200 break-all">
+   769→                                    {expandHashes ? node.previousHash : truncateHashShort(node.previousHash)}
+   770→                                  </code>
+   771→                                  <button
+   772→                                    className="shrink-0 p-0.5 rounded hover:bg-slate-200 transition-colors"
+   773→                                    onClick={() => handleCopyHash(node.previousHash, `prevHash-${idx}`)}
+   774→                                    title="Copy hash"
+   775→                                  >
+   776→                                    {copiedHash === `prevHash-${idx}` ? <Check className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3 text-slate-400" />}
+   777→                                  </button>
+   778→                                </div>
+   779→                                <div className="flex items-center gap-2 text-xs">
+   780→                                  <Shield className="h-3 w-3 text-slate-400 shrink-0" />
+   781→                                  <span className="text-muted-foreground">merkleRoot:</span>
+   782→                                  <code className="font-mono text-[11px] bg-white px-1.5 py-0.5 rounded border border-slate-200 break-all">
+   783→                                    {expandHashes ? node.merkleRoot : truncateHashShort(node.merkleRoot)}
+   784→                                  </code>
+   785→                                  <button
+   786→                                    className="shrink-0 p-0.5 rounded hover:bg-slate-200 transition-colors"
+   787→                                    onClick={() => handleCopyHash(node.merkleRoot, `merkleRoot-${idx}`)}
+   788→                                    title="Copy hash"
+   789→                                  >
+   790→                                    {copiedHash === `merkleRoot-${idx}` ? <Check className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3 text-slate-400" />}
+   791→                                  </button>
+   792→                                </div>
+   793→                                <Separator className="my-1" />
+   794→                                <div className="flex items-center gap-4 text-xs text-muted-foreground">
+   795→                                  <span>Actor: <span className="font-medium text-slate-700">{actor}</span></span>
+   796→                                  <span>{new Date(node.timestamp).toLocaleString()}</span>
+   797→                                </div>
+   798→                              </div>
+   799→                            </div>
+   800→                          </div>
+   801→                        </React.Fragment>
+   802→                      );
+   803→                    })}
+   804→                  </div>
+   805→                </ScrollArea>
+   806→              )}
+   807→            </CardContent>
+   808→          </Card>
+   809→
+   810→          {/* Back to list */}
+   811→          <Button
+   812→            variant="ghost"
+   813→            size="sm"
+   814→            onClick={() => {
+   815→              setSearchResult(null);
+   816→              setSearchQuery('');
+   817→            }}
+   818→            className="gap-1"
+   819→          >
+   820→            <ChevronRight className="h-4 w-4 rotate-180" />
+   821→            Back to Registry
+   822→          </Button>
+   823→        </div>
+   824→      )}
+   825→
+   826→      {/* Recent Certificates Table (when no search result) */}
+   827→      {!searchResult && (
+   828→        <Card>
+   829→          <CardHeader>
+   830→            <CardTitle className="text-base">Recent Certificates</CardTitle>
+   831→            <CardDescription>Browse all certificates in the public registry</CardDescription>
+   832→          </CardHeader>
+   833→          <CardContent className="p-0">
+   834→            <div className="overflow-x-auto">
+   835→              <Table>
+   836→                <TableHeader>
+   837→                  <TableRow>
+   838→                    <TableHead>Certificate #</TableHead>
+   839→                    <TableHead>Project</TableHead>
+   840→                    <TableHead>Status</TableHead>
+   841→                    <TableHead>Issued By</TableHead>
+   842→                    <TableHead className="hidden md:table-cell">Valid Until</TableHead>
+   843→                    <TableHead className="hidden lg:table-cell">Latest Event</TableHead>
+   844→                    <TableHead className="text-right">Actions</TableHead>
+   845→                  </TableRow>
+   846→                </TableHeader>
+   847→                <TableBody>
+   848→                  {recentEntries.length === 0 ? (
+   849→                    <TableRow>
+   850→                      <TableCell colSpan={7} className="text-center py-8 text-muted-foreground text-sm">
+   851→                        No certificates found in the registry.
+   852→                      </TableCell>
+   853→                    </TableRow>
+   854→                  ) : (
+   855→                    recentEntries.map((entry) => {
+   856→                      const sc = statusConfig[entry.status] || statusConfig.SUBMITTED;
+   857→                      return (
+   858→                        <TableRow key={entry.id}>
+   859→                          <TableCell className="font-mono text-xs">
+   860→                            {entry.certificateNumber || truncateHash(entry.id, 6)}
+   861→                          </TableCell>
+   862→                          <TableCell className="text-sm">{entry.project?.name || 'N/A'}</TableCell>
+   863→                          <TableCell>
+   864→                            <Badge variant="secondary" className={`${sc.bgColor} ${sc.color} ${sc.hoverBg} text-[10px] h-5`}>
+   865→                              {entry.status}
+   866→                            </Badge>
+   867→                          </TableCell>
+   868→                          <TableCell className="text-sm">{entry.issuedBy || 'TGO'}</TableCell>
+   869→                          <TableCell className="hidden md:table-cell text-sm text-muted-foreground">
+   870→                            {entry.validUntil ? new Date(entry.validUntil).toLocaleDateString() : 'N/A'}
+   871→                          </TableCell>
+   872→                          <TableCell className="hidden lg:table-cell">
+   873→                            {entry.latestAuditEvent ? (
+   874→                              <div className="flex items-center gap-1.5">
+   875→                                {(() => {
+   876→                                  const ec = eventConfig[entry.latestAuditEvent.eventType];
+   877→                                  const EIcon = ec?.icon || Hash;
+   878→                                  return <EIcon className={`h-3 w-3 ${ec?.color || 'text-slate-400'}`} />;
+   879→                                })()}
+   880→                                <span className="text-xs text-muted-foreground">{entry.latestAuditEvent.eventType}</span>
+   881→                              </div>
+   882→                            ) : (
+   883→                              <span className="text-xs text-muted-foreground">None</span>
+   884→                            )}
+   885→                          </TableCell>
+   886→                          <TableCell className="text-right">
+   887→                            <Button variant="ghost" size="sm" onClick={() => handleViewTrail(entry)} className="gap-1 text-xs" disabled={searching}>
+   888→                              {searching ? <Loader2 className="h-3 w-3 animate-spin" /> : <Eye className="h-3 w-3" />}
+   889→                              View Trail
+   890→                            </Button>
+   891→                          </TableCell>
+   892→                        </TableRow>
+   893→                      );
+   894→                    })
+   895→                  )}
+   896→                </TableBody>
+   897→              </Table>
+   898→            </div>
+   899→          </CardContent>
+   900→        </Card>
+   901→      )}
+   902→    </div>
+   903→  );
+   904→}
+   905→

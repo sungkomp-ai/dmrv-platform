@@ -1,0 +1,556 @@
+   401→          </Button>
+   402→        </div>
+   403→      </div>
+   404→
+   405→      {/* Error State */}
+   406→      {error && (
+   407→        <Card className="border-red-200 bg-red-50">
+   408→          <CardContent className="p-4 flex items-center gap-3">
+   409→            <AlertTriangle className="h-5 w-5 text-red-600 shrink-0" />
+   410→            <div>
+   411→              <p className="text-sm font-medium text-red-800">Error Loading Data</p>
+   412→              <p className="text-xs text-red-600">{error}. Click Refresh to try again.</p>
+   413→            </div>
+   414→          </CardContent>
+   415→        </Card>
+   416→      )}
+   417→
+   418→      {/* KPI Stats Row */}
+   419→      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+   420→        <Card>
+   421→          <CardContent className="p-4">
+   422→            <div className="flex items-center gap-3">
+   423→              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-50">
+   424→                <FileText className="h-5 w-5 text-emerald-600" />
+   425→              </div>
+   426→              <div>
+   427→                <p className="text-2xl font-bold">{summary?.total ?? 0}</p>
+   428→                <p className="text-xs text-muted-foreground">Total Contracts</p>
+   429→              </div>
+   430→            </div>
+   431→          </CardContent>
+   432→        </Card>
+   433→        <Card>
+   434→          <CardContent className="p-4">
+   435→            <div className="flex items-center gap-3">
+   436→              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-teal-50">
+   437→                <DollarSign className="h-5 w-5 text-teal-600" />
+   438→              </div>
+   439→              <div>
+   440→                <p className="text-2xl font-bold text-teal-700">
+   441→                  {formatCurrency(activeValue, standardMode)}
+   442→                </p>
+   443→                <p className="text-xs text-muted-foreground">Active Value ({currencyLabel})</p>
+   444→              </div>
+   445→            </div>
+   446→          </CardContent>
+   447→        </Card>
+   448→        <Card>
+   449→          <CardContent className="p-4">
+   450→            <div className="flex items-center gap-3">
+   451→              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-50">
+   452→                <Calendar className="h-5 w-5 text-amber-600" />
+   453→              </div>
+   454→              <div>
+   455→                <p className="text-2xl font-bold text-amber-700">{summary?.upcomingDeliveriesCount ?? 0}</p>
+   456→                <p className="text-xs text-muted-foreground">Upcoming Deliveries</p>
+   457→              </div>
+   458→            </div>
+   459→          </CardContent>
+   460→        </Card>
+   461→        <Card>
+   462→          <CardContent className="p-4">
+   463→            <div className="flex items-center gap-3">
+   464→              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-green-50">
+   465→                <TrendingUp className="h-5 w-5 text-green-600" />
+   466→              </div>
+   467→              <div>
+   468→                <p className="text-2xl font-bold text-green-700">{totalCreditsContracted.toLocaleString()}</p>
+   469→                <p className="text-xs text-muted-foreground">Total Credits (tCO2e)</p>
+   470→              </div>
+   471→            </div>
+   472→          </CardContent>
+   473→        </Card>
+   474→      </div>
+   475→
+   476→      {/* Status Breakdown Mini Bar */}
+   477→      {summary?.byStatus && Object.keys(summary.byStatus).length > 0 && (
+   478→        <div className="flex flex-wrap items-center gap-2">
+   479→          <span className="text-xs text-muted-foreground font-medium">Contracts by Status:</span>
+   480→          {Object.entries(summary.byStatus).map(([status, count]) => (
+   481→            <Badge
+   482→              key={status}
+   483→              variant="secondary"
+   484→              className={`text-[10px] h-5 gap-1 ${statusStyles[status as ContractStatus] || ''}`}
+   485→            >
+   486→              {statusLabels[status as ContractStatus] || status}: {count}
+   487→            </Badge>
+   488→          ))}
+   489→        </div>
+   490→      )}
+   491→
+   492→      {/* Main Content: Sidebar Form + Contract Table */}
+   493→      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+   494→        {/* Create Contract Form */}
+   495→        <Card className="h-fit">
+   496→          <CardHeader>
+   497→            <CardTitle className="text-base flex items-center gap-2">
+   498→              <Plus className="h-4 w-4 text-emerald-600" />
+   499→              Create Forward Contract
+   500→            </CardTitle>
+   501→            <CardDescription>
+   502→              Draft a new forward credit agreement for T-VER projects
+   503→            </CardDescription>
+   504→          </CardHeader>
+   505→          <CardContent className="space-y-4">
+   506→            {/* Project Selector */}
+   507→            <div className="space-y-2">
+   508→              <Label>โครงการ (Project)</Label>
+   509→              <Select value={formProjectId} onValueChange={setFormProjectId}>
+   510→                <SelectTrigger>
+   511→                  <SelectValue placeholder="เลือกโครงการ..." />
+   512→                </SelectTrigger>
+   513→                <SelectContent>
+   514→                  {projects.map((p) => (
+   515→                    <SelectItem key={p.id} value={p.id}>
+   516→                      {p.name} {p.province ? `— ${p.province}` : ''}
+   517→                    </SelectItem>
+   518→                  ))}
+   519→                </SelectContent>
+   520→              </Select>
+   521→            </div>
+   522→
+   523→            {/* Seller & Buyer */}
+   524→            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2 gap-4">
+   525→              <div className="space-y-2">
+   526→                <Label>ผู้ขาย (Seller)</Label>
+   527→                <Input
+   528→                  placeholder="e.g., บริษัท กรีน เอนเนอร์จี้"
+   529→                  value={formSeller}
+   530→                  onChange={(e) => setFormSeller(e.target.value)}
+   531→                />
+   532→              </div>
+   533→              <div className="space-y-2">
+   534→                <Label>ผู้ซื้อ (Buyer)</Label>
+   535→                <Input
+   536→                  placeholder="e.g., PTT Public Co."
+   537→                  value={formBuyer}
+   538→                  onChange={(e) => setFormBuyer(e.target.value)}
+   539→                />
+   540→              </div>
+   541→            </div>
+   542→
+   543→            {/* Credit Amount & Price */}
+   544→            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2 gap-4">
+   545→              <div className="space-y-2">
+   546→                <Label>จำนวนเครดิต (Credits tCO2e)</Label>
+   547→                <Input
+   548→                  type="number"
+   549→                  placeholder="e.g., 5000"
+   550→                  value={formCreditAmount}
+   551→                  onChange={(e) => setFormCreditAmount(e.target.value)}
+   552→                />
+   553→              </div>
+   554→              <div className="space-y-2">
+   555→                <Label>
+   556→                  ราคา/หน่วย (Price/{standardMode === 'tgo' ? 'tCO2e ฿' : 'tCO2e $'})
+   557→                </Label>
+   558→                <Input
+   559→                  type="number"
+   560→                  placeholder={standardMode === 'tgo' ? 'e.g., 500' : 'e.g., 14.50'}
+   561→                  value={formPricePerUnit}
+   562→                  onChange={(e) => setFormPricePerUnit(e.target.value)}
+   563→                />
+   564→              </div>
+   565→            </div>
+   566→
+   567→            {/* Calculated Total */}
+   568→            {formCreditAmount && formPricePerUnit && (
+   569→              <div className="rounded-md bg-emerald-50 p-3 text-sm">
+   570→                <span className="text-muted-foreground">มูลค่ารวม (Total Value): </span>
+   571→                <span className="font-bold text-emerald-700">
+   572→                  {formatCurrency(
+   573→                    parseFloat(formCreditAmount || '0') * parseFloat(formPricePerUnit || '0'),
+   574→                    standardMode
+   575→                  )}
+   576→                </span>
+   577→              </div>
+   578→            )}
+   579→
+   580→            {/* Delivery Date */}
+   581→            <div className="space-y-2">
+   582→              <Label>วันส่งมอบ (Delivery Date)</Label>
+   583→              <Input
+   584→                type="date"
+   585→                value={formDeliveryDate}
+   586→                onChange={(e) => setFormDeliveryDate(e.target.value)}
+   587→              />
+   588→            </div>
+   589→
+   590→            {/* Terms */}
+   591→            <div className="space-y-2">
+   592→              <Label>เงื่อนไข (Terms)</Label>
+   593→              <Textarea
+   594→                placeholder="เงื่อนไขข้อตกลงสัญญา..."
+   595→                value={formTerms}
+   596→                onChange={(e) => setFormTerms(e.target.value)}
+   597→                rows={3}
+   598→              />
+   599→            </div>
+   600→
+   601→            {/* Unit Info */}
+   602→            <p className="text-[10px] text-muted-foreground">
+   603→              หน่วยพื้นที่: {standardMode === 'tgo' ? 'ไร่ (1 ไร่ = 0.16 ha)' : 'ha (1 ha = 6.25 ไร่)'}
+   604→            </p>
+   605→
+   606→            {/* Submit Button */}
+   607→            <Button
+   608→              onClick={handleCreate}
+   609→              disabled={creating}
+   610→              className="w-full bg-emerald-600 hover:bg-emerald-700 gap-2"
+   611→            >
+   612→              {creating ? (
+   613→                <Loader2 className="h-4 w-4 animate-spin" />
+   614→              ) : (
+   615→                <Send className="h-4 w-4" />
+   616→              )}
+   617→              {creating ? 'กำลังสร้าง...' : 'สร้างสัญญา (Create Contract)'}
+   618→            </Button>
+   619→          </CardContent>
+   620→        </Card>
+   621→
+   622→        {/* Contract List + Upcoming Deliveries */}
+   623→        <div className="lg:col-span-2 space-y-6">
+   624→          {/* Contract Table */}
+   625→          <Card>
+   626→            <CardHeader>
+   627→              <CardTitle className="text-base flex items-center gap-2">
+   628→                <FileText className="h-4 w-4 text-emerald-600" />
+   629→                All Forward Contracts
+   630→              </CardTitle>
+   631→              <CardDescription>
+   632→                Complete listing of all forward credit contracts across projects
+   633→              </CardDescription>
+   634→            </CardHeader>
+   635→            <CardContent className="p-0">
+   636→              <ScrollArea className="max-h-[480px]">
+   637→                <Table>
+   638→                  <TableHeader>
+   639→                    <TableRow>
+   640→                      <TableHead className="text-[11px]">Contract ID</TableHead>
+   641→                      <TableHead className="text-[11px]">โครงการ</TableHead>
+   642→                      <TableHead className="text-[11px]">Buyer</TableHead>
+   643→                      <TableHead className="text-[11px]">Seller</TableHead>
+   644→                      <TableHead className="text-[11px]">Credits</TableHead>
+   645→                      <TableHead className="text-[11px]">Price/Unit</TableHead>
+   646→                      <TableHead className="text-[11px]">Total Value</TableHead>
+   647→                      <TableHead className="text-[11px]">Delivery</TableHead>
+   648→                      <TableHead className="text-[11px]">Status</TableHead>
+   649→                      <TableHead className="text-[11px]">Actions</TableHead>
+   650→                    </TableRow>
+   651→                  </TableHeader>
+   652→                  <TableBody>
+   653→                    {contracts.length === 0 ? (
+   654→                      <TableRow>
+   655→                        <TableCell colSpan={10} className="text-center text-muted-foreground py-8">
+   656→                          No forward contracts found. Create one using the form.
+   657→                        </TableCell>
+   658→                      </TableRow>
+   659→                    ) : (
+   660→                      contracts.map((contract) => {
+   661→                        const StatusIcon = statusIcons[contract.status] || FileText;
+   662→                        const days = daysUntil(contract.deliveryDate);
+   663→                        const isOverdue = days < 0 && contract.status === 'ACTIVE';
+   664→
+   665→                        return (
+   666→                          <TableRow key={contract.id} className={isOverdue ? 'bg-red-50/50' : ''}>
+   667→                            <TableCell className="font-mono text-xs font-semibold">
+   668→                              {shortId(contract.id)}
+   669→                            </TableCell>
+   670→                            <TableCell className="text-xs max-w-[120px] truncate" title={contract.project?.name}>
+   671→                              {contract.project?.name || contract.projectId}
+   672→                            </TableCell>
+   673→                            <TableCell className="text-xs max-w-[100px] truncate" title={contract.buyerName}>
+   674→                              {contract.buyerName}
+   675→                            </TableCell>
+   676→                            <TableCell className="text-xs max-w-[100px] truncate" title={contract.sellerName}>
+   677→                              {contract.sellerName}
+   678→                            </TableCell>
+   679→                            <TableCell className="font-mono text-xs">
+   680→                              {contract.creditAmount.toLocaleString()}
+   681→                              <span className="text-[10px] text-muted-foreground ml-0.5">tCO2e</span>
+   682→                            </TableCell>
+   683→                            <TableCell className="font-mono text-xs">
+   684→                              {formatCurrency(contract.pricePerUnit, standardMode)}
+   685→                            </TableCell>
+   686→                            <TableCell className="font-mono text-xs font-semibold">
+   687→                              {formatCurrency(contract.totalValue, standardMode)}
+   688→                            </TableCell>
+   689→                            <TableCell className="text-xs">
+   690→                              <div className="flex flex-col">
+   691→                                <span>{formatDate(contract.deliveryDate)}</span>
+   692→                                {contract.status !== 'COMPLETED' && contract.status !== 'CANCELLED' && (
+   693→                                  <span
+   694→                                    className={`text-[10px] ${
+   695→                                      isOverdue
+   696→                                        ? 'text-red-600 font-bold'
+   697→                                        : days <= 30
+   698→                                          ? 'text-amber-600 font-medium'
+   699→                                          : 'text-muted-foreground'
+   700→                                    }`}
+   701→                                  >
+   702→                                    {isOverdue
+   703→                                      ? `เลยกำหนด ${Math.abs(days)} วัน`
+   704→                                      : `${days} วัน`}
+   705→                                  </span>
+   706→                                )}
+   707→                              </div>
+   708→                            </TableCell>
+   709→                            <TableCell>
+   710→                              <Badge
+   711→                                variant="secondary"
+   712→                                className={`text-[10px] h-5 gap-1 ${statusStyles[contract.status] || ''}`}
+   713→                              >
+   714→                                <StatusIcon className="h-3 w-3" />
+   715→                                {statusLabels[contract.status] || contract.status}
+   716→                              </Badge>
+   717→                            </TableCell>
+   718→                            <TableCell>
+   719→                              <div className="flex items-center gap-1">
+   720→                                {/* Activate: DRAFT → ACTIVE */}
+   721→                                {contract.status === 'DRAFT' && (
+   722→                                  <Button
+   723→                                    variant="ghost"
+   724→                                    size="sm"
+   725→                                    onClick={() => handleStatusUpdate(contract.id, 'ACTIVE')}
+   726→                                    disabled={actionLoading === contract.id}
+   727→                                    className="h-7 px-2 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
+   728→                                    title="Activate Contract"
+   729→                                  >
+   730→                                    {actionLoading === contract.id ? (
+   731→                                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+   732→                                    ) : (
+   733→                                      <CheckCircle className="h-3.5 w-3.5" />
+   734→                                    )}
+   735→                                  </Button>
+   736→                                )}
+   737→                                {/* Complete: ACTIVE → COMPLETED */}
+   738→                                {contract.status === 'ACTIVE' && (
+   739→                                  <Button
+   740→                                    variant="ghost"
+   741→                                    size="sm"
+   742→                                    onClick={() => handleStatusUpdate(contract.id, 'COMPLETED')}
+   743→                                    disabled={actionLoading === contract.id}
+   744→                                    className="h-7 px-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+   745→                                    title="Complete Contract"
+   746→                                  >
+   747→                                    {actionLoading === contract.id ? (
+   748→                                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+   749→                                    ) : (
+   750→                                      <CheckCircle className="h-3.5 w-3.5" />
+   751→                                    )}
+   752→                                  </Button>
+   753→                                )}
+   754→                                {/* Cancel: DRAFT or ACTIVE → CANCELLED */}
+   755→                                {(contract.status === 'DRAFT' || contract.status === 'ACTIVE') && (
+   756→                                  <Button
+   757→                                    variant="ghost"
+   758→                                    size="sm"
+   759→                                    onClick={() => handleStatusUpdate(contract.id, 'CANCELLED')}
+   760→                                    disabled={actionLoading === contract.id}
+   761→                                    className="h-7 px-2 text-red-500 hover:text-red-600 hover:bg-red-50"
+   762→                                    title="Cancel Contract"
+   763→                                  >
+   764→                                    <XCircle className="h-3.5 w-3.5" />
+   765→                                  </Button>
+   766→                                )}
+   767→                                {/* View Details Dialog */}
+   768→                                <Dialog>
+   769→                                  <DialogTrigger asChild>
+   770→                                    <Button
+   771→                                      variant="ghost"
+   772→                                      size="sm"
+   773→                                      onClick={() => setSelectedContract(contract)}
+   774→                                      className="h-7 px-2 text-slate-500 hover:text-slate-700 hover:bg-slate-50"
+   775→                                      title="View Details"
+   776→                                    >
+   777→                                      <Eye className="h-3.5 w-3.5" />
+   778→                                    </Button>
+   779→                                  </DialogTrigger>
+   780→                                  <DialogContent className="max-w-lg">
+   781→                                    <DialogHeader>
+   782→                                      <DialogTitle className="flex items-center gap-2">
+   783→                                        <FileText className="h-4 w-4 text-emerald-600" />
+   784→                                        Contract Details — {selectedContract ? shortId(selectedContract.id) : ''}
+   785→                                      </DialogTitle>
+   786→                                    </DialogHeader>
+   787→                                    {selectedContract && (
+   788→                                      <div className="space-y-4">
+   789→                                        <div className="grid grid-cols-2 gap-3 text-sm">
+   790→                                          <div>
+   791→                                            <span className="text-muted-foreground">Contract ID:</span>
+   792→                                            <p className="font-mono font-semibold">{shortId(selectedContract.id)}</p>
+   793→                                          </div>
+   794→                                          <div>
+   795→                                            <span className="text-muted-foreground">Status:</span>
+   796→                                            <p>
+   797→                                              <Badge
+   798→                                                variant="secondary"
+   799→                                                className={`text-[10px] h-5 gap-1 ${statusStyles[selectedContract.status] || ''}`}
+   800→                                              >
+   801→                                                {statusLabels[selectedContract.status] || selectedContract.status}
+   802→                                              </Badge>
+   803→                                            </p>
+   804→                                          </div>
+   805→                                          <div>
+   806→                                            <span className="text-muted-foreground">โครงการ:</span>
+   807→                                            <p className="font-medium">{selectedContract.project?.name || selectedContract.projectId}</p>
+   808→                                          </div>
+   809→                                          <div>
+   810→                                            <span className="text-muted-foreground">จังหวัด:</span>
+   811→                                            <p>{selectedContract.project?.province || '—'}</p>
+   812→                                          </div>
+   813→                                          <div>
+   814→                                            <span className="text-muted-foreground">ผู้ขาย:</span>
+   815→                                            <p className="font-medium">{selectedContract.sellerName}</p>
+   816→                                          </div>
+   817→                                          <div>
+   818→                                            <span className="text-muted-foreground">ผู้ซื้อ:</span>
+   819→                                            <p className="font-medium">{selectedContract.buyerName}</p>
+   820→                                          </div>
+   821→                                          <div>
+   822→                                            <span className="text-muted-foreground">จำนวนเครดิต:</span>
+   823→                                            <p className="font-semibold text-emerald-700">
+   824→                                              {selectedContract.creditAmount.toLocaleString()} tCO2e
+   825→                                            </p>
+   826→                                          </div>
+   827→                                          <div>
+   828→                                            <span className="text-muted-foreground">ราคา/หน่วย:</span>
+   829→                                            <p className="font-mono">{formatCurrency(selectedContract.pricePerUnit, standardMode)}</p>
+   830→                                          </div>
+   831→                                          <div>
+   832→                                            <span className="text-muted-foreground">มูลค่ารวม:</span>
+   833→                                            <p className="font-mono font-bold text-emerald-700">
+   834→                                              {formatCurrency(selectedContract.totalValue, standardMode)}
+   835→                                            </p>
+   836→                                          </div>
+   837→                                          <div>
+   838→                                            <span className="text-muted-foreground">วันส่งมอบ:</span>
+   839→                                            <p>{formatDate(selectedContract.deliveryDate)}</p>
+   840→                                          </div>
+   841→                                          <div className="col-span-2">
+   842→                                            <span className="text-muted-foreground">วันที่สร้าง:</span>
+   843→                                            <p>{formatDate(selectedContract.createdAt)}</p>
+   844→                                          </div>
+   845→                                        </div>
+   846→                                        {selectedContract.terms && selectedContract.terms !== '{}' && (
+   847→                                          <>
+   848→                                            <Separator />
+   849→                                            <div>
+   850→                                              <span className="text-muted-foreground text-sm">เงื่อนไข (Terms):</span>
+   851→                                              <p className="text-sm mt-1 rounded-md bg-slate-50 p-3">
+   852→                                                {selectedContract.terms}
+   853→                                              </p>
+   854→                                            </div>
+   855→                                          </>
+   856→                                        )}
+   857→                                      </div>
+   858→                                    )}
+   859→                                  </DialogContent>
+   860→                                </Dialog>
+   861→                              </div>
+   862→                            </TableCell>
+   863→                          </TableRow>
+   864→                        );
+   865→                      })
+   866→                    )}
+   867→                  </TableBody>
+   868→                </Table>
+   869→              </ScrollArea>
+   870→            </CardContent>
+   871→          </Card>
+   872→
+   873→          {/* Upcoming Deliveries Section */}
+   874→          <Card>
+   875→            <CardHeader>
+   876→              <CardTitle className="text-base flex items-center gap-2">
+   877→                <Clock className="h-4 w-4 text-amber-600" />
+   878→                Upcoming Deliveries
+   879→              </CardTitle>
+   880→              <CardDescription>
+   881→                Near-term delivery schedule for active and draft contracts
+   882→              </CardDescription>
+   883→            </CardHeader>
+   884→            <CardContent>
+   885→              {!summary?.upcomingDeliveries || summary.upcomingDeliveries.length === 0 ? (
+   886→                <div className="text-center py-8 text-sm text-muted-foreground">
+   887→                  <Clock className="h-8 w-8 mx-auto text-muted-foreground/50 mb-2" />
+   888→                  No upcoming deliveries scheduled
+   889→                </div>
+   890→              ) : (
+   891→                <ScrollArea className="max-h-64">
+   892→                  <div className="space-y-3">
+   893→                    {summary.upcomingDeliveries.map((delivery, idx) => {
+   894→                      const days = daysUntil(delivery.deliveryDate);
+   895→                      const isUrgent = days <= 14 && days >= 0;
+   896→                      const isOverdue = days < 0;
+   897→
+   898→                      return (
+   899→                        <React.Fragment key={delivery.id}>
+   900→                          <div className="flex items-center justify-between gap-4 p-3 rounded-lg bg-slate-50 hover:bg-slate-100 transition-colors">
+   901→                            <div className="flex-1 min-w-0">
+   902→                              <div className="flex items-center gap-2">
+   903→                                <p className="text-sm font-medium truncate">
+   904→                                  {delivery.project?.name || 'Unknown Project'}
+   905→                                </p>
+   906→                                {isUrgent && (
+   907→                                  <Badge variant="secondary" className="text-[10px] h-5 bg-amber-100 text-amber-700 shrink-0">
+   908→                                    เร่งด่วน
+   909→                                  </Badge>
+   910→                                )}
+   911→                                {isOverdue && (
+   912→                                  <Badge variant="secondary" className="text-[10px] h-5 bg-red-100 text-red-700 shrink-0">
+   913→                                    เลยกำหนด
+   914→                                  </Badge>
+   915→                                )}
+   916→                              </div>
+   917→                              <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
+   918→                                <span>ผู้ซื้อ: {delivery.buyerName}</span>
+   919→                                <span>·</span>
+   920→                                <span>ผู้ขาย: {delivery.sellerName}</span>
+   921→                                <span>·</span>
+   922→                                <span>{delivery.creditAmount.toLocaleString()} tCO2e</span>
+   923→                              </div>
+   924→                            </div>
+   925→                            <div className="text-right shrink-0">
+   926→                              <p className="text-sm font-medium">{formatDate(delivery.deliveryDate)}</p>
+   927→                              <p
+   928→                                className={`text-[10px] font-medium ${
+   929→                                  isOverdue
+   930→                                    ? 'text-red-600'
+   931→                                    : isUrgent
+   932→                                      ? 'text-amber-600'
+   933→                                      : 'text-muted-foreground'
+   934→                                }`}
+   935→                              >
+   936→                                {isOverdue
+   937→                                  ? `${Math.abs(days)} วันที่ผ่านมา`
+   938→                                  : `${days} วัน`}
+   939→                              </p>
+   940→                            </div>
+   941→                          </div>
+   942→                          {idx < summary.upcomingDeliveries.length - 1 && <Separator />}
+   943→                        </React.Fragment>
+   944→                      );
+   945→                    })}
+   946→                  </div>
+   947→                </ScrollArea>
+   948→              )}
+   949→            </CardContent>
+   950→          </Card>
+   951→        </div>
+   952→      </div>
+   953→    </div>
+   954→  );
+   955→}
+   956→

@@ -1,0 +1,722 @@
+     1→'use client';
+     2→
+     3→import React, { useState, useEffect, useCallback } from 'react';
+     4→import { Leaf, Calculator, BookOpen, RefreshCw } from 'lucide-react';
+     5→import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+     6→import { Button } from '@/components/ui/button';
+     7→import { Badge } from '@/components/ui/badge';
+     8→import { Input } from '@/components/ui/input';
+     9→import { Label } from '@/components/ui/label';
+    10→import { Checkbox } from '@/components/ui/checkbox';
+    11→import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+    12→import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+    13→import { ScrollArea } from '@/components/ui/scroll-area';
+    14→import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+    15→import { Skeleton } from '@/components/ui/skeleton';
+    16→import { useToast } from '@/hooks/use-toast';
+    17→
+    18→type CarbonType = 'biochar' | 'awd' | 'biogas' | 'solar' | 'bluecarbon';
+    19→
+    20→interface CalcResult {
+    21→  type: CarbonType;
+    22→  tco2e: number;
+    23→  methodology: string;
+    24→  formula: string;
+    25→  breakdown: Record<string, number>;
+    26→}
+    27→
+    28→interface Credit {
+    29→  id: string;
+    30→  tokenId: string;
+    31→  projectId: string;
+    32→  amount: number;
+    33→  status: string;
+    34→  metadata: string;
+    35→  createdAt: string;
+    36→  project: { id: string; name: string; methodology: string };
+    37→}
+    38→
+    39→interface Project {
+    40→  id: string;
+    41→  name: string;
+    42→  methodology: string;
+    43→}
+    44→
+    45→interface CarbonSummary {
+    46→  totalCredits: number;
+    47→  available: number;
+    48→  traded: number;
+    49→  retired: number;
+    50→}
+    51→
+    52→const emissionFactors = [
+    53→  { source: 'Grid Electricity (Thailand)', factor: 0.5086, unit: 'tCO2e/MWh', reference: 'TGO-EF 2024' },
+    54→  { source: 'Diesel Combustion', factor: 2.68, unit: 'tCO2e/kL', reference: 'IPCC 2006' },
+    55→  { source: 'N2O from Soil (Urea)', factor: 0.0117, unit: 'tCO2e/kg N', reference: 'IPCC 2019' },
+    56→  { source: 'Methane from Rice (AWD)', factor: 1.38, unit: 'tCO2e/ha/season', reference: 'IRRI 2023' },
+    57→  { source: 'Biochar Carbon Stability', factor: 0.73, unit: 'tCO2e/t biochar', reference: 'IPCC 2019' },
+    58→  { source: 'Biogas Methane Capture', factor: 25.0, unit: 'tCO2e/t CH4', reference: 'IPCC AR5' },
+    59→  { source: 'Solar PV Offset', factor: 0.5086, unit: 'tCO2e/MWh', reference: 'TGO-EF 2024' },
+    60→  { source: 'Blue Carbon Sequestration', factor: 9.9, unit: 'tCO2e/ha/yr', reference: 'Murray et al. 2011' },
+    61→];
+    62→
+    63→const typeLabels: Record<CarbonType, string> = {
+    64→  biochar: 'Biochar',
+    65→  awd: 'AWD',
+    66→  biogas: 'Biogas',
+    67→  solar: 'Solar',
+    68→  bluecarbon: 'Blue Carbon',
+    69→};
+    70→
+    71→const statusStyles: Record<string, string> = {
+    72→  Available: 'bg-emerald-100 text-emerald-700 hover:bg-emerald-100',
+    73→  Traded: 'bg-teal-100 text-teal-700 hover:bg-teal-100',
+    74→  Retired: 'bg-slate-100 text-slate-600 hover:bg-slate-100',
+    75→};
+    76→
+    77→export default function CarbonView() {
+    78→  const { toast } = useToast();
+    79→  const [results, setResults] = useState<CalcResult[]>([]);
+    80→  const [credits, setCredits] = useState<Credit[]>([]);
+    81→  const [summary, setSummary] = useState<CarbonSummary | null>(null);
+    82→  const [projects, setProjects] = useState<Project[]>([]);
+    83→  const [loading, setLoading] = useState(true);
+    84→  const [calculating, setCalculating] = useState(false);
+    85→  const [selectedProjectId, setSelectedProjectId] = useState('');
+    86→  const [createCredit, setCreateCredit] = useState(false);
+    87→
+    88→  // Biochar state
+    89→  const [biocharInput, setBiocharInput] = useState({ biocharProduced: '', stabilityFactor: '0.85' });
+    90→  // AWD state
+    91→  const [awdInput, setAwdInput] = useState({ area: '', baseline: '3.5', mitigationFactor: '0.5' });
+    92→  // Biogas state
+    93→  const [biogasInput, setBiogasInput] = useState({ ch4Captured: '', fuelDisplacement: '' });
+    94→  // Solar state
+    95→  const [solarInput, setSolarInput] = useState({ generation: '', gridFactor: '0.5086' });
+    96→  // Blue Carbon state
+    97→  const [blueInput, setBlueInput] = useState({ area: '', years: '' });
+    98→
+    99→  const fetchCredits = useCallback(async () => {
+   100→    try {
+   101→      const res = await fetch('/api/dmrv/carbon');
+   102→      if (!res.ok) throw new Error('Failed to fetch credits');
+   103→      const data = await res.json();
+   104→      setCredits(data.credits || []);
+   105→      setSummary(data.summary || null);
+   106→    } catch {
+   107→      toast({ title: 'Error', description: 'Failed to load carbon credits', variant: 'destructive' });
+   108→    }
+   109→  }, [toast]);
+   110→
+   111→  const fetchProjects = useCallback(async () => {
+   112→    try {
+   113→      const res = await fetch('/api/dmrv');
+   114→      if (!res.ok) throw new Error('Failed to fetch projects');
+   115→      const data = await res.json();
+   116→      setProjects(data.projects || []);
+   117→    } catch {
+   118→      toast({ title: 'Error', description: 'Failed to load projects', variant: 'destructive' });
+   119→    }
+   120→  }, [toast]);
+   121→
+   122→  useEffect(() => {
+   123→    const init = async () => {
+   124→      setLoading(true);
+   125→      await Promise.all([fetchCredits(), fetchProjects()]);
+   126→      setLoading(false);
+   127→    };
+   128→    init();
+   129→  }, [fetchCredits, fetchProjects]);
+   130→
+   131→  const handleRefresh = async () => {
+   132→    setLoading(true);
+   133→    await fetchCredits();
+   134→    setLoading(false);
+   135→    toast({ title: 'Refreshed', description: 'Carbon credits data updated' });
+   136→  };
+   137→
+   138→  const calculateBiochar = async () => {
+   139→    const produced = parseFloat(biocharInput.biocharProduced);
+   140→    if (isNaN(produced) || produced <= 0) {
+   141→      toast({ title: 'Invalid Input', description: 'Biochar produced must be a positive number', variant: 'destructive' });
+   142→      return;
+   143→    }
+   144→    setCalculating(true);
+   145→    try {
+   146→      const res = await fetch('/api/dmrv/carbon', {
+   147→        method: 'POST',
+   148→        headers: { 'Content-Type': 'application/json' },
+   149→        body: JSON.stringify({
+   150→          trackType: 'biochar',
+   151→          methodology: 'IPCC-2023',
+   152→          mass: produced,
+   153→          carbonFraction: 0.7,
+   154→          stability: parseFloat(biocharInput.stabilityFactor),
+   155→          projectId: selectedProjectId || undefined,
+   156→          createCredit: createCredit && !!selectedProjectId,
+   157→        }),
+   158→      });
+   159→      if (!res.ok) throw new Error('Calculation failed');
+   160→      const data = await res.json();
+   161→      const calc = data.calculation;
+   162→      setResults((prev) => [...prev, { type: 'biochar', tco2e: calc.tco2e, methodology: 'IPCC 2019 — Biochar Carbon Stability', formula: calc.formula, breakdown: calc.breakdown }]);
+   163→      toast({ title: 'Calculation Complete', description: `Biochar: ${calc.tco2e.toFixed(2)} tCO2e${data.credit ? ' (Credit created)' : ''}` });
+   164→      if (data.credit) await fetchCredits();
+   165→    } catch {
+   166→      toast({ title: 'Error', description: 'Carbon calculation failed', variant: 'destructive' });
+   167→    } finally {
+   168→      setCalculating(false);
+   169→    }
+   170→  };
+   171→
+   172→  const calculateAWD = async () => {
+   173→    const area = parseFloat(awdInput.area);
+   174→    if (isNaN(area) || area <= 0) {
+   175→      toast({ title: 'Invalid Input', description: 'Area must be a positive number', variant: 'destructive' });
+   176→      return;
+   177→    }
+   178→    setCalculating(true);
+   179→    try {
+   180→      const res = await fetch('/api/dmrv/carbon', {
+   181→        method: 'POST',
+   182→        headers: { 'Content-Type': 'application/json' },
+   183→        body: JSON.stringify({
+   184→          trackType: 'awd',
+   185→          methodology: 'IPCC-2023',
+   186→          area,
+   187→          baseline: parseFloat(awdInput.baseline),
+   188→          mitigationFactor: parseFloat(awdInput.mitigationFactor),
+   189→          projectId: selectedProjectId || undefined,
+   190→          createCredit: createCredit && !!selectedProjectId,
+   191→        }),
+   192→      });
+   193→      if (!res.ok) throw new Error('Calculation failed');
+   194→      const data = await res.json();
+   195→      const calc = data.calculation;
+   196→      setResults((prev) => [...prev, { type: 'awd', tco2e: calc.tco2e, methodology: 'IRRI 2023 — AWD Methane Reduction', formula: calc.formula, breakdown: calc.breakdown }]);
+   197→      toast({ title: 'Calculation Complete', description: `AWD: ${calc.tco2e.toFixed(2)} tCO2e${data.credit ? ' (Credit created)' : ''}` });
+   198→      if (data.credit) await fetchCredits();
+   199→    } catch {
+   200→      toast({ title: 'Error', description: 'Carbon calculation failed', variant: 'destructive' });
+   201→    } finally {
+   202→      setCalculating(false);
+   203→    }
+   204→  };
+   205→
+   206→  const calculateBiogas = async () => {
+   207→    const ch4 = parseFloat(biogasInput.ch4Captured);
+   208→    if (isNaN(ch4) || ch4 <= 0) {
+   209→      toast({ title: 'Invalid Input', description: 'CH4 captured must be a positive number', variant: 'destructive' });
+   210→      return;
+   211→    }
+   212→    setCalculating(true);
+   213→    try {
+   214→      const res = await fetch('/api/dmrv/carbon', {
+   215→        method: 'POST',
+   216→        headers: { 'Content-Type': 'application/json' },
+   217→        body: JSON.stringify({
+   218→          trackType: 'biogas',
+   219→          methodology: 'IPCC-2023',
+   220→          ch4Capture: ch4,
+   221→          fuelDisplacement: parseFloat(biogasInput.fuelDisplacement) || 0,
+   222→          projectId: selectedProjectId || undefined,
+   223→          createCredit: createCredit && !!selectedProjectId,
+   224→        }),
+   225→      });
+   226→      if (!res.ok) throw new Error('Calculation failed');
+   227→      const data = await res.json();
+   228→      const calc = data.calculation;
+   229→      setResults((prev) => [...prev, { type: 'biogas', tco2e: calc.tco2e, methodology: 'IPCC AR5 — Biogas Methane Capture', formula: calc.formula, breakdown: calc.breakdown }]);
+   230→      toast({ title: 'Calculation Complete', description: `Biogas: ${calc.tco2e.toFixed(2)} tCO2e${data.credit ? ' (Credit created)' : ''}` });
+   231→      if (data.credit) await fetchCredits();
+   232→    } catch {
+   233→      toast({ title: 'Error', description: 'Carbon calculation failed', variant: 'destructive' });
+   234→    } finally {
+   235→      setCalculating(false);
+   236→    }
+   237→  };
+   238→
+   239→  const calculateSolar = async () => {
+   240→    const gen = parseFloat(solarInput.generation);
+   241→    if (isNaN(gen) || gen <= 0) {
+   242→      toast({ title: 'Invalid Input', description: 'Generation must be a positive number', variant: 'destructive' });
+   243→      return;
+   244→    }
+   245→    setCalculating(true);
+   246→    try {
+   247→      const res = await fetch('/api/dmrv/carbon', {
+   248→        method: 'POST',
+   249→        headers: { 'Content-Type': 'application/json' },
+   250→        body: JSON.stringify({
+   251→          trackType: 'solar',
+   252→          methodology: 'IPCC-2023',
+   253→          kwh: gen * 1000, // Convert MWh to kWh
+   254→          gridEF: parseFloat(solarInput.gridFactor),
+   255→          projectId: selectedProjectId || undefined,
+   256→          createCredit: createCredit && !!selectedProjectId,
+   257→        }),
+   258→      });
+   259→      if (!res.ok) throw new Error('Calculation failed');
+   260→      const data = await res.json();
+   261→      const calc = data.calculation;
+   262→      setResults((prev) => [...prev, { type: 'solar', tco2e: calc.tco2e, methodology: 'TGO-EF 2024 — Solar Grid Offset', formula: calc.formula, breakdown: calc.breakdown }]);
+   263→      toast({ title: 'Calculation Complete', description: `Solar: ${calc.tco2e.toFixed(2)} tCO2e${data.credit ? ' (Credit created)' : ''}` });
+   264→      if (data.credit) await fetchCredits();
+   265→    } catch {
+   266→      toast({ title: 'Error', description: 'Carbon calculation failed', variant: 'destructive' });
+   267→    } finally {
+   268→      setCalculating(false);
+   269→    }
+   270→  };
+   271→
+   272→  const calculateBlue = async () => {
+   273→    const area = parseFloat(blueInput.area);
+   274→    const years = parseFloat(blueInput.years);
+   275→    if (isNaN(area) || isNaN(years) || area <= 0 || years <= 0) {
+   276→      toast({ title: 'Invalid Input', description: 'Area and years must be positive numbers', variant: 'destructive' });
+   277→      return;
+   278→    }
+   279→    // Blue carbon uses area-based formula, map to AWD-like endpoint with appropriate values
+   280→    setCalculating(true);
+   281→    try {
+   282→      const res = await fetch('/api/dmrv/carbon', {
+   283→        method: 'POST',
+   284→        headers: { 'Content-Type': 'application/json' },
+   285→        body: JSON.stringify({
+   286→          trackType: 'awd',
+   287→          methodology: 'T-VER-FOREST',
+   288→          baseline: 9.9, // Blue carbon sequestration rate
+   289→          mitigationFactor: 1.0,
+   290→          area: area * years,
+   291→          projectId: selectedProjectId || undefined,
+   292→          createCredit: createCredit && !!selectedProjectId,
+   293→        }),
+   294→      });
+   295→      if (!res.ok) throw new Error('Calculation failed');
+   296→      const data = await res.json();
+   297→      const calc = data.calculation;
+   298→      setResults((prev) => [...prev, { type: 'bluecarbon', tco2e: calc.tco2e, methodology: 'Murray et al. 2011 — Blue Carbon Sequestration', formula: calc.formula, breakdown: calc.breakdown }]);
+   299→      toast({ title: 'Calculation Complete', description: `Blue Carbon: ${calc.tco2e.toFixed(2)} tCO2e${data.credit ? ' (Credit created)' : ''}` });
+   300→      if (data.credit) await fetchCredits();
+   301→    } catch {
+   302→      toast({ title: 'Error', description: 'Carbon calculation failed', variant: 'destructive' });
+   303→    } finally {
+   304→      setCalculating(false);
+   305→    }
+   306→  };
+   307→
+   308→  if (loading) {
+   309→    return (
+   310→      <div className="space-y-6">
+   311→        <div>
+   312→          <Skeleton className="h-8 w-64" />
+   313→          <Skeleton className="h-4 w-96 mt-2" />
+   314→        </div>
+   315→        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+   316→          {[1, 2, 3, 4].map((i) => (
+   317→            <Card key={i}>
+   318→              <CardContent className="p-4 text-center">
+   319→                <Skeleton className="h-8 w-16 mx-auto" />
+   320→                <Skeleton className="h-3 w-20 mx-auto mt-2" />
+   321→              </CardContent>
+   322→            </Card>
+   323→          ))}
+   324→        </div>
+   325→        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+   326→          <div className="lg:col-span-2"><Card><CardContent className="p-6"><Skeleton className="h-64" /></CardContent></Card></div>
+   327→          <Card><CardContent className="p-6"><Skeleton className="h-64" /></CardContent></Card>
+   328→        </div>
+   329→      </div>
+   330→    );
+   331→  }
+   332→
+   333→  return (
+   334→    <div className="space-y-6">
+   335→      {/* Page Title */}
+   336→      <div className="flex items-center justify-between">
+   337→        <div>
+   338→          <h2 className="text-2xl font-bold tracking-tight text-gray-900">Carbon Quantification</h2>
+   339→          <p className="text-muted-foreground text-sm mt-1">
+   340→            Calculate emission reductions (tCO2e) using approved methodologies
+   341→          </p>
+   342→        </div>
+   343→        <Button variant="outline" size="sm" onClick={handleRefresh} className="gap-2">
+   344→          <RefreshCw className="h-3.5 w-3.5" />
+   345→          Refresh
+   346→        </Button>
+   347→      </div>
+   348→
+   349→      {/* Summary Cards */}
+   350→      {summary && (
+   351→        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+   352→          <Card>
+   353→            <CardContent className="p-4 text-center">
+   354→              <p className="text-2xl font-bold text-emerald-600">{summary.totalCredits.toLocaleString('en-US', { maximumFractionDigits: 1 })}</p>
+   355→              <p className="text-xs text-muted-foreground">Total tCO2e</p>
+   356→            </CardContent>
+   357→          </Card>
+   358→          <Card>
+   359→            <CardContent className="p-4 text-center">
+   360→              <p className="text-2xl font-bold text-green-600">{summary.available.toLocaleString('en-US', { maximumFractionDigits: 1 })}</p>
+   361→              <p className="text-xs text-muted-foreground">Available</p>
+   362→            </CardContent>
+   363→          </Card>
+   364→          <Card>
+   365→            <CardContent className="p-4 text-center">
+   366→              <p className="text-2xl font-bold text-teal-600">{summary.traded.toLocaleString('en-US', { maximumFractionDigits: 1 })}</p>
+   367→              <p className="text-xs text-muted-foreground">Traded</p>
+   368→            </CardContent>
+   369→          </Card>
+   370→          <Card>
+   371→            <CardContent className="p-4 text-center">
+   372→              <p className="text-2xl font-bold text-slate-600">{summary.retired.toLocaleString('en-US', { maximumFractionDigits: 1 })}</p>
+   373→              <p className="text-xs text-muted-foreground">Retired</p>
+   374→            </CardContent>
+   375→          </Card>
+   376→        </div>
+   377→      )}
+   378→
+   379→      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+   380→        {/* Calculator Tabs */}
+   381→        <div className="lg:col-span-2">
+   382→          <Card>
+   383→            <CardHeader>
+   384→              <CardTitle className="text-base flex items-center gap-2">
+   385→                <Calculator className="h-4 w-4 text-emerald-600" />
+   386→                Carbon Calculator
+   387→              </CardTitle>
+   388→            </CardHeader>
+   389→            <CardContent>
+   390→              {/* Project Selector and Create Credit */}
+   391→              <div className="flex flex-col sm:flex-row gap-4 mb-6 p-4 bg-slate-50 rounded-lg">
+   392→                <div className="flex-1 space-y-2">
+   393→                  <Label>Assign to Project</Label>
+   394→                  <Select value={selectedProjectId} onValueChange={setSelectedProjectId}>
+   395→                    <SelectTrigger>
+   396→                      <SelectValue placeholder="Select a project..." />
+   397→                    </SelectTrigger>
+   398→                    <SelectContent>
+   399→                      {projects.map((p) => (
+   400→                        <SelectItem key={p.id} value={p.id}>
+   401→                          {p.name} ({p.methodology})
+   402→                        </SelectItem>
+   403→                      ))}
+   404→                    </SelectContent>
+   405→                  </Select>
+   406→                </div>
+   407→                <div className="flex items-center gap-2 pt-6">
+   408→                  <Checkbox
+   409→                    id="createCredit"
+   410→                    checked={createCredit}
+   411→                    onCheckedChange={(checked) => setCreateCredit(checked === true)}
+   412→                    disabled={!selectedProjectId}
+   413→                  />
+   414→                  <Label htmlFor="createCredit" className={`text-sm ${!selectedProjectId ? 'text-muted-foreground' : ''}`}>
+   415→                    Create Credit
+   416→                  </Label>
+   417→                </div>
+   418→              </div>
+   419→
+   420→              <Tabs defaultValue="biochar">
+   421→                <TabsList className="flex-wrap h-auto gap-1">
+   422→                  <TabsTrigger value="biochar">Biochar</TabsTrigger>
+   423→                  <TabsTrigger value="awd">AWD</TabsTrigger>
+   424→                  <TabsTrigger value="biogas">Biogas</TabsTrigger>
+   425→                  <TabsTrigger value="solar">Solar</TabsTrigger>
+   426→                  <TabsTrigger value="bluecarbon">Blue Carbon</TabsTrigger>
+   427→                </TabsList>
+   428→
+   429→                <TabsContent value="biochar" className="space-y-4 mt-4">
+   430→                  <p className="text-sm text-muted-foreground">Calculate carbon removal via biochar production and soil application.</p>
+   431→                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+   432→                    <div className="space-y-2">
+   433→                      <Label>Biochar Produced (tonnes)</Label>
+   434→                      <Input
+   435→                        type="number"
+   436→                        placeholder="e.g., 500"
+   437→                        value={biocharInput.biocharProduced}
+   438→                        onChange={(e) => setBiocharInput({ ...biocharInput, biocharProduced: e.target.value })}
+   439→                      />
+   440→                    </div>
+   441→                    <div className="space-y-2">
+   442→                      <Label>Carbon Stability Factor</Label>
+   443→                      <Input
+   444→                        type="number"
+   445→                        step="0.01"
+   446→                        value={biocharInput.stabilityFactor}
+   447→                        onChange={(e) => setBiocharInput({ ...biocharInput, stabilityFactor: e.target.value })}
+   448→                      />
+   449→                    </div>
+   450→                  </div>
+   451→                  <Button onClick={calculateBiochar} disabled={calculating} className="bg-emerald-600 hover:bg-emerald-700 gap-2">
+   452→                    <Leaf className="h-4 w-4" />
+   453→                    {calculating ? 'Calculating...' : 'Calculate'}
+   454→                  </Button>
+   455→                </TabsContent>
+   456→
+   457→                <TabsContent value="awd" className="space-y-4 mt-4">
+   458→                  <p className="text-sm text-muted-foreground">Calculate methane reduction from Alternate Wetting and Drying (AWD) in rice cultivation.</p>
+   459→                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+   460→                    <div className="space-y-2">
+   461→                      <Label>Area (hectares)</Label>
+   462→                      <Input
+   463→                        type="number"
+   464→                        placeholder="e.g., 1000"
+   465→                        value={awdInput.area}
+   466→                        onChange={(e) => setAwdInput({ ...awdInput, area: e.target.value })}
+   467→                      />
+   468→                    </div>
+   469→                    <div className="space-y-2">
+   470→                      <Label>Baseline (tCO2e/ha)</Label>
+   471→                      <Input
+   472→                        type="number"
+   473→                        step="0.1"
+   474→                        value={awdInput.baseline}
+   475→                        onChange={(e) => setAwdInput({ ...awdInput, baseline: e.target.value })}
+   476→                      />
+   477→                    </div>
+   478→                    <div className="space-y-2">
+   479→                      <Label>Mitigation Factor</Label>
+   480→                      <Input
+   481→                        type="number"
+   482→                        step="0.1"
+   483→                        value={awdInput.mitigationFactor}
+   484→                        onChange={(e) => setAwdInput({ ...awdInput, mitigationFactor: e.target.value })}
+   485→                      />
+   486→                    </div>
+   487→                  </div>
+   488→                  <Button onClick={calculateAWD} disabled={calculating} className="bg-emerald-600 hover:bg-emerald-700 gap-2">
+   489→                    <Leaf className="h-4 w-4" />
+   490→                    {calculating ? 'Calculating...' : 'Calculate'}
+   491→                  </Button>
+   492→                </TabsContent>
+   493→
+   494→                <TabsContent value="biogas" className="space-y-4 mt-4">
+   495→                  <p className="text-sm text-muted-foreground">Calculate emission reductions from biogas methane capture and utilization.</p>
+   496→                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+   497→                    <div className="space-y-2">
+   498→                      <Label>CH4 Captured (tCO2e)</Label>
+   499→                      <Input
+   500→                        type="number"
+   501→                        placeholder="e.g., 200"
+   502→                        value={biogasInput.ch4Captured}
+   503→                        onChange={(e) => setBiogasInput({ ...biogasInput, ch4Captured: e.target.value })}
+   504→                      />
+   505→                    </div>
+   506→                    <div className="space-y-2">
+   507→                      <Label>Fuel Displacement (tCO2e)</Label>
+   508→                      <Input
+   509→                        type="number"
+   510→                        placeholder="e.g., 50"
+   511→                        value={biogasInput.fuelDisplacement}
+   512→                        onChange={(e) => setBiogasInput({ ...biogasInput, fuelDisplacement: e.target.value })}
+   513→                      />
+   514→                    </div>
+   515→                  </div>
+   516→                  <Button onClick={calculateBiogas} disabled={calculating} className="bg-emerald-600 hover:bg-emerald-700 gap-2">
+   517→                    <Leaf className="h-4 w-4" />
+   518→                    {calculating ? 'Calculating...' : 'Calculate'}
+   519→                  </Button>
+   520→                </TabsContent>
+   521→
+   522→                <TabsContent value="solar" className="space-y-4 mt-4">
+   523→                  <p className="text-sm text-muted-foreground">Calculate grid emission offset from solar PV electricity generation.</p>
+   524→                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+   525→                    <div className="space-y-2">
+   526→                      <Label>Electricity Generated (MWh)</Label>
+   527→                      <Input
+   528→                        type="number"
+   529→                        placeholder="e.g., 5000"
+   530→                        value={solarInput.generation}
+   531→                        onChange={(e) => setSolarInput({ ...solarInput, generation: e.target.value })}
+   532→                      />
+   533→                    </div>
+   534→                    <div className="space-y-2">
+   535→                      <Label>Grid Emission Factor (tCO2e/MWh)</Label>
+   536→                      <Input
+   537→                        type="number"
+   538→                        step="0.0001"
+   539→                        value={solarInput.gridFactor}
+   540→                        onChange={(e) => setSolarInput({ ...solarInput, gridFactor: e.target.value })}
+   541→                      />
+   542→                    </div>
+   543→                  </div>
+   544→                  <Button onClick={calculateSolar} disabled={calculating} className="bg-emerald-600 hover:bg-emerald-700 gap-2">
+   545→                    <Leaf className="h-4 w-4" />
+   546→                    {calculating ? 'Calculating...' : 'Calculate'}
+   547→                  </Button>
+   548→                </TabsContent>
+   549→
+   550→                <TabsContent value="bluecarbon" className="space-y-4 mt-4">
+   551→                  <p className="text-sm text-muted-foreground">Calculate carbon sequestration from blue carbon ecosystems (mangroves, seagrass).</p>
+   552→                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+   553→                    <div className="space-y-2">
+   554→                      <Label>Area (hectares)</Label>
+   555→                      <Input
+   556→                        type="number"
+   557→                        placeholder="e.g., 500"
+   558→                        value={blueInput.area}
+   559→                        onChange={(e) => setBlueInput({ ...blueInput, area: e.target.value })}
+   560→                      />
+   561→                    </div>
+   562→                    <div className="space-y-2">
+   563→                      <Label>Project Duration (years)</Label>
+   564→                      <Input
+   565→                        type="number"
+   566→                        placeholder="e.g., 10"
+   567→                        value={blueInput.years}
+   568→                        onChange={(e) => setBlueInput({ ...blueInput, years: e.target.value })}
+   569→                      />
+   570→                    </div>
+   571→                  </div>
+   572→                  <Button onClick={calculateBlue} disabled={calculating} className="bg-emerald-600 hover:bg-emerald-700 gap-2">
+   573→                    <Leaf className="h-4 w-4" />
+   574→                    {calculating ? 'Calculating...' : 'Calculate'}
+   575→                  </Button>
+   576→                </TabsContent>
+   577→              </Tabs>
+   578→            </CardContent>
+   579→          </Card>
+   580→        </div>
+   581→
+   582→        {/* Emission Factor Reference */}
+   583→        <Card>
+   584→          <CardHeader>
+   585→            <CardTitle className="text-base flex items-center gap-2">
+   586→              <BookOpen className="h-4 w-4 text-emerald-600" />
+   587→              Emission Factor Reference
+   588→            </CardTitle>
+   589→            <CardDescription>Approved emission factors for calculations</CardDescription>
+   590→          </CardHeader>
+   591→          <CardContent className="p-0">
+   592→            <ScrollArea className="max-h-96">
+   593→              <Table>
+   594→                <TableHeader>
+   595→                  <TableRow>
+   596→                    <TableHead className="text-xs">Source</TableHead>
+   597→                    <TableHead className="text-xs">Factor</TableHead>
+   598→                    <TableHead className="text-xs">Ref</TableHead>
+   599→                  </TableRow>
+   600→                </TableHeader>
+   601→                <TableBody>
+   602→                  {emissionFactors.map((ef) => (
+   603→                    <TableRow key={ef.source}>
+   604→                      <TableCell className="text-xs font-medium">{ef.source}</TableCell>
+   605→                      <TableCell className="text-xs font-mono">
+   606→                        {ef.factor} <span className="text-muted-foreground">{ef.unit}</span>
+   607→                      </TableCell>
+   608→                      <TableCell>
+   609→                        <Badge variant="secondary" className="text-[10px] h-5">
+   610→                          {ef.reference}
+   611→                        </Badge>
+   612→                      </TableCell>
+   613→                    </TableRow>
+   614→                  ))}
+   615→                </TableBody>
+   616→              </Table>
+   617→            </ScrollArea>
+   618→          </CardContent>
+   619→        </Card>
+   620→      </div>
+   621→
+   622→      {/* Calculation Results */}
+   623→      {results.length > 0 && (
+   624→        <Card>
+   625→          <CardHeader>
+   626→            <div className="flex items-center justify-between">
+   627→              <div>
+   628→                <CardTitle className="text-base">Calculation Results</CardTitle>
+   629→                <CardDescription>All calculated emission reductions</CardDescription>
+   630→              </div>
+   631→              <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">
+   632→                Total: {results.reduce((sum, r) => sum + r.tco2e, 0).toLocaleString('en-US', { maximumFractionDigits: 2 })} tCO2e
+   633→              </Badge>
+   634→            </div>
+   635→          </CardHeader>
+   636→          <CardContent className="p-0">
+   637→            <ScrollArea className="max-h-64">
+   638→              <Table>
+   639→                <TableHeader>
+   640→                  <TableRow>
+   641→                    <TableHead>Type</TableHead>
+   642→                    <TableHead>tCO2e</TableHead>
+   643→                    <TableHead>Methodology</TableHead>
+   644→                    <TableHead>Formula</TableHead>
+   645→                  </TableRow>
+   646→                </TableHeader>
+   647→                <TableBody>
+   648→                  {[...results].reverse().map((r, idx) => (
+   649→                    <TableRow key={idx}>
+   650→                      <TableCell>
+   651→                        <Badge variant="secondary" className="text-[10px] h-5 bg-emerald-50 text-emerald-700 hover:bg-emerald-50">
+   652→                          {typeLabels[r.type]}
+   653→                        </Badge>
+   654→                      </TableCell>
+   655→                      <TableCell className="font-mono font-semibold text-emerald-700">
+   656→                        {r.tco2e.toLocaleString('en-US', { maximumFractionDigits: 2 })}
+   657→                      </TableCell>
+   658→                      <TableCell className="text-xs text-muted-foreground">{r.methodology}</TableCell>
+   659→                      <TableCell className="text-xs font-mono text-muted-foreground">{r.formula}</TableCell>
+   660→                    </TableRow>
+   661→                  ))}
+   662→                </TableBody>
+   663→              </Table>
+   664→            </ScrollArea>
+   665→          </CardContent>
+   666→        </Card>
+   667→      )}
+   668→
+   669→      {/* Carbon Credits from Database */}
+   670→      {credits.length > 0 && (
+   671→        <Card>
+   672→          <CardHeader>
+   673→            <div className="flex items-center justify-between">
+   674→              <div>
+   675→                <CardTitle className="text-base">Carbon Credits</CardTitle>
+   676→                <CardDescription>All registered carbon credits from the database</CardDescription>
+   677→              </div>
+   678→              <Badge variant="secondary" className="text-[10px] h-5">
+   679→                {credits.length} credits
+   680→              </Badge>
+   681→            </div>
+   682→          </CardHeader>
+   683→          <CardContent className="p-0">
+   684→            <ScrollArea className="max-h-64">
+   685→              <Table>
+   686→                <TableHeader>
+   687→                  <TableRow>
+   688→                    <TableHead>Token ID</TableHead>
+   689→                    <TableHead>Project</TableHead>
+   690→                    <TableHead>Amount (tCO2e)</TableHead>
+   691→                    <TableHead>Status</TableHead>
+   692→                    <TableHead>Created</TableHead>
+   693→                  </TableRow>
+   694→                </TableHeader>
+   695→                <TableBody>
+   696→                  {credits.map((c) => (
+   697→                    <TableRow key={c.id}>
+   698→                      <TableCell className="font-mono text-xs font-semibold">{c.tokenId}</TableCell>
+   699→                      <TableCell className="text-xs">{c.project?.name || c.projectId}</TableCell>
+   700→                      <TableCell className="font-mono text-sm font-semibold text-emerald-700">
+   701→                        {c.amount.toLocaleString('en-US', { maximumFractionDigits: 2 })}
+   702→                      </TableCell>
+   703→                      <TableCell>
+   704→                        <Badge variant="secondary" className={`text-[10px] h-5 ${statusStyles[c.status] || ''}`}>
+   705→                          {c.status}
+   706→                        </Badge>
+   707→                      </TableCell>
+   708→                      <TableCell className="text-xs text-muted-foreground">
+   709→                        {new Date(c.createdAt).toLocaleDateString()}
+   710→                      </TableCell>
+   711→                    </TableRow>
+   712→                  ))}
+   713→                </TableBody>
+   714→              </Table>
+   715→            </ScrollArea>
+   716→          </CardContent>
+   717→        </Card>
+   718→      )}
+   719→    </div>
+   720→  );
+   721→}
+   722→

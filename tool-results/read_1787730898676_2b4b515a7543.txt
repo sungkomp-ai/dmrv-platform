@@ -1,0 +1,722 @@
+     1→'use client';
+     2→
+     3→import React, { useState, useEffect, useCallback } from 'react';
+     4→import {
+     5→  Link2, Unlink, RefreshCw, ArrowUpRight, ArrowDownLeft, Globe,
+     6→  Database, Server, Shield, Send, Plus, ExternalLink, Copy,
+     7→  CheckCircle, Clock, AlertTriangle, Activity,
+     8→} from 'lucide-react';
+     9→import { Card, CardContent } from '@/components/ui/card';
+    10→import { Button } from '@/components/ui/button';
+    11→import { Badge } from '@/components/ui/badge';
+    12→import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+    13→import {
+    14→  Dialog, DialogContent, DialogHeader, DialogTitle,
+    15→} from '@/components/ui/dialog';
+    16→import { Input } from '@/components/ui/input';
+    17→import { Label } from '@/components/ui/label';
+    18→import {
+    19→  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+    20→} from '@/components/ui/select';
+    21→import {
+    22→  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+    23→} from '@/components/ui/table';
+    24→import { Skeleton } from '@/components/ui/skeleton';
+    25→import { ScrollArea } from '@/components/ui/scroll-area';
+    26→import { Separator } from '@/components/ui/separator';
+    27→import { useToast } from '@/hooks/use-toast';
+    28→
+    29→// ─── Types ────────────────────────────────────────────────────────────────
+    30→
+    31→type BridgeStatus = 'CONNECTED' | 'PENDING' | 'SYNCING' | 'DISCONNECTED' | 'ERROR';
+    32→type RegistryType = 'VERRA' | 'GOLD_STANDARD' | 'I_REC' | 'CDM' | 'T_VER' | 'CUSTOM';
+    33→type BridgeProtocol = 'API' | 'POLYGON_BRIDGE' | 'ETHEREUM_BRIDGE' | 'COSMOS_IBC' | 'CUSTOM';
+    34→type TxType = 'MINT' | 'TRANSFER' | 'RETIRE';
+    35→type TxDirection = 'OUTBOUND' | 'INBOUND';
+    36→type TxStatus = 'PENDING' | 'SUBMITTED' | 'CONFIRMED' | 'FAILED' | 'ROLLED_BACK';
+    37→
+    38→interface Bridge {
+    39→  id: string; name: string; registryType: RegistryType; status: BridgeStatus;
+    40→  bridgeProtocol: BridgeProtocol; endpoint: string; apiKeyRef: string;
+    41→  accountId: string; accountName: string; syncInterval: number;
+    42→  lastSyncAt: string | null; totalCreditsSynced: number; metadata: string; createdAt: string;
+    43→}
+    44→
+    45→interface BridgeTransaction {
+    46→  id: string; bridgeId: string; bridgeName?: string; txType: string;
+    47→  direction: TxDirection; creditAmount: number; creditTokenId: string;
+    48→  externalRef: string | null; externalStatus: string; txHash: string | null;
+    49→  status: TxStatus; errorMessage: string; metadata: string;
+    50→  initiatedBy: string; createdAt: string;
+    51→}
+    52→
+    53→interface BridgeSummary {
+    54→  totalBridges: number; connectedBridges: number; totalCreditsSynced: number;
+    55→  totalTransactionAmount: number;
+    56→  byBridgeStatus: Record<BridgeStatus, number>;
+    57→  byTxStatus: Record<TxStatus, number>;
+    58→  byTxType: Record<TxType, number>;
+    59→  byDirection: Record<TxDirection, number>;
+    60→}
+    61→
+    62→interface BridgeData {
+    63→  bridges: Bridge[]; recentTransactions: BridgeTransaction[]; summary: BridgeSummary;
+    64→}
+    65→
+    66→// ─── Config ───────────────────────────────────────────────────────────────
+    67→
+    68→const registryBadge: Record<RegistryType, { bg: string; text: string }> = {
+    69→  VERRA: { bg: 'bg-emerald-100', text: 'text-emerald-700' },
+    70→  GOLD_STANDARD: { bg: 'bg-amber-100', text: 'text-amber-700' },
+    71→  I_REC: { bg: 'bg-sky-100', text: 'text-sky-700' },
+    72→  CDM: { bg: 'bg-slate-100', text: 'text-slate-700' },
+    73→  T_VER: { bg: 'bg-teal-100', text: 'text-teal-700' },
+    74→  CUSTOM: { bg: 'bg-purple-100', text: 'text-purple-700' },
+    75→};
+    76→
+    77→const statusDot: Record<BridgeStatus, string> = {
+    78→  CONNECTED: 'bg-emerald-500', PENDING: 'bg-amber-500', SYNCING: 'bg-yellow-400',
+    79→  DISCONNECTED: 'bg-gray-400', ERROR: 'bg-red-500',
+    80→};
+    81→
+    82→const statusConfig: Record<BridgeStatus, { bg: string; text: string; icon: React.ElementType }> = {
+    83→  CONNECTED: { bg: 'bg-emerald-100', text: 'text-emerald-700', icon: CheckCircle },
+    84→  PENDING: { bg: 'bg-amber-100', text: 'text-amber-700', icon: Clock },
+    85→  SYNCING: { bg: 'bg-yellow-100', text: 'text-yellow-700', icon: Activity },
+    86→  DISCONNECTED: { bg: 'bg-gray-100', text: 'text-gray-600', icon: Unlink },
+    87→  ERROR: { bg: 'bg-red-100', text: 'text-red-700', icon: AlertTriangle },
+    88→};
+    89→
+    90→const txStatusConfig: Record<TxStatus, { bg: string; text: string }> = {
+    91→  PENDING: { bg: 'bg-amber-100', text: 'text-amber-700' },
+    92→  SUBMITTED: { bg: 'bg-sky-100', text: 'text-sky-700' },
+    93→  CONFIRMED: { bg: 'bg-emerald-100', text: 'text-emerald-700' },
+    94→  FAILED: { bg: 'bg-red-100', text: 'text-red-700' },
+    95→  ROLLED_BACK: { bg: 'bg-gray-100', text: 'text-gray-600' },
+    96→};
+    97→
+    98→const protocolIcon: Record<BridgeProtocol, React.ElementType> = {
+    99→  API: Globe, POLYGON_BRIDGE: Database, ETHEREUM_BRIDGE: Server,
+   100→  COSMOS_IBC: Shield, CUSTOM: Server,
+   101→};
+   102→
+   103→function fmtTime(dateStr: string | null): string {
+   104→  if (!dateStr) return 'Never';
+   105→  const d = new Date(dateStr), now = new Date();
+   106→  const mins = Math.floor((now.getTime() - d.getTime()) / 60000);
+   107→  if (mins < 1) return 'Just now';
+   108→  if (mins < 60) return `${mins}m ago`;
+   109→  const hrs = Math.floor(mins / 60);
+   110→  if (hrs < 24) return `${hrs}h ago`;
+   111→  const days = Math.floor(hrs / 24);
+   112→  return days < 30 ? `${days}d ago` : d.toLocaleDateString();
+   113→}
+   114→
+   115→// ─── Mock Data ────────────────────────────────────────────────────────────
+   116→
+   117→const MOCK: BridgeData = {
+   118→  bridges: [
+   119→    { id: 'BR-001', name: 'Verra VCS Registry', registryType: 'VERRA', status: 'CONNECTED', bridgeProtocol: 'API', endpoint: 'https://registry.verra.org/api/v2', apiKeyRef: 'key_vcs_***', accountId: 'ACC-VCS-001', accountName: 'T-VER Thailand Bridge', syncInterval: 3600, lastSyncAt: '2025-06-15T08:30:00Z', totalCreditsSynced: 12450.5, metadata: '{}', createdAt: '2025-01-10T00:00:00Z' },
+   120→    { id: 'BR-002', name: 'Gold Standard Bridge', registryType: 'GOLD_STANDARD', status: 'SYNCING', bridgeProtocol: 'POLYGON_BRIDGE', endpoint: 'https://bridge.goldstandard.org', apiKeyRef: 'key_gs_***', accountId: 'ACC-GS-042', accountName: 'GS Thailand Portal', syncInterval: 7200, lastSyncAt: '2025-06-14T23:00:00Z', totalCreditsSynced: 8320.0, metadata: '{}', createdAt: '2025-02-05T00:00:00Z' },
+   121→    { id: 'BR-003', name: 'I-REC Energy Registry', registryType: 'I_REC', status: 'CONNECTED', bridgeProtocol: 'ETHEREUM_BRIDGE', endpoint: 'https://api.irec.org/v1', apiKeyRef: 'key_irec_***', accountId: 'ACC-IREC-112', accountName: 'T-VER I-REC Gateway', syncInterval: 1800, lastSyncAt: '2025-06-15T10:00:00Z', totalCreditsSynced: 5670.25, metadata: '{}', createdAt: '2025-03-12T00:00:00Z' },
+   122→    { id: 'BR-004', name: 'CDM CDM-EB Link', registryType: 'CDM', status: 'DISCONNECTED', bridgeProtocol: 'API', endpoint: 'https://cdm.unfccc.int/api', apiKeyRef: 'key_cdm_***', accountId: 'ACC-CDM-008', accountName: 'CDM Legacy Bridge', syncInterval: 86400, lastSyncAt: '2025-05-20T12:00:00Z', totalCreditsSynced: 2100.0, metadata: '{}', createdAt: '2025-01-20T00:00:00Z' },
+   123→    { id: 'BR-005', name: 'T-VER Domestic', registryType: 'T_VER', status: 'CONNECTED', bridgeProtocol: 'COSMOS_IBC', endpoint: 'https://t-ver.go.th/api/bridge', apiKeyRef: 'key_tver_***', accountId: 'ACC-TVER-001', accountName: 'T-VER Internal', syncInterval: 900, lastSyncAt: '2025-06-15T11:00:00Z', totalCreditsSynced: 32000.0, metadata: '{}', createdAt: '2024-11-01T00:00:00Z' },
+   124→    { id: 'BR-006', name: 'Partner Exchange', registryType: 'CUSTOM', status: 'ERROR', bridgeProtocol: 'CUSTOM', endpoint: 'https://partner.example.com/api', apiKeyRef: 'key_cust_***', accountId: 'ACC-CUST-005', accountName: 'Custom Partner', syncInterval: 14400, lastSyncAt: '2025-06-10T06:00:00Z', totalCreditsSynced: 450.0, metadata: '{}', createdAt: '2025-04-01T00:00:00Z' },
+   125→  ],
+   126→  recentTransactions: [
+   127→    { id: 'TX-001', bridgeId: 'BR-001', bridgeName: 'Verra VCS Registry', txType: 'TRANSFER', direction: 'OUTBOUND', creditAmount: 500.0, creditTokenId: 'VCS-2025-TH-001', externalRef: 'EXT-VCS-99201', externalStatus: '', txHash: '0xabc123def456789abc123def456789abc123def4', status: 'CONFIRMED', errorMessage: '', initiatedBy: 'Admin', metadata: '{"projectId":"PRJ-001","methodology":"ACM0002"}', createdAt: '2025-06-15T08:30:00Z' },
+   128→    { id: 'TX-002', bridgeId: 'BR-002', bridgeName: 'Gold Standard Bridge', txType: 'MINT', direction: 'INBOUND', creditAmount: 1200.0, creditTokenId: 'GS-2025-TH-015', externalRef: 'EXT-GS-44521', externalStatus: '', txHash: '0x789ghijkl0123456789ghijkl0123456789ghijk', status: 'SUBMITTED', errorMessage: '', initiatedBy: 'Admin', metadata: '{"projectId":"PRJ-003","vintage":"2024"}', createdAt: '2025-06-14T23:00:00Z' },
+   129→    { id: 'TX-003', bridgeId: 'BR-005', bridgeName: 'T-VER Domestic', txType: 'RETIRE', direction: 'OUTBOUND', creditAmount: 300.0, creditTokenId: 'TVER-2025-045', externalRef: null, externalStatus: '', txHash: '0xmno345pqr678stu901vwx234yza567bcd890efg', status: 'PENDING', errorMessage: '', initiatedBy: 'Admin', metadata: '{"retirementReason":"Corporate offset 2025"}', createdAt: '2025-06-15T11:00:00Z' },
+   130→    { id: 'TX-004', bridgeId: 'BR-003', bridgeName: 'I-REC Energy Registry', txType: 'TRANSFER', direction: 'INBOUND', creditAmount: 750.0, creditTokenId: 'IREC-2025-TH-008', externalRef: 'EXT-IREC-77312', externalStatus: '', txHash: null, status: 'FAILED', errorMessage: 'Endpoint timeout', initiatedBy: 'Admin', metadata: '{"error":"Endpoint timeout","retryCount":3}', createdAt: '2025-06-15T10:00:00Z' },
+   131→    { id: 'TX-005', bridgeId: 'BR-001', bridgeName: 'Verra VCS Registry', txType: 'MINT', direction: 'INBOUND', creditAmount: 2000.0, creditTokenId: 'VCS-2025-TH-003', externalRef: 'EXT-VCS-99150', externalStatus: '', txHash: '0xstu901vwx234yza567bcd890efg123hij456klm', status: 'CONFIRMED', errorMessage: '', initiatedBy: 'Admin', metadata: '{"projectId":"PRJ-002","vintage":"2024"}', createdAt: '2025-06-13T14:00:00Z' },
+   132→    { id: 'TX-006', bridgeId: 'BR-006', bridgeName: 'Partner Exchange', txType: 'TRANSFER', direction: 'OUTBOUND', creditAmount: 150.0, creditTokenId: 'CUST-2025-012', externalRef: null, externalStatus: '', txHash: null, status: 'ROLLED_BACK', errorMessage: 'Connection lost', initiatedBy: 'Admin', metadata: '{"reason":"Connection lost during transfer"}', createdAt: '2025-06-10T06:00:00Z' },
+   133→  ],
+   134→  summary: {
+   135→    totalBridges: 6, connectedBridges: 3, totalCreditsSynced: 59990.75, totalTransactionAmount: 4900.0,
+   136→    byBridgeStatus: { CONNECTED: 3, PENDING: 0, SYNCING: 1, DISCONNECTED: 1, ERROR: 1 },
+   137→    byTxStatus: { PENDING: 1, SUBMITTED: 1, CONFIRMED: 2, FAILED: 1, ROLLED_BACK: 1 },
+   138→    byTxType: { MINT: 2, TRANSFER: 3, RETIRE: 1 },
+   139→    byDirection: { OUTBOUND: 3, INBOUND: 3 },
+   140→  },
+   141→};
+   142→
+   143→// ─── Component ────────────────────────────────────────────────────────────
+   144→
+   145→export default function CrossChainBridgeView() {
+   146→  const { toast } = useToast();
+   147→  const [data, setData] = useState<BridgeData | null>(null);
+   148→  const [loading, setLoading] = useState(true);
+   149→  const [activeTab, setActiveTab] = useState('bridges');
+   150→  const [addDialogOpen, setAddDialogOpen] = useState(false);
+   151→  const [detailBridge, setDetailBridge] = useState<Bridge | null>(null);
+   152→  const [expandedTx, setExpandedTx] = useState<string | null>(null);
+   153→  const [submitting, setSubmitting] = useState(false);
+   154→  const [actioningBridge, setActioningBridge] = useState<string | null>(null);
+   155→
+   156→  // Add bridge form
+   157→  const [fName, setFName] = useState('');
+   158→  const [fRegistry, setFRegistry] = useState<RegistryType>('VERRA');
+   159→  const [fEndpoint, setFEndpoint] = useState('');
+   160→  const [fApiKey, setFApiKey] = useState('');
+   161→  const [fAccId, setFAccId] = useState('');
+   162→  const [fAccName, setFAccName] = useState('');
+   163→  const [fProtocol, setFProtocol] = useState<BridgeProtocol>('API');
+   164→  const [fSyncInt, setFSyncInt] = useState('3600');
+   165→
+   166→  // Transfer form
+   167→  const [txBridgeId, setTxBridgeId] = useState('');
+   168→  const [txType, setTxType] = useState<TxType>('TRANSFER');
+   169→  const [txDir, setTxDir] = useState<TxDirection>('OUTBOUND');
+   170→  const [txAmount, setTxAmount] = useState('');
+   171→  const [txTokenId, setTxTokenId] = useState('');
+   172→  const [txMeta, setTxMeta] = useState('');
+   173→
+   174→  const fetchData = useCallback(async () => {
+   175→    try {
+   176→      setLoading(true);
+   177→      const res = await fetch('/api/dmrv/bridge');
+   178→      if (!res.ok) throw new Error('Failed');
+   179→      const json = await res.json();
+   180→      const bMap = new Map((json.bridges || []).map((b: Bridge) => [b.id, b.name]));
+   181→      const bridges = (json.bridges || []).map((b: Record<string, unknown>) => ({
+   182→        ...b, bridgeProtocol: (b.bridgeProtocol || b.protocol || 'API') as BridgeProtocol,
+   183→        endpoint: (b.endpoint || b.endpointUrl || '') as string,
+   184→      }));
+   185→      const txs = (json.recentTransactions || []).map((t: Record<string, unknown>) => ({
+   186→        ...t, bridgeName: t.bridgeName || bMap.get(t.bridgeId as string) || 'Unknown',
+   187→      }));
+   188→      setData({ ...json, bridges, recentTransactions: txs } as BridgeData);
+   189→    } catch {
+   190→      setData(MOCK);
+   191→    } finally {
+   192→      setLoading(false);
+   193→    }
+   194→  }, []);
+   195→
+   196→  useEffect(() => { fetchData(); }, [fetchData]);
+   197→
+   198→  const postAction = async (body: Record<string, unknown>): Promise<boolean> => {
+   199→    setSubmitting(true);
+   200→    try {
+   201→      const res = await fetch('/api/dmrv/bridge', {
+   202→        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+   203→      });
+   204→      if (res.ok) { toast({ title: 'Success', description: `Action "${body.action}" completed` }); await fetchData(); return true; }
+   205→      toast({ title: 'Error', description: `Failed to ${body.action}`, variant: 'destructive' });
+   206→      return false;
+   207→    } catch {
+   208→      toast({ title: 'Network Error', description: 'Could not reach server', variant: 'destructive' });
+   209→      return false;
+   210→    } finally { setSubmitting(false); }
+   211→  };
+   212→
+   213→  const bridgeAction = async (action: string, bridgeId: string) => {
+   214→    setActioningBridge(bridgeId);
+   215→    try { await postAction({ action, bridgeId }); } finally { setActioningBridge(null); }
+   216→  };
+   217→
+   218→  const handleCreate = async () => {
+   219→    if (!fName || !fEndpoint || !fAccId) {
+   220→      toast({ title: 'Validation Error', description: 'Name, Endpoint, and Account ID are required', variant: 'destructive' });
+   221→      return;
+   222→    }
+   223→    const ok = await postAction({
+   224→      action: 'create_bridge', name: fName, registryType: fRegistry, endpoint: fEndpoint,
+   225→      apiKeyRef: fApiKey, accountId: fAccId, accountName: fAccName,
+   226→      bridgeProtocol: fProtocol, syncInterval: parseInt(fSyncInt) || 3600,
+   227→    });
+   228→    if (ok) { setAddDialogOpen(false); resetCreateForm(); }
+   229→  };
+   230→
+   231→  const handleTransfer = async () => {
+   232→    if (!txBridgeId || !txAmount || !txTokenId) {
+   233→      toast({ title: 'Validation Error', description: 'Bridge, amount, and token ID are required', variant: 'destructive' });
+   234→      return;
+   235→    }
+   236→    const ok = await postAction({
+   237→      action: 'transfer', bridgeId: txBridgeId, txType, direction: txDir,
+   238→      creditAmount: parseFloat(txAmount), creditTokenId: txTokenId, metadata: txMeta,
+   239→    });
+   240→    if (ok) resetTransferForm();
+   241→  };
+   242→
+   243→  const resetCreateForm = () => {
+   244→    setFName(''); setFRegistry('VERRA'); setFEndpoint('');
+   245→    setFApiKey(''); setFAccId(''); setFAccName(''); setFProtocol('API'); setFSyncInt('3600');
+   246→  };
+   247→  const resetTransferForm = () => {
+   248→    setTxBridgeId(''); setTxType('TRANSFER'); setTxDir('OUTBOUND');
+   249→    setTxAmount(''); setTxTokenId(''); setTxMeta('');
+   250→  };
+   251→
+   252→  const bridges = data?.bridges || MOCK.bridges;
+   253→  const txns = data?.recentTransactions || MOCK.recentTransactions;
+   254→  const summary = data?.summary || MOCK.summary;
+   255→  const connected = bridges.filter((b) => b.status === 'CONNECTED' || b.status === 'SYNCING');
+   256→
+   257→  // ─── Loading ──────────────────────────────────────────────────────────
+   258→
+   259→  if (loading && !data) {
+   260→    return (
+   261→      <div className="space-y-6">
+   262→        <div className="flex items-center justify-between">
+   263→          <div><Skeleton className="h-8 w-64" /><Skeleton className="h-4 w-96 mt-2" /></div>
+   264→          <Skeleton className="h-9 w-32" />
+   265→        </div>
+   266→        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+   267→          {[1, 2, 3, 4].map((i) => (<Card key={i}><CardContent className="p-4"><Skeleton className="h-16" /></CardContent></Card>))}
+   268→        </div>
+   269→        <Skeleton className="h-10 w-72" />
+   270→      </div>
+   271→    );
+   272→  }
+   273→
+   274→  // ─── Render ──────────────────────────────────────────────────────────
+   275→
+   276→  return (
+   277→    <div className="space-y-6">
+   278→      {/* Header */}
+   279→      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+   280→        <div>
+   281→          <h2 className="text-2xl font-bold tracking-tight text-gray-900 flex items-center gap-2">
+   282→            <Link2 className="h-6 w-6 text-emerald-600" /> Cross-Chain Bridge
+   283→          </h2>
+   284→          <p className="text-muted-foreground text-sm mt-1">
+   285→            Registry connections &amp; inter-chain credit transfers
+   286→          </p>
+   287→        </div>
+   288→        <div className="flex gap-2 self-start">
+   289→          <Button variant="outline" size="sm" onClick={fetchData} className="gap-1.5">
+   290→            <RefreshCw className="h-3.5 w-3.5" /> Refresh
+   291→          </Button>
+   292→          <Button size="sm" onClick={() => setAddDialogOpen(true)} className="gap-1.5 bg-emerald-600 hover:bg-emerald-700">
+   293→            <Plus className="h-3.5 w-3.5" /> Add Bridge
+   294→          </Button>
+   295→        </div>
+   296→      </div>
+   297→
+   298→      {/* Summary Cards */}
+   299→      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+   300→        <Card><CardContent className="p-4 flex items-center gap-3">
+   301→          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-100">
+   302→            <Link2 className="h-5 w-5 text-slate-600" />
+   303→          </div>
+   304→          <div><p className="text-xl font-bold">{summary.totalBridges}</p><p className="text-xs text-muted-foreground">Total / {summary.connectedBridges} Connected</p></div>
+   305→        </CardContent></Card>
+   306→        <Card><CardContent className="p-4 flex items-center gap-3">
+   307→          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-50">
+   308→            <Database className="h-5 w-5 text-emerald-600" />
+   309→          </div>
+   310→          <div><p className="text-xl font-bold text-emerald-600">{summary.totalCreditsSynced.toLocaleString()}</p><p className="text-xs text-muted-foreground">Credits Synced (tCO₂e)</p></div>
+   311→        </CardContent></Card>
+   312→        <Card><CardContent className="p-4 flex items-center gap-3">
+   313→          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-teal-50">
+   314→            <Activity className="h-5 w-5 text-teal-600" />
+   315→          </div>
+   316→          <div><p className="text-xl font-bold text-teal-600">{summary.totalTransactionAmount.toLocaleString()}</p><p className="text-xs text-muted-foreground">Tx Volume (tCO₂e)</p></div>
+   317→        </CardContent></Card>
+   318→        <Card><CardContent className="p-4 flex items-center gap-3">
+   319→          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-50">
+   320→            <Clock className="h-5 w-5 text-amber-600" />
+   321→          </div>
+   322→          <div><p className="text-xl font-bold text-amber-600">{(summary.byTxStatus.PENDING || 0) + (summary.byTxStatus.SUBMITTED || 0)}</p><p className="text-xs text-muted-foreground">Pending Transactions</p></div>
+   323→        </CardContent></Card>
+   324→      </div>
+   325→
+   326→      {/* Tabs */}
+   327→      <Tabs value={activeTab} onValueChange={setActiveTab}>
+   328→        <TabsList>
+   329→          <TabsTrigger value="bridges" className="gap-1"><Globe className="h-3.5 w-3.5" /> Bridges</TabsTrigger>
+   330→          <TabsTrigger value="transfer" className="gap-1"><Send className="h-3.5 w-3.5" /> Transfer</TabsTrigger>
+   331→          <TabsTrigger value="history" className="gap-1"><Activity className="h-3.5 w-3.5" /> History</TabsTrigger>
+   332→        </TabsList>
+   333→
+   334→        {/* ── Bridges Tab ─────────────────────────────────────────────── */}
+   335→        <TabsContent value="bridges" className="mt-4">
+   336→          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+   337→            {bridges.map((bridge) => {
+   338→              const reg = registryBadge[bridge.registryType];
+   339→              const st = statusConfig[bridge.status];
+   340→              const StIcon = st.icon;
+   341→              const PI = protocolIcon[bridge.bridgeProtocol];
+   342→              return (
+   343→                <Card key={bridge.id} className="hover:border-emerald-300 hover:shadow-sm transition-all cursor-pointer"
+   344→                  onClick={() => setDetailBridge(bridge)}>
+   345→                  <CardContent className="p-4">
+   346→                    <div className="flex items-start justify-between gap-3 mb-3">
+   347→                      <div className="flex items-center gap-2.5 min-w-0">
+   348→                        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-100 shrink-0">
+   349→                          <PI className="h-4 w-4 text-slate-600" />
+   350→                        </div>
+   351→                        <div className="min-w-0">
+   352→                          <p className="text-sm font-semibold truncate">{bridge.name}</p>
+   353→                          <p className="text-xs text-muted-foreground font-mono">{bridge.id}</p>
+   354→                        </div>
+   355→                      </div>
+   356→                      <div className="flex items-center gap-2 shrink-0">
+   357→                        <div className={`h-2 w-2 rounded-full ${statusDot[bridge.status]}`} />
+   358→                        <Badge variant="secondary" className={`text-[10px] h-5 ${st.bg} ${st.text}`}>
+   359→                          <StIcon className="h-3 w-3 mr-0.5" />{bridge.status}
+   360→                        </Badge>
+   361→                      </div>
+   362→                    </div>
+   363→                    <div className="flex flex-wrap items-center gap-1.5 mb-3">
+   364→                      <Badge variant="secondary" className={`text-[10px] h-5 ${reg.bg} ${reg.text}`}>
+   365→                        {bridge.registryType.replace('_', '-')}
+   366→                      </Badge>
+   367→                      <Badge variant="secondary" className="text-[10px] h-5 bg-slate-50 text-slate-600">
+   368→                        {bridge.bridgeProtocol.replace('_', ' ')}
+   369→                      </Badge>
+   370→                    </div>
+   371→                    <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs mb-3">
+   372→                      <div><span className="text-muted-foreground">Last Sync: </span><span className="font-medium">{fmtTime(bridge.lastSyncAt)}</span></div>
+   373→                      <div><span className="text-muted-foreground">Synced: </span><span className="font-medium">{bridge.totalCreditsSynced.toLocaleString()} tCO₂e</span></div>
+   374→                      <div className="truncate"><span className="text-muted-foreground">Account: </span><span className="font-medium">{bridge.accountName || bridge.accountId || '—'}</span></div>
+   375→                      <div><span className="text-muted-foreground">Interval: </span><span className="font-medium">{bridge.syncInterval / 60}min</span></div>
+   376→                    </div>
+   377→                    <div className="flex items-center gap-2 pt-2 border-t" onClick={(e) => e.stopPropagation()}>
+   378→                      {bridge.status === 'DISCONNECTED' || bridge.status === 'ERROR' ? (
+   379→                        <Button size="sm" variant="outline" className="gap-1 border-emerald-300 text-emerald-700 hover:bg-emerald-50 text-xs h-7"
+   380→                          disabled={actioningBridge === bridge.id} onClick={() => bridgeAction('connect', bridge.id)}>
+   381→                          {actioningBridge === bridge.id ? <RefreshCw className="h-3 w-3 animate-spin" /> : <Link2 className="h-3 w-3" />}Connect
+   382→                        </Button>
+   383→                      ) : (
+   384→                        <>
+   385→                          <Button size="sm" variant="outline" className="gap-1 text-xs h-7"
+   386→                            disabled={actioningBridge === bridge.id} onClick={() => bridgeAction('sync', bridge.id)}>
+   387→                            <RefreshCw className={`h-3 w-3 ${actioningBridge === bridge.id ? 'animate-spin' : ''}`} />Sync Now
+   388→                          </Button>
+   389→                          <Button size="sm" variant="outline" className="gap-1 text-xs h-7 border-red-200 text-red-600 hover:bg-red-50"
+   390→                            disabled={actioningBridge === bridge.id} onClick={() => bridgeAction('disconnect', bridge.id)}>
+   391→                            <Unlink className="h-3 w-3" />Disconnect
+   392→                          </Button>
+   393→                        </>
+   394→                      )}
+   395→                      <Button size="sm" variant="ghost" className="gap-1 text-xs h-7 ml-auto" onClick={() => setDetailBridge(bridge)}>
+   396→                        <ExternalLink className="h-3 w-3" />Details
+   397→                      </Button>
+   398→                    </div>
+   399→                  </CardContent>
+   400→                </Card>
+   401→              );
+   402→            })}
+   403→          </div>
+   404→        </TabsContent>
+   405→
+   406→        {/* ── Transfer Tab ─────────────────────────────────────────────── */}
+   407→        <TabsContent value="transfer" className="mt-4">
+   408→          <Card>
+   409→            <CardContent className="p-6">
+   410→              <div className="flex items-center gap-2 mb-5">
+   411→                <Send className="h-5 w-5 text-emerald-600" />
+   412→                <h3 className="text-lg font-semibold">Credit Transfer</h3>
+   413→              </div>
+   414→              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+   415→                <div className="space-y-4">
+   416→                  <div className="space-y-1.5">
+   417→                    <Label className="text-xs font-medium">Bridge *</Label>
+   418→                    <Select value={txBridgeId} onValueChange={setTxBridgeId}>
+   419→                      <SelectTrigger className="text-sm"><SelectValue placeholder="Select connected bridge" /></SelectTrigger>
+   420→                      <SelectContent>
+   421→                        {connected.map((b) => (<SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>))}
+   422→                        {connected.length === 0 && (<SelectItem value="_none" disabled>No connected bridges</SelectItem>)}
+   423→                      </SelectContent>
+   424→                    </Select>
+   425→                  </div>
+   426→                  <div className="grid grid-cols-2 gap-4">
+   427→                    <div className="space-y-1.5">
+   428→                      <Label className="text-xs font-medium">Transfer Type</Label>
+   429→                      <Select value={txType} onValueChange={(v) => setTxType(v as TxType)}>
+   430→                        <SelectTrigger className="text-sm"><SelectValue /></SelectTrigger>
+   431→                        <SelectContent>
+   432→                          <SelectItem value="MINT">MINT</SelectItem>
+   433→                          <SelectItem value="TRANSFER">TRANSFER</SelectItem>
+   434→                          <SelectItem value="RETIRE">RETIRE</SelectItem>
+   435→                        </SelectContent>
+   436→                      </Select>
+   437→                    </div>
+   438→                    <div className="space-y-1.5">
+   439→                      <Label className="text-xs font-medium">Direction</Label>
+   440→                      <Select value={txDir} onValueChange={(v) => setTxDir(v as TxDirection)}>
+   441→                        <SelectTrigger className="text-sm"><SelectValue /></SelectTrigger>
+   442→                        <SelectContent>
+   443→                          <SelectItem value="OUTBOUND">⬆ OUTBOUND</SelectItem>
+   444→                          <SelectItem value="INBOUND">⬇ INBOUND</SelectItem>
+   445→                        </SelectContent>
+   446→                      </Select>
+   447→                    </div>
+   448→                  </div>
+   449→                  <div className="grid grid-cols-2 gap-4">
+   450→                    <div className="space-y-1.5">
+   451→                      <Label className="text-xs font-medium">Credit Amount (tCO₂e) *</Label>
+   452→                      <Input type="number" value={txAmount} onChange={(e) => setTxAmount(e.target.value)} placeholder="0.00" className="text-sm" />
+   453→                    </div>
+   454→                    <div className="space-y-1.5">
+   455→                      <Label className="text-xs font-medium">Credit Token ID *</Label>
+   456→                      <Input value={txTokenId} onChange={(e) => setTxTokenId(e.target.value)} placeholder="VCS-2025-TH-001" className="text-sm" />
+   457→                    </div>
+   458→                  </div>
+   459→                  <div className="space-y-1.5">
+   460→                    <Label className="text-xs font-medium">Metadata (JSON, optional)</Label>
+   461→                    <Input value={txMeta} onChange={(e) => setTxMeta(e.target.value)} placeholder='{"projectId":"PRJ-001"}' className="text-sm" />
+   462→                  </div>
+   463→                  <Separator />
+   464→                  <div className="flex gap-2">
+   465→                    <Button variant="outline" size="sm" onClick={resetTransferForm}>Clear</Button>
+   466→                    <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 gap-1.5" disabled={submitting} onClick={handleTransfer}>
+   467→                      {submitting ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+   468→                      Submit Transfer
+   469→                    </Button>
+   470→                  </div>
+   471→                </div>
+   472→                {/* Summary sidebar */}
+   473→                <div className="space-y-4">
+   474→                  <Card className="bg-slate-50 border-dashed">
+   475→                    <CardContent className="p-4 space-y-3">
+   476→                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Transfer Summary</p>
+   477→                      <div className="space-y-2 text-sm">
+   478→                        <div className="flex justify-between"><span className="text-muted-foreground">Bridge:</span><span className="font-medium">{connected.find((b) => b.id === txBridgeId)?.name || '—'}</span></div>
+   479→                        <div className="flex justify-between"><span className="text-muted-foreground">Type:</span><span className="font-medium">{txType}</span></div>
+   480→                        <div className="flex justify-between"><span className="text-muted-foreground">Direction:</span>
+   481→                          <Badge variant="secondary" className={`text-[10px] h-5 gap-0.5 ${txDir === 'OUTBOUND' ? 'bg-orange-50 text-orange-700' : 'bg-sky-50 text-sky-700'}`}>
+   482→                            {txDir === 'OUTBOUND' ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownLeft className="h-3 w-3" />}{txDir}
+   483→                          </Badge>
+   484→                        </div>
+   485→                        <div className="flex justify-between"><span className="text-muted-foreground">Amount:</span><span className="font-semibold text-emerald-600">{txAmount ? `${parseFloat(txAmount).toLocaleString()} tCO₂e` : '—'}</span></div>
+   486→                        <div className="flex justify-between"><span className="text-muted-foreground">Token ID:</span><span className="font-mono text-xs">{txTokenId || '—'}</span></div>
+   487→                      </div>
+   488→                    </CardContent>
+   489→                  </Card>
+   490→                  <div className="text-xs text-muted-foreground space-y-1">
+   491→                    <p className="font-medium">Connected Bridges: {connected.length}</p>
+   492→                    {connected.map((b) => (
+   493→                      <div key={b.id} className="flex items-center gap-1.5">
+   494→                        <div className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+   495→                        <span>{b.name}</span>
+   496→                        <span className="text-muted-foreground">({b.registryType})</span>
+   497→                      </div>
+   498→                    ))}
+   499→                  </div>
+   500→                </div>
+   501→              </div>
+   502→            </CardContent>
+   503→          </Card>
+   504→        </TabsContent>
+   505→
+   506→        {/* ── History Tab ──────────────────────────────────────────────── */}
+   507→        <TabsContent value="history" className="mt-4">
+   508→          <Card>
+   509→            <CardContent className="p-0">
+   510→              <ScrollArea className="max-h-[600px]">
+   511→                <Table>
+   512→                  <TableHeader>
+   513→                    <TableRow>
+   514→                      <TableHead className="text-xs">Date</TableHead>
+   515→                      <TableHead className="text-xs">Bridge</TableHead>
+   516→                      <TableHead className="text-xs">Type</TableHead>
+   517→                      <TableHead className="text-xs">Direction</TableHead>
+   518→                      <TableHead className="text-xs text-right">Amount (tCO₂e)</TableHead>
+   519→                      <TableHead className="text-xs">Status</TableHead>
+   520→                      <TableHead className="text-xs">Tx Hash</TableHead>
+   521→                    </TableRow>
+   522→                  </TableHeader>
+   523→                  <TableBody>
+   524→                    {txns.map((tx) => {
+   525→                      const ts = txStatusConfig[tx.status];
+   526→                      return (
+   527→                        <React.Fragment key={tx.id}>
+   528→                          <TableRow className="cursor-pointer hover:bg-slate-50"
+   529→                            onClick={() => setExpandedTx(expandedTx === tx.id ? null : tx.id)}>
+   530→                            <TableCell className="text-xs whitespace-nowrap">
+   531→                              {new Date(tx.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' })}
+   532→                            </TableCell>
+   533→                            <TableCell className="text-xs font-medium max-w-[120px] truncate">{tx.bridgeName || '—'}</TableCell>
+   534→                            <TableCell className="text-xs">
+   535→                              <Badge variant="secondary" className="text-[10px] h-5 bg-slate-50 text-slate-700">{tx.txType}</Badge>
+   536→                            </TableCell>
+   537→                            <TableCell className="text-xs">
+   538→                              <Badge variant="secondary" className={`text-[10px] h-5 gap-0.5 ${tx.direction === 'OUTBOUND' ? 'bg-orange-50 text-orange-700' : 'bg-sky-50 text-sky-700'}`}>
+   539→                                {tx.direction === 'OUTBOUND' ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownLeft className="h-3 w-3" />}
+   540→                                {tx.direction}
+   541→                              </Badge>
+   542→                            </TableCell>
+   543→                            <TableCell className="text-xs text-right font-semibold">{tx.creditAmount.toLocaleString()}</TableCell>
+   544→                            <TableCell className="text-xs">
+   545→                              <Badge variant="secondary" className={`text-[10px] h-5 ${ts.bg} ${ts.text}`}>{tx.status.replace('_', ' ')}</Badge>
+   546→                            </TableCell>
+   547→                            <TableCell className="text-xs font-mono max-w-[120px]">
+   548→                              {tx.txHash ? (
+   549→                                <span className="flex items-center gap-1">
+   550→                                  <span className="truncate">{tx.txHash.slice(0, 10)}...{tx.txHash.slice(-6)}</span>
+   551→                                  <button className="p-0.5 hover:bg-slate-100 rounded shrink-0" onClick={(e) => {
+   552→                                    e.stopPropagation(); navigator.clipboard.writeText(tx.txHash || '');
+   553→                                    toast({ title: 'Copied', description: 'Tx hash copied' });
+   554→                                  }}><Copy className="h-3 w-3 text-slate-400" /></button>
+   555→                                </span>
+   556→                              ) : '—'}
+   557→                            </TableCell>
+   558→                          </TableRow>
+   559→                          {expandedTx === tx.id && (
+   560→                            <TableRow>
+   561→                              <TableCell colSpan={7} className="bg-slate-50 p-3">
+   562→                                <div className="text-xs space-y-2">
+   563→                                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+   564→                                    <div><span className="text-muted-foreground">Token ID:</span> <span className="font-mono">{tx.creditTokenId}</span></div>
+   565→                                    <div><span className="text-muted-foreground">External Ref:</span> <span className="font-mono">{tx.externalRef || '—'}</span></div>
+   566→                                    <div><span className="text-muted-foreground">Initiated By:</span> <span>{tx.initiatedBy}</span></div>
+   567→                                    <div><span className="text-muted-foreground">Ext Status:</span> <span>{tx.externalStatus || '—'}</span></div>
+   568→                                  </div>
+   569→                                  {tx.errorMessage && (
+   570→                                    <div className="bg-red-50 border border-red-200 rounded p-2 text-red-700">{tx.errorMessage}</div>
+   571→                                  )}
+   572→                                  <div>
+   573→                                    <p className="font-semibold mb-1">Metadata:</p>
+   574→                                    <pre className="bg-white border rounded p-2 text-[11px] overflow-x-auto whitespace-pre-wrap">
+   575→                                      {(() => { try { return JSON.stringify(JSON.parse(tx.metadata), null, 2); } catch { return tx.metadata; } })()}
+   576→                                    </pre>
+   577→                                  </div>
+   578→                                </div>
+   579→                              </TableCell>
+   580→                            </TableRow>
+   581→                          )}
+   582→                        </React.Fragment>
+   583→                      );
+   584→                    })}
+   585→                    {txns.length === 0 && (
+   586→                      <TableRow><TableCell colSpan={7} className="text-center py-8 text-sm text-muted-foreground">No transactions recorded yet</TableCell></TableRow>
+   587→                    )}
+   588→                  </TableBody>
+   589→                </Table>
+   590→              </ScrollArea>
+   591→            </CardContent>
+   592→          </Card>
+   593→        </TabsContent>
+   594→      </Tabs>
+   595→
+   596→      {/* ── Add Bridge Dialog ─────────────────────────────────────────── */}
+   597→      <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
+   598→        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+   599→          <DialogHeader>
+   600→            <DialogTitle className="flex items-center gap-2"><Plus className="h-5 w-5 text-emerald-600" />Add New Bridge</DialogTitle>
+   601→          </DialogHeader>
+   602→          <div className="space-y-4">
+   603→            <div className="space-y-1.5">
+   604→              <Label className="text-xs">Bridge Name *</Label>
+   605→              <Input value={fName} onChange={(e) => setFName(e.target.value)} placeholder="e.g. Verra VCS Bridge" className="text-sm" />
+   606→            </div>
+   607→            <div className="grid grid-cols-2 gap-4">
+   608→              <div className="space-y-1.5">
+   609→                <Label className="text-xs">Registry Type</Label>
+   610→                <Select value={fRegistry} onValueChange={(v) => setFRegistry(v as RegistryType)}>
+   611→                  <SelectTrigger className="text-sm"><SelectValue /></SelectTrigger>
+   612→                  <SelectContent>
+   613→                    <SelectItem value="VERRA">VERRA</SelectItem><SelectItem value="GOLD_STANDARD">Gold Standard</SelectItem>
+   614→                    <SelectItem value="I_REC">I-REC</SelectItem><SelectItem value="CDM">CDM</SelectItem>
+   615→                    <SelectItem value="T_VER">T-VER</SelectItem><SelectItem value="CUSTOM">Custom</SelectItem>
+   616→                  </SelectContent>
+   617→                </Select>
+   618→              </div>
+   619→              <div className="space-y-1.5">
+   620→                <Label className="text-xs">Bridge Protocol</Label>
+   621→                <Select value={fProtocol} onValueChange={(v) => setFProtocol(v as BridgeProtocol)}>
+   622→                  <SelectTrigger className="text-sm"><SelectValue /></SelectTrigger>
+   623→                  <SelectContent>
+   624→                    <SelectItem value="API">API</SelectItem><SelectItem value="POLYGON_BRIDGE">Polygon Bridge</SelectItem>
+   625→                    <SelectItem value="ETHEREUM_BRIDGE">Ethereum Bridge</SelectItem><SelectItem value="COSMOS_IBC">Cosmos IBC</SelectItem>
+   626→                    <SelectItem value="CUSTOM">Custom</SelectItem>
+   627→                  </SelectContent>
+   628→                </Select>
+   629→              </div>
+   630→            </div>
+   631→            <div className="space-y-1.5">
+   632→              <Label className="text-xs">Endpoint URL *</Label>
+   633→              <Input value={fEndpoint} onChange={(e) => setFEndpoint(e.target.value)} placeholder="https://registry.example.com/api" className="text-sm" />
+   634→            </div>
+   635→            <div className="space-y-1.5">
+   636→              <Label className="text-xs">API Key Reference</Label>
+   637→              <Input value={fApiKey} onChange={(e) => setFApiKey(e.target.value)} placeholder="key_***" className="text-sm" />
+   638→            </div>
+   639→            <div className="grid grid-cols-2 gap-4">
+   640→              <div className="space-y-1.5">
+   641→                <Label className="text-xs">Account ID *</Label>
+   642→                <Input value={fAccId} onChange={(e) => setFAccId(e.target.value)} placeholder="ACC-XXX-001" className="text-sm" />
+   643→              </div>
+   644→              <div className="space-y-1.5">
+   645→                <Label className="text-xs">Account Name</Label>
+   646→                <Input value={fAccName} onChange={(e) => setFAccName(e.target.value)} placeholder="My Bridge Account" className="text-sm" />
+   647→              </div>
+   648→            </div>
+   649→            <div className="space-y-1.5">
+   650→              <Label className="text-xs">Sync Interval (seconds)</Label>
+   651→              <Input value={fSyncInt} onChange={(e) => setFSyncInt(e.target.value)} placeholder="3600" className="text-sm" />
+   652→            </div>
+   653→            <Separator />
+   654→            <div className="flex justify-end gap-2">
+   655→              <Button variant="outline" size="sm" onClick={() => { setAddDialogOpen(false); resetCreateForm(); }}>Cancel</Button>
+   656→              <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 gap-1.5" disabled={submitting} onClick={handleCreate}>
+   657→                {submitting ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}Create Bridge
+   658→              </Button>
+   659→            </div>
+   660→          </div>
+   661→        </DialogContent>
+   662→      </Dialog>
+   663→
+   664→      {/* ── Bridge Detail Dialog ──────────────────────────────────────── */}
+   665→      <Dialog open={!!detailBridge} onOpenChange={(open) => { if (!open) setDetailBridge(null); }}>
+   666→        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+   667→          <DialogHeader>
+   668→            <DialogTitle className="flex items-center gap-2">
+   669→              {detailBridge && (() => { const PI = protocolIcon[detailBridge.bridgeProtocol]; return <PI className="h-5 w-5 text-emerald-600" />; })()}
+   670→              {detailBridge?.name || 'Bridge Details'}
+   671→            </DialogTitle>
+   672→          </DialogHeader>
+   673→          {detailBridge && (
+   674→            <div className="space-y-4">
+   675→              <div className="flex flex-wrap gap-2">
+   676→                {(() => { const st = statusConfig[detailBridge.status]; const SI = st.icon;
+   677→                  return <Badge variant="secondary" className={`text-xs gap-1 ${st.bg} ${st.text}`}><SI className="h-3 w-3" />{detailBridge.status}</Badge>; })()}
+   678→                <Badge variant="secondary" className={`text-xs ${registryBadge[detailBridge.registryType].bg} ${registryBadge[detailBridge.registryType].text}`}>
+   679→                  {detailBridge.registryType.replace('_', '-')}
+   680→                </Badge>
+   681→                <Badge variant="secondary" className="text-xs bg-slate-50 text-slate-600">{detailBridge.bridgeProtocol.replace('_', ' ')}</Badge>
+   682→              </div>
+   683→              <Card><CardContent className="p-3 space-y-2">
+   684→                <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
+   685→                  <div><span className="text-muted-foreground">Bridge ID:</span></div><div className="font-mono font-medium">{detailBridge.id}</div>
+   686→                  <div><span className="text-muted-foreground">Endpoint:</span></div><div className="font-mono break-all">{detailBridge.endpoint}</div>
+   687→                  <div><span className="text-muted-foreground">API Key Ref:</span></div><div className="font-mono">{detailBridge.apiKeyRef}</div>
+   688→                  <div><span className="text-muted-foreground">Account ID:</span></div><div className="font-mono">{detailBridge.accountId}</div>
+   689→                  <div><span className="text-muted-foreground">Account Name:</span></div><div className="font-medium">{detailBridge.accountName || '—'}</div>
+   690→                  <div><span className="text-muted-foreground">Sync Interval:</span></div><div className="font-medium">{detailBridge.syncInterval / 60} min</div>
+   691→                  <div><span className="text-muted-foreground">Last Sync:</span></div><div className="font-medium">{fmtTime(detailBridge.lastSyncAt)}</div>
+   692→                  <div><span className="text-muted-foreground">Total Synced:</span></div><div className="font-semibold text-emerald-600">{detailBridge.totalCreditsSynced.toLocaleString()} tCO₂e</div>
+   693→                  <div><span className="text-muted-foreground">Created:</span></div><div className="font-medium">{new Date(detailBridge.createdAt).toLocaleDateString()}</div>
+   694→                </div>
+   695→              </CardContent></Card>
+   696→              <div className="flex gap-2">
+   697→                {detailBridge.status === 'CONNECTED' || detailBridge.status === 'SYNCING' ? (
+   698→                  <>
+   699→                    <Button size="sm" variant="outline" className="gap-1.5 flex-1" disabled={actioningBridge === detailBridge.id}
+   700→                      onClick={() => bridgeAction('sync', detailBridge.id)}>
+   701→                      <RefreshCw className={`h-3.5 w-3.5 ${actioningBridge === detailBridge.id ? 'animate-spin' : ''}`} />Sync Now
+   702→                    </Button>
+   703→                    <Button size="sm" variant="outline" className="gap-1.5 border-red-200 text-red-600 hover:bg-red-50 flex-1"
+   704→                      disabled={actioningBridge === detailBridge.id} onClick={() => bridgeAction('disconnect', detailBridge.id)}>
+   705→                      <Unlink className="h-3.5 w-3.5" />Disconnect
+   706→                    </Button>
+   707→                  </>
+   708→                ) : (
+   709→                  <Button size="sm" variant="outline" className="gap-1.5 flex-1 border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+   710→                    disabled={actioningBridge === detailBridge.id} onClick={() => bridgeAction('connect', detailBridge.id)}>
+   711→                    <Link2 className="h-3.5 w-3.5" />Connect
+   712→                  </Button>
+   713→                )}
+   714→              </div>
+   715→            </div>
+   716→          )}
+   717→        </DialogContent>
+   718→      </Dialog>
+   719→    </div>
+   720→  );
+   721→}
+   722→
