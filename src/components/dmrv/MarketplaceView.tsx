@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { ShoppingCart, Plus, ArrowRightLeft, Ban, Briefcase, Loader2 } from 'lucide-react';
+import { ShoppingCart, Plus, ArrowRightLeft, Ban, Briefcase, Loader2, FileDown, ExternalLink } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -235,11 +235,23 @@ export default function MarketplaceView() {
   return (
     <div className="space-y-6">
       {/* Page Title */}
-      <div>
-        <h2 className="text-2xl font-bold tracking-tight text-gray-900">Marketplace</h2>
-        <p className="text-muted-foreground text-sm mt-1">
-          Mint, trade, and retire carbon credits on the marketplace
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight text-gray-900">Marketplace</h2>
+          <p className="text-muted-foreground text-sm mt-1">
+            Mint, trade, and retire carbon credits on the marketplace
+          </p>
+        </div>
+        <a
+          href="/Tokenized-Carbon-Credit-Platform.pdf"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-2 rounded-md border border-emerald-300 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-100 transition-colors whitespace-nowrap"
+        >
+          <FileDown className="h-4 w-4" />
+          เอกสาร Tokenized Carbon Credit (PDF)
+          <ExternalLink className="h-3 w-3 opacity-60" />
+        </a>
       </div>
 
       {/* Stats */}
