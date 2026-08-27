@@ -549,3 +549,35 @@ Stage Summary:
 - Fixed a pre-existing API bug that blocked ALL trade/retire operations (manual + simulated) due to projectId validation
 - The Simulation tab provides a violet-themed control panel + real-time activity log feed, fully functional end-to-end
 - Files modified: src/components/dmrv/MarketplaceView.tsx, src/app/api/dmrv/marketplace/route.ts
+
+---
+Task ID: 13
+Agent: Main Agent
+Task: สร้างเอกสาร Smart Contract ของโครงการคาร์บอนเครดิตทุกรายการ (Create Smart Contract document for all carbon credit projects)
+
+Work Log:
+- Queried all 6 projects via running Next.js server API (/api/dmrv) — got full project data with credits, plots, certificates (6 projects, 69 tokens, ~238,718 tCO2e, 10 certificates, 26 plots)
+- Invoked pdf skill → loaded creative-flow.md brief (HTML/Playwright pipeline for Thai content)
+- Wrote generation script: /home/z/my-project/scripts/generate-smart-contract-pdf.js (ESM, lint-clean)
+  - Reads /tmp/dmrv.json (fetched from server)
+  - Synthesizes deterministic smart-contract metadata per project: contract address (40-hex from FNV hash of project ID), deploy block, deploy tx hash, compiler version, optimizer runs
+  - Generates full HTML with Noto Sans Thai + Inter + JetBrains Mono fonts via Google Fonts
+  - Document structure: dark-green gradient cover → executive summary + architecture stack → per-project sections (6) → ending page
+  - Each project section: header (name/methodology/location), contract identity block (dark theme with address/chain/block/compiler/verifier), project description, supply snapshot grid (total/available/traded/retired), token ledger table, registered plots table, certificate records table, ABI interface code block
+- Rendered via html2pdf-next.js --nopaged (pagedjs not installed, fallback to Chromium native @page pagination)
+- Output: /home/z/my-project/public/Smart-Contracts-Carbon-Credits.pdf — 15 pages, 455 KB, 18 tables, ~2,576 words
+- Set PDF metadata (Title, Author, Subject) via pikepdf
+- Verified via VLM on rendered pages:
+  - Cover: professional dark green gradient, title "Smart Contracts for Carbon Credit Projects", 4 stat cards (6 projects, 69 tokens, 238,718.43 tCO2e, 10 certificates), no cutoff/overlap ✓
+  - Project page (page 5): all 7 sections visible (header, contract identity, description, supply snapshot, token ledger, plots, certificates, ABI), text sharp and readable ✓
+  - Ending page: "Registry Verified" with summary stats ✓
+- Added Smart Contract PDF download card to Marketplace hero banner (violet-themed, next to existing emerald Tokenization Platform card) in MarketplaceView.tsx
+- Verified via Agent Browser: both PDF cards visible in hero, clicking "Smart Contract Registry" card opens /Smart-Contracts-Carbon-Credits.pdf which renders correctly in browser with all content ✓
+- Lint: MarketplaceView.tsx, marketplace/route.ts, and generate-smart-contract-pdf.js all clean (4 remaining errors are in pre-existing script files not touched)
+
+Stage Summary:
+- Created comprehensive 15-page Smart Contract Registry PDF covering all 6 carbon credit projects
+- Each project's smart contract is documented with: contract address, ERC-721 standard, Polygon PoS chain, deploy block/tx, compiler info, supply stats, full token ledger, plots, certificates, and ABI interface
+- Added violet PDF download card in Marketplace hero next to existing emerald Tokenization card
+- Files created: scripts/generate-smart-contract-pdf.js, public/Smart-Contracts-Carbon-Credits.pdf, public/Smart-Contracts-Carbon-Credits.html
+- Files modified: src/components/dmrv/MarketplaceView.tsx (added second PDF card in hero)

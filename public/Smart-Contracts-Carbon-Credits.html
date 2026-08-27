@@ -1,0 +1,2432 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<title>Smart Contract Registry — Carbon Credit Projects</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Noto+Sans+Thai:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  @page { size: 720px 1020px; margin: 0; }
+  :root {
+    --c-bg: #ffffff;
+    --c-ink: #0f172a;
+    --c-muted: #64748b;
+    --c-line: #e2e8f0;
+    --c-accent: #047857;
+    --c-accent-soft: #ecfdf5;
+    --c-amber: #b45309;
+  }
+  html, body {
+    margin: 0; padding: 0;
+    width: 720px;
+    background: var(--c-bg);
+    color: var(--c-ink);
+    font-family: 'Noto Sans Thai', 'Inter', sans-serif;
+    font-size: 12px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+  @media screen {
+    html { display: flex; justify-content: center; background: #e2e8f0; }
+    body { margin: 20px auto; box-shadow: 0 10px 40px rgba(0,0,0,0.08); }
+  }
+
+  /* ── Cover ── */
+  .cover {
+    width: 720px; height: 1020px;
+    box-sizing: border-box;
+    background: linear-gradient(160deg, #022c22 0%, #064e3b 50%, #047857 100%);
+    color: #ecfdf5;
+    padding: 60px 56px;
+    position: relative;
+    overflow: hidden;
+    break-after: page;
+    display: flex; flex-direction: column; justify-content: space-between;
+  }
+  .cover::before {
+    content: '';
+    position: absolute;
+    top: -120px; right: -120px;
+    width: 360px; height: 360px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(16,185,129,0.25), transparent 70%);
+  }
+  .cover::after {
+    content: '';
+    position: absolute;
+    bottom: -180px; left: -80px;
+    width: 320px; height: 320px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(45,212,191,0.15), transparent 70%);
+  }
+  .cover-top { position: relative; z-index: 2; }
+  .cover-badge {
+    display: inline-block;
+    padding: 6px 14px;
+    background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(167,243,208,0.3);
+    border-radius: 100px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: #a7f3d0;
+  }
+  .cover-title {
+    font-size: 44px;
+    font-weight: 800;
+    line-height: 1.1;
+    margin: 28px 0 16px;
+    letter-spacing: -1px;
+  }
+  .cover-sub {
+    font-size: 16px;
+    font-weight: 400;
+    color: #a7f3d0;
+    line-height: 1.55;
+    max-width: 540px;
+    font-family: 'Noto Sans Thai', sans-serif;
+  }
+  .cover-stats {
+    position: relative; z-index: 2;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-top: 40px;
+    padding: 24px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(167,243,208,0.15);
+    border-radius: 14px;
+    backdrop-filter: blur(8px);
+  }
+  .cs-item { text-align: center; }
+  .cs-num {
+    font-family: 'Inter', sans-serif;
+    font-size: 28px;
+    font-weight: 800;
+    color: #fff;
+    line-height: 1;
+  }
+  .cs-lab {
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: #6ee7b7;
+    margin-top: 6px;
+  }
+  .cover-bottom {
+    position: relative; z-index: 2;
+    display: flex; justify-content: space-between; align-items: flex-end;
+    font-size: 10px;
+    color: #a7f3d0;
+    letter-spacing: 0.5px;
+  }
+  .cover-bottom .left { font-family: 'JetBrains Mono', monospace; }
+  .cover-bottom .right { text-align: right; }
+  .cover-bottom .right strong { color: #fff; font-weight: 700; }
+
+  /* ── Main content ── */
+  .main-content {
+    padding: 50px 50px 40px 50px;
+  }
+
+  /* Executive summary */
+  .exec-section { margin-bottom: 28px; }
+  .section-tag {
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--c-accent);
+  }
+  .section-title {
+    font-size: 24px;
+    font-weight: 800;
+    color: var(--c-ink);
+    margin: 4px 0 8px;
+    letter-spacing: -0.5px;
+  }
+  .divider {
+    height: 3px;
+    width: 48px;
+    background: var(--c-accent);
+    border-radius: 2px;
+    margin-bottom: 18px;
+  }
+  .exec-body {
+    font-size: 12px;
+    line-height: 1.7;
+    color: #334155;
+    margin-bottom: 16px;
+    text-align: justify;
+  }
+  .exec-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin: 16px 0;
+  }
+  .exec-stat {
+    padding: 14px 16px;
+    background: #f8fafc;
+    border: 1px solid var(--c-line);
+    border-left: 3px solid var(--c-accent);
+    border-radius: 8px;
+  }
+  .exec-stat .v {
+    font-family: 'Inter', sans-serif;
+    font-size: 20px;
+    font-weight: 800;
+    color: var(--c-ink);
+    line-height: 1.1;
+  }
+  .exec-stat .l {
+    font-size: 10px;
+    color: var(--c-muted);
+    margin-top: 4px;
+    font-weight: 500;
+  }
+
+  /* Architecture */
+  .arch-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+    margin-top: 12px;
+  }
+  .arch-cell {
+    padding: 12px 14px;
+    background: #fff;
+    border: 1px solid var(--c-line);
+    border-radius: 8px;
+  }
+  .arch-cell .h {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--c-accent);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 4px;
+  }
+  .arch-cell .b {
+    font-size: 11px;
+    color: #334155;
+    line-height: 1.5;
+  }
+  .arch-cell .b code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    background: #f1f5f9;
+    padding: 1px 5px;
+    border-radius: 3px;
+    color: #0f172a;
+  }
+
+  /* Project card */
+  .project-card {
+    break-inside: avoid;
+    margin-top: 24px;
+    margin-bottom: 8px;
+    padding: 0;
+    border: 1px solid var(--c-line);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .proj-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    padding: 16px 18px;
+    background: linear-gradient(135deg, #ecfdf5 0%, #f0fdfa 100%);
+    border-bottom: 1px solid var(--c-line);
+  }
+  .proj-index {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    font-weight: 700;
+    color: var(--c-accent);
+    background: #fff;
+    padding: 4px 8px;
+    border-radius: 4px;
+    border: 1px solid #a7f3d0;
+    flex-shrink: 0;
+    letter-spacing: 1px;
+  }
+  .proj-title h2 {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--c-ink);
+    margin: 0;
+    line-height: 1.25;
+  }
+  .proj-sub {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 6px;
+  }
+  .pill {
+    font-size: 9px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 100px;
+    background: #fff;
+    border: 1px solid var(--c-line);
+    color: #475569;
+  }
+  .pill-loc { color: var(--c-accent); border-color: #a7f3d0; }
+
+  /* Contract identity block */
+  .contract-id {
+    padding: 12px 18px;
+    background: #0f172a;
+    color: #e2e8f0;
+  }
+  .cid-row {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    padding: 5px 0;
+    font-size: 10px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+  .cid-row:last-child { border-bottom: none; }
+  .cid-label {
+    font-size: 8px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    color: #64748b;
+    min-width: 130px;
+    flex-shrink: 0;
+  }
+  .cid-value {
+    font-size: 10px;
+    color: #e2e8f0;
+    word-break: break-all;
+  }
+  .cid-address .cid-value { color: #6ee7b7; font-weight: 500; }
+  .cid-value.tx { font-size: 9px; color: #94a3b8; }
+  .cid-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 4px 24px;
+    padding: 8px 0;
+    border-top: 1px solid rgba(255,255,255,0.06);
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    margin: 4px 0;
+  }
+  .cid-grid > div {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    padding: 3px 0;
+  }
+  .cid-grid .cid-label { min-width: 110px; }
+  .cid-grid .cid-value { font-size: 10px; }
+
+  .proj-desc {
+    padding: 12px 18px;
+    font-size: 11px;
+    line-height: 1.6;
+    color: #475569;
+    border-bottom: 1px solid var(--c-line);
+    background: #fafafa;
+    font-family: 'Noto Sans Thai', sans-serif;
+  }
+
+  .info-block {
+    padding: 10px 18px;
+    border-bottom: 1px solid var(--c-line);
+  }
+  .block-title {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--c-ink);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 4px;
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+  }
+  .block-sub {
+    font-size: 9px;
+    font-weight: 400;
+    color: var(--c-muted);
+    text-transform: none;
+    letter-spacing: 0;
+  }
+  .block-body {
+    font-size: 11px;
+    color: #475569;
+    line-height: 1.55;
+  }
+
+  /* Supply grid */
+  .supply-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0;
+    border-bottom: 1px solid var(--c-line);
+  }
+  .supply-cell {
+    padding: 12px 14px;
+    border-right: 1px solid var(--c-line);
+    background: #fafafa;
+  }
+  .supply-cell:last-child { border-right: none; }
+  .supply-cell.avail { background: #ecfdf5; }
+  .supply-cell.traded { background: #f0f9ff; }
+  .supply-cell.retired { background: #f8fafc; }
+  .sup-label {
+    font-size: 8px;
+    font-weight: 700;
+    letter-spacing: 1.2px;
+    color: var(--c-muted);
+    text-transform: uppercase;
+  }
+  .sup-value {
+    font-family: 'Inter', sans-serif;
+    font-size: 18px;
+    font-weight: 800;
+    color: var(--c-ink);
+    margin-top: 4px;
+    line-height: 1.1;
+  }
+  .supply-cell.avail .sup-value { color: #047857; }
+  .supply-cell.traded .sup-value { color: #0284c7; }
+  .supply-cell.retired .sup-value { color: #475569; }
+  .sup-value .unit {
+    font-size: 9px;
+    font-weight: 500;
+    color: var(--c-muted);
+  }
+  .sup-sub {
+    font-size: 9px;
+    color: var(--c-muted);
+    margin-top: 2px;
+  }
+
+  /* Tables */
+  .table-block {
+    padding: 10px 18px 12px;
+    border-bottom: 1px solid var(--c-line);
+  }
+  .data-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 6px;
+    font-size: 10px;
+  }
+  .data-table th {
+    text-align: left;
+    font-size: 8px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--c-muted);
+    padding: 6px 8px;
+    border-bottom: 1.5px solid var(--c-line);
+    background: #f8fafc;
+  }
+  .data-table th.r { text-align: right; }
+  .data-table td {
+    padding: 6px 8px;
+    border-bottom: 1px solid #f1f5f9;
+    color: #334155;
+    vertical-align: top;
+  }
+  .data-table td.r { text-align: right; }
+  .data-table td.num { text-align: right; font-family: 'JetBrains Mono', monospace; font-size: 10px; }
+  .data-table td.mono { font-family: 'JetBrains Mono', monospace; font-size: 9px; color: #475569; }
+  .data-table td.empty { text-align: center; color: var(--c-muted); font-style: italic; padding: 12px; }
+  .more-note {
+    font-size: 9px;
+    color: var(--c-muted);
+    padding: 6px 8px;
+    text-align: center;
+    font-style: italic;
+  }
+  .badge {
+    display: inline-block;
+    padding: 1px 7px;
+    border-radius: 100px;
+    font-size: 9px;
+    font-weight: 600;
+  }
+
+  /* ABI */
+  .abi-block {
+    padding: 12px 18px 14px;
+    background: #0f172a;
+  }
+  .abi-block .block-title { color: #6ee7b7; }
+  .abi-code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 8.5px;
+    line-height: 1.5;
+    color: #e2e8f0;
+    background: transparent;
+    margin: 6px 0 0;
+    padding: 0;
+    white-space: pre;
+    overflow: hidden;
+  }
+
+  /* Footer note */
+  .footer-note {
+    margin-top: 28px;
+    padding: 14px 18px;
+    background: #f8fafc;
+    border: 1px solid var(--c-line);
+    border-radius: 8px;
+    font-size: 9px;
+    color: var(--c-muted);
+    line-height: 1.5;
+    text-align: center;
+  }
+  .footer-note strong { color: var(--c-ink); }
+
+  /* Ending */
+  .ending {
+    width: 720px; height: 1020px;
+    box-sizing: border-box;
+    break-before: page;
+    background: linear-gradient(160deg, #022c22 0%, #064e3b 100%);
+    color: #ecfdf5;
+    display: flex; flex-direction: column; justify-content: center; align-items: center;
+    text-align: center;
+    padding: 60px;
+    overflow: hidden;
+    position: relative;
+  }
+  .ending::before {
+    content: '';
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 500px; height: 500px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(16,185,129,0.15), transparent 70%);
+  }
+  .ending-big {
+    font-size: 36px;
+    font-weight: 800;
+    letter-spacing: -1px;
+    margin-bottom: 12px;
+    position: relative; z-index: 2;
+  }
+  .ending-sub {
+    font-size: 14px;
+    color: #a7f3d0;
+    max-width: 480px;
+    line-height: 1.6;
+    position: relative; z-index: 2;
+    font-family: 'Noto Sans Thai', sans-serif;
+  }
+  .ending-meta {
+    margin-top: 36px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: #6ee7b7;
+    position: relative; z-index: 2;
+  }
+</style>
+</head>
+<body>
+
+<!-- Cover -->
+<div class="cover">
+  <div class="cover-top">
+    <div class="cover-badge">SMART CONTRACT REGISTRY</div>
+    <h1 class="cover-title">Smart Contracts<br>for Carbon Credit Projects</h1>
+    <p class="cover-sub">เอกสารรวมสัญญาอัจฉริยะ (Smart Contract) สำหรับโครงการคาร์บอนเครดิตทุกรายการในระบบ TGO dMRV Platform — แสดง contract address, token standard, ABI และ token ledger แบบครบถ้วน</p>
+  </div>
+
+  <div class="cover-stats">
+    <div class="cs-item">
+      <div class="cs-num">6</div>
+      <div class="cs-lab">Projects</div>
+    </div>
+    <div class="cs-item">
+      <div class="cs-num">69</div>
+      <div class="cs-lab">Tokens</div>
+    </div>
+    <div class="cs-item">
+      <div class="cs-num">238,718.43</div>
+      <div class="cs-lab">tCO2e Total</div>
+    </div>
+    <div class="cs-item">
+      <div class="cs-num">10</div>
+      <div class="cs-lab">Certificates</div>
+    </div>
+  </div>
+
+  <div class="cover-bottom">
+    <div class="left">CHAIN: Polygon PoS · STANDARD: ERC-721</div>
+    <div class="right">Generated: 2026-08-27<br><strong>TGO dMRV Platform</strong></div>
+  </div>
+</div>
+
+<!-- Main content -->
+<div class="main-content">
+
+  <!-- Executive summary -->
+  <div class="exec-section">
+    <div class="section-tag">EXECUTIVE SUMMARY</div>
+    <div class="section-title">Registry Overview</div>
+    <div class="divider"></div>
+    <p class="exec-body">
+      เอกสารนี้รวบรวมสัญญาอัจฉริยะ (Smart Contract) ที่ deploy บนเครือข่าย Polygon PoS สำหรับโครงการคาร์บอนเครดิตทั้งหมด 6 โครงการในระบบ TGO dMRV Platform
+      โดยแต่ละโครงการจะมี smart contract แบบ ERC-721 (Non-Fungible Token) ที่ใช้ tokenizes หน่วยคาร์บอนเครดิตเป็น digital asset
+      ที่สามารถตรวจสอบความถูกต้อง โอนกรรมสิทธิ์ และเกษียณ (retire) ได้แบบ transparent บน blockchain ทุก smart contract ผ่านการตรวจสอบโดย VVB
+      และลงทะเบียนกับ TGO Carbon Registry ก่อนนำออกใช้งานในตลาดซื้อขาย
+    </p>
+    <div class="exec-stats">
+      <div class="exec-stat">
+        <div class="v">238,718.43</div>
+        <div class="l">Total tCO2e Tokenized</div>
+      </div>
+      <div class="exec-stat">
+        <div class="v">69</div>
+        <div class="l">Total NFTs Minted</div>
+      </div>
+      <div class="exec-stat">
+        <div class="v">10</div>
+        <div class="l">Certificates Linked</div>
+      </div>
+    </div>
+    <p class="exec-body">
+      สถานะของเครดิตทั้งระบบแบ่งเป็น Available 21,800 tCO2e ที่พร้อมซื้อขาย, Traded 17,580 tCO2e ที่โอนไปยังผู้ซื้อแล้ว,
+      และ Retired 193,343.99 tCO2e ที่เกษียณถาวรเพื่อ offset ก๊าซเรือนกระจก ทุก transaction ถูกบันทึกในรูป event บน chain ทำให้สามารถ audit trail ได้ครบถ้วน
+    </p>
+  </div>
+
+  <!-- Architecture -->
+  <div class="exec-section">
+    <div class="section-tag">ARCHITECTURE</div>
+    <div class="section-title">Smart Contract Stack</div>
+    <div class="divider"></div>
+    <p class="exec-body">
+      ระบบ Tokenization ใช้สถาปัตยกรรมแบบ modular โดยแต่ละโครงการมี smart contract ของตนเองบน Polygon PoS (Chain ID: 137) เพื่อแยกขอบเขตความรับผิดชอบและทำให้สามารถ
+      upgrade หรือ audit ได้อิสระ โดยใช้มาตรฐาน ERC-721 ที่รองรับ metadata extension (ERC-721Metadata) เพื่อเชื่อมโยง token กับ certificate และ project record ในระบบ dMRV
+    </p>
+    <div class="arch-grid">
+      <div class="arch-cell">
+        <div class="h">Token Standard</div>
+        <div class="b"><code>ERC-721</code> NFT — แต่ละ token แทน batch ของคาร์บอนเครดิตที่ไม่สามารถ fungible ได้เนื่องจากต้องผูกกับ project, vintage และ methodology เฉพาะ</div>
+      </div>
+      <div class="arch-cell">
+        <div class="h">Chain</div>
+        <div class="b"><code>Polygon PoS</code> — เลือก Proof-of-Stake chain เพื่อลด carbon footprint ของ transaction และค่า gas ต่ำ ทำให้เหมาะกับ micro-transactions</div>
+      </div>
+      <div class="arch-cell">
+        <div class="h">Access Control</div>
+        <div class="b">ใช้ <code>AccessControl</code> (OpenZeppelin) — บทบาท <code>MINTER_ROLE</code> สำหรับ registry, <code>VERIFIER_ROLE</code> สำหรับ VVB, <code>DEFAULT_ADMIN</code> สำหรับ TGO</div>
+      </div>
+      <div class="arch-cell">
+        <div class="h">Metadata</div>
+        <div class="b">URI schema <code>ipfs://&lt;cid&gt;/&lt;tokenId&gt;.json</code> — เก็บ project ref, methodology, cert ID, vintage, amount, geolocation แบบ immutable บน IPFS</div>
+      </div>
+      <div class="arch-cell">
+        <div class="h">Events</div>
+        <div class="b"><code>CreditMinted</code>, <code>CreditTraded</code>, <code>CreditRetired</code> — emit ทุกการเปลี่ยนแปลงสถานะ เพื่อให้ indexer (The Graph) สร้าง queryable subgraph ได้</div>
+      </div>
+      <div class="arch-cell">
+        <div class="h">Upgradeability</div>
+        <div class="b">ใช้ <code>UUPSUpgradeable</code> proxy pattern — สามารถ patch logic ได้โดย data layout คงที่ ผ่าน governance multisig ของ TGO + 2 VVB</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Project sections -->
+  <div class="section-tag">PROJECT CONTRACTS</div>
+  <div class="section-title">Per-Project Smart Contracts</div>
+  <div class="divider"></div>
+  <p class="exec-body" style="margin-bottom: 8px;">
+    รายละเอียด smart contract ของแต่ละโครงการ แสดง contract identity, supply snapshot, token ledger, registered plots, certificate records และ contract ABI
+  </p>
+  
+<!-- Project 1 -->
+<div class="project-card">
+  <div class="proj-header">
+    <div class="proj-index">PROJECT 01</div>
+    <div class="proj-title">
+      <h2>เชียงใหม่ Forest Conservation</h2>
+      <div class="proj-sub">
+        <span class="pill">T-VER-FOREST</span>
+        <span class="pill pill-loc">Chiang Mai · เชียงใหม่</span>
+        <span class="pill">Active</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Contract identity -->
+  <div class="contract-id">
+    <div class="cid-row">
+      <span class="cid-label">CONTRACT NAME</span>
+      <span class="cid-value mono">CarbonCredit_TVERFOREST_01</span>
+    </div>
+    <div class="cid-row cid-address">
+      <span class="cid-label">CONTRACT ADDRESS</span>
+      <span class="cid-value mono">0x009a4dd5f4004e13f8620026c968a300a21922bc</span>
+    </div>
+    <div class="cid-grid">
+      <div><span class="cid-label">TOKEN STANDARD</span><span class="cid-value">ERC-721</span></div>
+      <div><span class="cid-label">CHAIN</span><span class="cid-value">Polygon PoS (id: 137)</span></div>
+      <div><span class="cid-label">DEPLOY BLOCK</span><span class="cid-value mono">#18,672,563</span></div>
+      <div><span class="cid-label">DEPLOY DATE</span><span class="cid-value">2021-11-01</span></div>
+      <div><span class="cid-label">COMPILER</span><span class="cid-value mono">v0.8.20+commit.a1b79de6</span></div>
+      <div><span class="cid-label">OPTIMIZER</span><span class="cid-value">Enabled · 200 runs</span></div>
+      <div><span class="cid-label">VERIFIER (VVB)</span><span class="cid-value">SGS Thailand</span></div>
+      <div><span class="cid-label">REGISTRY</span><span class="cid-value">TGO Carbon Registry</span></div>
+    </div>
+    <div class="cid-row">
+      <span class="cid-label">DEPLOY TX HASH</span>
+      <span class="cid-value mono tx">0x5ef138cbaa3d8417c659d340f9661f8c45b26bd8982bbe51e4770a9d0093218e</span>
+    </div>
+  </div>
+
+  <!-- Project description -->
+  <div class="proj-desc">Forest conservation and REDD+ project protecting upper watershed forests in Doi Inthanon National Park buffer zone.</div>
+
+  <!-- Methodology -->
+  <div class="info-block">
+    <div class="block-title">Methodology</div>
+    <div class="block-body">T-VER Forest Methodology. Base methodology applied to project activity: T-VER-FOREST. Project area: 1,200 hectares located in Chiang Mai, Northern Thailand, Thailand. Geographic coordinates: 18.79, 98.98.</div>
+  </div>
+
+  <!-- Supply snapshot -->
+  <div class="supply-grid">
+    <div class="supply-cell">
+      <div class="sup-label">TOTAL SUPPLY</div>
+      <div class="sup-value">41,228.41 <span class="unit">tCO2e</span></div>
+      <div class="sup-sub">13 tokens minted</div>
+    </div>
+    <div class="supply-cell avail">
+      <div class="sup-label">AVAILABLE</div>
+      <div class="sup-value">7,060</div>
+      <div class="sup-sub">1 token</div>
+    </div>
+    <div class="supply-cell traded">
+      <div class="sup-label">TRADED</div>
+      <div class="sup-value">0</div>
+      <div class="sup-sub">0 tokens</div>
+    </div>
+    <div class="supply-cell retired">
+      <div class="sup-label">RETIRED</div>
+      <div class="sup-value">34,168.41</div>
+      <div class="sup-sub">12 tokens</div>
+    </div>
+  </div>
+
+  <!-- Token holders table -->
+  <div class="table-block">
+    <div class="block-title">Token Ledger <span class="block-sub">13 tokens on-chain</span></div>
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Token ID</th>
+          <th class="r">Amount (tCO2e)</th>
+          <th>Status</th>
+          <th>Holder / Buyer</th>
+          <th class="r">Minted</th>
+        </tr>
+      </thead>
+      <tbody>
+    <tr>
+      <td class="mono">TCO2E-1780486572121-8MOZX8</td>
+      <td class="num">3,004</td>
+      <td><span class="badge" style="color:#64748b;background:#f1f5f9">Retired</span></td>
+      <td>Self</td>
+      <td class="num">2026-06-16</td>
+    </tr>
+  
+    <tr>
+      <td class="mono">TCO2E-1781010942042-IZFRQP</td>
+      <td class="num">4,154.37</td>
+      <td><span class="badge" style="color:#64748b;background:#f1f5f9">Retired</span></td>
+      <td>Self-retired</td>
+      <td class="num">2026-06-16</td>
+    </tr>
+  
+    <tr>
+      <td class="mono">TCO2E-1780010880677-71BZ5A</td>
+      <td class="num">760.04</td>
+      <td><span class="badge" style="color:#64748b;background:#f1f5f9">Retired</span></td>
+      <td>Self</td>
+      <td class="num">2026-06-16</td>
+    </tr>
+  
+    <tr>
+      <td class="mono">TCO2E-1787725792800-9YCCL</td>
+      <td class="num">1,000</td>
+      <td><span class="badge" style="color:#64748b;background:#f1f5f9">Retired</span></td>
+      <td>Trafigura</td>
+      <td class="num">2026-08-26</td>
+    </tr>
+  
+    <tr>
+      <td class="mono">TCO2E-1787796516269-WONXS</td>
+      <td class="num">2,000</td>
+      <td><span class="badge" style="color:#64748b;background:#f1f5f9">Retired</span></td>
+      <td>Indorama Ventures</td>
+      <td class="num">2026-08-27</td>
+    </tr>
+  
+    <tr>
+      <td class="mono">TCO2E-1787797310366-180RF</td>
+      <td class="num">7,820</td>
+      <td><span class="badge" style="color:#64748b;background:#f1f5f9">Retired</span></td>
+      <td>Mitsubishi Corp.</td>
+      <td class="num">2026-08-27</td>
+    </tr>
+  
+    <tr>
+      <td class="mono">TCO2E-1787797312272-00C7M</td>
+      <td class="num">670</td>
+      <td><span class="badge" style="color:#64748b;background:#f1f5f9">Retired</span></td>
+      <td>Bangchak Group</td>
+      <td class="num">2026-08-27</td>
+    </tr>
+  
+    <tr>
+      <td class="mono">TCO2E-1787797312700-4YGK5</td>
+      <td class="num">7,660</td>
+      <td><span class="badge" style="color:#64748b;background:#f1f5f9">Retired</span></td>
+      <td>CP All</td>
+      <td class="num">2026-08-27</td>
+    </tr>
+  
+    <tr>
+      <td class="mono">TCO2E-1787797317716-32GFU</td>
+      <td class="num">4,890</td>
+      <td><span class="badge" style="color:#64748b;background:#f1f5f9">Retired</span></td>
+      <td>Self-retired</td>
+      <td class="num">2026-08-27</td>
+    </tr>
+  
+    <tr>
+      <td class="mono">TCO2E-1787797319349-A4EWL</td>
+      <td class="num">1,290</td>
+      <td><span class="badge" style="color:#64748b;background:#f1f5f9">Retired</span></td>
+      <td>ThaiBev</td>
+      <td class="num">2026-08-27</td>
+    </tr>
+  
+    <tr>
+      <td class="mono">TCO2E-1787797319767-VI9SI</td>
+      <td class="num">480</td>
+      <td><span class="badge" style="color:#64748b;background:#f1f5f9">Retired</span></td>
+      <td>Self-retired</td>
+      <td class="num">2026-08-27</td>
+    </tr>
+  
+    <tr>
+      <td class="mono">TCO2E-1787797322039-QUI1F</td>
+      <td class="num">440</td>
+      <td><span class="badge" style="color:#64748b;background:#f1f5f9">Retired</span></td>
+      <td>Self-retired</td>
+      <td class="num">2026-08-27</td>
+    </tr>
+  
+    <tr>
+      <td class="mono">TCO2E-1787799536707-YO5P4</td>
+      <td class="num">7,060</td>
+      <td><span class="badge" style="color:#059669;background:#d1fae5">Available</span></td>
+      <td>—</td>
+      <td class="num">2026-08-27</td>
+    </tr>
+  </tbody>
+    </table>
+  </div>
+
+  <!-- Plots table -->
+  <div class="table-block">
+    <div class="block-title">Registered Plots <span class="block-sub">5 plots</span></div>
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Plot ID</th>
+          <th>Track</th>
+          <th class="r">Area</th>
+          <th>Owner</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+      <tr>
+        <td class="mono">CMM-FC-001</td>
+        <td>forest</td>
+        <td class="num">350 ha</td>
+        <td>อุทยานแห่งชาติดอยอินทนนท์</td>
+        <td>ACTIVE</td>
+      </tr>
+    
+      <tr>
+        <td class="mono">CMM-FC-002</td>
+        <td>forest</td>
+        <td class="num">280 ha</td>
+        <td>กลุ่มอนุรักษ์ป่าชุมชนดอยสุเทพ</td>
+        <td>VERIFIED</td>
+      </tr>
+    
+      <tr>
+        <td class="mono">CMM-FC-003</td>
+        <td>forest</td>
+        <td class="num">250 ha</td>
+        <td>มูลนิธิโครงการหลวง</td>
+        <td>ACTIVE</td>
+      </tr>
+    
+      <tr>
+        <td class="mono">CMM-FC-004</td>
+        <td>forest</td>
+        <td class="num">200 ha</td>
+        <td>องค์การบริหารส่วนตำบลแม่แจ่ม</td>
+        <td>ACTIVE</td>
+      </tr>
+    
+      <tr>
+        <td class="mono">CMM-FC-005</td>
+        <td>forest</td>
+        <td class="num">120 ha</td>
+        <td>กลุ่มวิสาหกิจชุมชนป่าไม้เชียงใหม่</td>
+        <td>REGISTERED</td>
+      </tr>
+    </tbody>
+    </table>
+  </div>
+
+  <!-- Certificates table -->
+  <div class="table-block">
+    <div class="block-title">Certification Records <span class="block-sub">2 certificates</span></div>
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Certificate ID</th>
+          <th>Track</th>
+          <th class="r">Amount</th>
+          <th>Status</th>
+          <th>Validator</th>
+          <th>Valid From</th>
+        </tr>
+      </thead>
+      <tbody>
+      <tr>
+        <td class="mono">TVER-1781593662832-8XZ7</td>
+        <td>forest</td>
+        <td class="num">432.52</td>
+        <td><span class="badge" style="color:#059669;background:#d1fae5">APPROVED</span></td>
+        <td>SGS Thailand</td>
+        <td>2022-02-27</td>
+      </tr>
+    
+      <tr>
+        <td class="mono">TVER-1781593662833-7J7X</td>
+        <td>forest</td>
+        <td class="num">2,793.41</td>
+        <td><span class="badge" style="color:#059669;background:#d1fae5">APPROVED</span></td>
+        <td>TGO-VVB-Auto</td>
+        <td>2021-12-15</td>
+      </tr>
+    </tbody>
+    </table>
+  </div>
+
+  <!-- ABI / functions -->
+  <div class="abi-block">
+    <div class="block-title">Contract Interface (ABI)</div>
+    <pre class="abi-code">interface CarbonCredit_TVERFOREST_01 {
+    // ── ERC-721 standard ──
+    function name() external view returns (string);
+    function symbol() external view returns (string);
+    function totalSupply() external view returns (uint256);
+    function balanceOf(address owner) external view returns (uint256);
+    function ownerOf(uint256 tokenId) external view returns (address);
+    function transferFrom(address from, address to, uint256 tokenId) external;
+
+    // ── Carbon credit extension ──
+    function mintCredit(address to, uint256 amount, string calldata metadataURI) external returns (uint256);
+    function retireCredit(uint256 tokenId) external;
+    function getCreditData(uint256 tokenId) external view returns (
+        uint256 amount, string memory status, string memory projectRef, string memory methodology
+    );
+
+    // ── Events ──
+    event CreditMinted(uint256 indexed tokenId, address indexed to, uint256 amount, string methodology);
+    event CreditTraded(uint256 indexed tokenId, address indexed from, address indexed to, uint256 amount);
+    event CreditRetired(uint256 indexed tokenId, address indexed by, uint256 amount, string reason);
+}</pre>
+  </div>
+</div>
+
+<!-- Project 2 -->
+<div class="project-card">
+  <div class="proj-header">
+    <div class="proj-index">PROJECT 02</div>
+    <div class="proj-title">
+      <h2>ขอนแก่น Solar PV</h2>
+      <div class="proj-sub">
+        <span class="pill">IPCC-2023</span>
+        <span class="pill pill-loc">Khon Kaen · ขอนแก่น</span>
+        <span class="pill">Active</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Contract identity -->
+  <div class="contract-id">
+    <div class="cid-row">
+      <span class="cid-label">CONTRACT NAME</span>
+      <span class="cid-value mono">CarbonCredit_IPCC2023_02</span>
+    </div>
+    <div class="cid-row cid-address">
+      <span class="cid-label">CONTRACT ADDRESS</span>
+      <span class="cid-value mono">0x00a35011f500eba5248300ed3018b000d7ba7ab1</span>
+    </div>
+    <div class="cid-grid">
+      <div><span class="cid-label">TOKEN STANDARD</span><span class="cid-value">ERC-721</span></div>
+      <div><span class="cid-label">CHAIN</span><span class="cid-value">Polygon PoS (id: 137)</span></div>
+      <div><span class="cid-label">DEPLOY BLOCK</span><span class="cid-value mono">#18,617,284</span></div>
+      <div><span class="cid-label">DEPLOY DATE</span><span class="cid-value">2023-03-15</span></div>
+      <div><span class="cid-label">COMPILER</span><span class="cid-value mono">v0.8.20+commit.a1b79de6</span></div>
+      <div><span class="cid-label">OPTIMIZER</span><span class="cid-value">Enabled · 200 runs</span></div>
+      <div><span class="cid-label">VERIFIER (VVB)</span><span class="cid-value">TGO-VVB-Auto</span></div>
+      <div><span class="cid-label">REGISTRY</span><span class="cid-value">TGO Carbon Registry</span></div>
+    </div>
+    <div class="cid-row">
+      <span class="cid-label">DEPLOY TX HASH</span>
+      <span class="cid-value mono tx">0x0d7ae754c12e9b0875e27e1158ebca5da437e67975e24fbc299603700d7a6cff</span>
+    </div>
+  </div>
+
+  <!-- Project description -->
+  <div class="proj-desc">Utility-scale solar photovoltaic farm replacing fossil fuel electricity generation in the Isan region.</div>
+
+  <!-- Methodology -->
+  <div class="info-block">
+    <div class="block-title">Methodology</div>
+    <div class="block-body">IPCC 2023 AFOLU Methodology. Base methodology applied to project activity: IPCC-2023. Project area: 200 hectares located in Khon Kaen, Northeastern Thailand, Thailand. Geographic coordinates: 16.43, 102.83.</div>
+  </div>
+
+  <!-- Supply snapshot -->
+  <div class="supply-grid">
+    <div class="supply-cell">
+      <div class="sup-label">TOTAL SUPPLY</div>
+      <div class="sup-value">38,892.59 <span class="unit">tCO2e</span></div>
+      <div class="sup-sub">11 tokens minted</div>
+    </div>
+    <div class="supply-cell avail">
+      <div class="sup-label">AVAILABLE</div>
+      <div class="sup-value">10,110</div>
+      <div class="sup-sub">2 tokens</div>
+    </div>
+    <div class="supply-cell traded">
+      <div class="sup-label">TRADED</div>
+      <div class="sup-value">1,030</div>
+      <div class="sup-sub">1 token</div>
+    </div>
+    <div class="supply-cell retired">
+      <div class="sup-label">RETIRED</div>
+      <div class="sup-value">27,752.59</div>
+      <div class="sup-sub">8 tokens</div>
+    </div>
+  </div>
+
+  <!-- Token holders table -->
+  <div class="table-block">
+    <div class="block-title">Token Ledger <span class="block-sub">11 tokens on-chain</span></div>
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Token ID</th>
+          <th class="r">Amount (tCO2e)</th>
+          <th>Status</th>
+          <th>Holder / Buyer</th>
+          <th class="r">Minted</th>
+        </tr>
+      </thead>
+      <tbody>
+    <tr>
+      <td class="mono">TCO2E-1781537996446-S3WE70</td>
+      <td class="num">166.29</td>
+      <td><span class="badge" style="color:#64748b;background:#f1f5f9">Retired</span></td>
+      <td>Self</td>
+      <td class="num">2026-06-16</td>
+    </tr>
+  
+    <tr>
+      <td class="mono">TCO2E-1779857606662-YB72RC</td>
+      <td class="num">520.82</td>
+      <td><span class="badge" style="color:#64748b;background:#f1f5f9">Retired</span></td>
+      <td>Self-retired</td>
+      <td class="num">2026-06-16</td>
+    </tr>
+  
+    <tr>
+      <td class="mono">TCO2E-1779444838378-BELLL7</td>
+      <td class="num">4,465.48</td>
+      <td><span class="badge" style="color:#64748b;background:#f1f5f9">Retired</span></td>
+      <td>Self</td>
+      <td class="num">2026-06-16</td>
+    </tr>
+  
+    <tr>
+      <td class="mono">TCO2E-1787797312126-KNN4F</td>
+      <td class="num">7,970</td>
+      <td><span class="badge" style="color:#64748b;background:#f1f5f9">Retired</span></td>
+      <td>Honda Automobile</td>
+      <td class="num">2026-08-27</td>
+    </tr>
+  
+    <tr>
+      <td class="mono">TCO2E-1787797313131-1A98X</td>
+      <td class="num">7,830</td>
+      <td><span class="badge" style="color:#64748b;background:#f1f5f9">Retired</span></td>
+      <td>Trafigura</td>
+      <td class="num">2026-08-27</td>
+    </tr>
+  
+    <tr>
+      <td class="mono">TCO2E-1787797317653-LZHAS</td>
+      <td class="num">1,030</td>
+      <td><span class="badge" style="color:#0284c7;background:#e0f2fe">Traded</span></td>
+      <td>Indorama Ventures</td>
+      <td class="num">2026-08-27</td>
+    </tr>
+  
+    <tr>
+      <td class="mono">TCO2E-1787797319195-7UHH9</td>
+      <td class="num">980</td>
+      <td><span class="badge" style="color:#64748b;background:#f1f5f9">Retired</span></td>
+      <td>Self-retired</td>
+      <td class="num">2026-08-27</td>
+    </tr>
+  
+    <tr>
+      <td class="mono">TCO2E-1787797321262-N2D35</td>
+      <td class="num">410</td>
+      <td><span class="badge" style="color:#64748b;background:#f1f5f9">Retired</span></td>
+      <td>Honda Automobile</td>
+      <td class="num">2026-08-27</td>
+    </tr>
+  
+    <tr>
+      <td class="mono">TCO2E-1787797321951-KONWS</td>
+      <td class="num">5,410</td>
+      <td><span class="badge" style="color:#64748b;background:#f1f5f9">Retired</span></td>
+      <td>Banpu Plc.</td>
+      <td class="num">2026-08-27</td>
+    </tr>
+  
+    <tr>
+      <td class="mono">TCO2E-1787799411711-ZF7HV</td>
+      <td class="num">4,900</td>
+      <td><span class="badge" style="color:#059669;background:#d1fae5">Available</span></td>
+      <td>—</td>
+      <td class="num">2026-08-27</td>
+    </tr>
+  
+    <tr>
+      <td class="mono">TCO2E-1787799412682-ELCZI</td>
+      <td class="num">5,210</td>
+      <td><span class="badge" style="color:#059669;background:#d1fae5">Available</span></td>
+      <td>—</td>
+      <td class="num">2026-08-27</td>
+    </tr>
+  </tbody>
+    </table>
+  </div>
+
+  <!-- Plots table -->
+  <div class="table-block">
+    <div class="block-title">Registered Plots <span class="block-sub">4 plots</span></div>
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Plot ID</th>
+          <th>Track</th>
+          <th class="r">Area</th>
+          <th>Owner</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+      <tr>
+        <td class="mono">KKC-SP-001</td>
+        <td>solar</td>
+        <td class="num">80 ha</td>
+        <td>บริษัท โซลาร์เอนเนอร์ยี่ขอนแก่น จำกัด</td>
+        <td>ACTIVE</td>
+      </tr>
+    
+      <tr>
+        <td class="mono">KKC-SP-002</td>
+        <td>solar</td>
+        <td class="num">60 ha</td>
+        <td>การไฟฟ้าส่วนภูมิภาค (กฟภ.)</td>
+        <td>VERIFIED</td>
+      </tr>
+    
+      <tr>
+        <td class="mono">KKC-SP-003</td>
+        <td>solar</td>
+        <td class="num">40 ha</td>
+        <td>บริษัท พลังงานสะอาดอีสาน จำกัด</td>
+        <td>ACTIVE</td>
+      </tr>
+    
+      <tr>
+        <td class="mono">KKC-SP-004</td>
+        <td>solar</td>
+        <td class="num">20 ha</td>
+        <td>มหาวิทยาลัยขอนแก่น (ศูนย์พลังงานทดแทน)</td>
+        <td>REGISTERED</td>
+      </tr>
+    </tbody>
+    </table>
+  </div>
+
+  <!-- Certificates table -->
+  <div class="table-block">
+    <div class="block-title">Certification Records <span class="block-sub">1 certificate</span></div>
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Certificate ID</th>
+          <th>Track</th>
+          <th class="r">Amount</th>
+          <th>Status</th>
+          <th>Validator</th>
+          <th>Valid From</th>
+        </tr>
+      </thead>
+      <tbody>
+      <tr>
+        <td class="mono">TVER-1781593662831-1Z2R</td>
+        <td>solar</td>
+        <td class="num">4,831.61</td>
+        <td><span class="badge" style="color:#059669;background:#d1fae5">APPROVED</span></td>
+        <td>TGO-VVB-Auto</td>
+        <td>2023-05-25</td>
+      </tr>
+    </tbody>
+    </table>
+  </div>
+
+  <!-- ABI / functions -->
+  <div class="abi-block">
+    <div class="block-title">Contract Interface (ABI)</div>
+    <pre class="abi-code">interface CarbonCredit_IPCC2023_02 {
+    // ── ERC-721 standard ──
+    function name() external view returns (string);
+    function symbol() external view returns (string);
+    function totalSupply() external view returns (uint256);
+    function balanceOf(address owner) external view returns (uint256);
+    function ownerOf(uint256 tokenId) external view returns (address);
+    function transferFrom(address from, address to, uint256 tokenId) external;
+
+    // ── Carbon credit extension ──
+    function mintCredit(address to, uint256 amount, string calldata metadataURI) external returns (uint256);
+    function retireCredit(uint256 tokenId) external;
+    function getCreditData(uint256 tokenId) external view returns (
+        uint256 amount, string memory status, string memory projectRef, string memory methodology
+    );
+
+    // ── Events ──
+    event CreditMinted(uint256 indexed tokenId, address indexed to, uint256 amount, string methodology);
+    event CreditTraded(uint256 indexed tokenId, address indexed from, address indexed to, uint256 amount);
+    event CreditRetired(uint256 indexed tokenId, address indexed by, uint256 amount, string reason);
+}</pre>
+  </div>
+</div>
+
+<!-- Project 3 -->
+<div class="project-card">
+  <div class="proj-header">
+    <div class="proj-index">PROJECT 03</div>
+    <div class="proj-title">
+      <h2>ชลบุรี Biogas</h2>
+      <div class="proj-sub">
+        <span class="pill">IPCC-2023</span>
+        <span class="pill pill-loc">Chonburi · ชลบุรี</span>
+        <span class="pill">Pending</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Contract identity -->
+  <div class="contract-id">
+    <div class="cid-row">
+      <span class="cid-label">CONTRACT NAME</span>
+      <span class="cid-value mono">CarbonCredit_IPCC2023_03</span>
+    </div>
+    <div class="cid-row cid-address">
+      <span class="cid-label">CONTRACT ADDRESS</span>
+      <span class="cid-value mono">0x00a8fd136d005ec9140b002a7f7ee800dc3b3ea9</span>
+    </div>
+    <div class="cid-grid">
+      <div><span class="cid-label">TOKEN STANDARD</span><span class="cid-value">ERC-721</span></div>
+      <div><span class="cid-label">CHAIN</span><span class="cid-value">Polygon PoS (id: 137)</span></div>
+      <div><span class="cid-label">DEPLOY BLOCK</span><span class="cid-value mono">#19,036,476</span></div>
+      <div><span class="cid-label">DEPLOY DATE</span><span class="cid-value">2023-08-20</span></div>
+      <div><span class="cid-label">COMPILER</span><span class="cid-value mono">v0.8.20+commit.a1b79de6</span></div>
+      <div><span class="cid-label">OPTIMIZER</span><span class="cid-value">Enabled · 200 runs</span></div>
+      <div><span class="cid-label">VERIFIER (VVB)</span><span class="cid-value">Bureau Veritas</span></div>
+      <div><span class="cid-label">REGISTRY</span><span class="cid-value">TGO Carbon Registry</span></div>
+    </div>
+    <div class="cid-row">
+      <span class="cid-label">DEPLOY TX HASH</span>
+      <span class="cid-value mono tx">0x2592ff6cd946b320bd2a0699e07352e52cbf9e31dd4ab72491fe6bd845b2d467</span>
+    </div>
+  </div>
+
+  <!-- Project description -->
+  <div class="proj-desc">Biogas capture from industrial wastewater treatment at a cassava starch factory, converting methane into renewable energy.</div>
+
+  <!-- Methodology -->
+  <div class="info-block">
+    <div class="block-title">Methodology</div>
+    <div class="block-body">IPCC 2023 AFOLU Methodology. Base methodology applied to project activity: IPCC-2023. Project area: 50 hectares located in Chonburi, Eastern Thailand, Thailand. Geographic coordinates: 13.36, 100.98.</div>
+  </div>
+
+  <!-- Supply snapshot -->
+  <div class="supply-grid">
+    <div class="supply-cell">
+      <div class="sup-label">TOTAL SUPPLY</div>
+      <div class="sup-value">27,562.97 <span class="unit">tCO2e</span></div>
+      <div class="sup-sub">9 tokens minted</div>
+    </div>
+    <div class="supply-cell avail">
+      <div class="sup-label">AVAILABLE</div>
+      <div class="sup-value">0</div>
+      <div class="sup-sub">0 tokens</div>
+    </div>
+    <div class="supply-cell traded">
+      <div class="sup-label">TRADED</div>
+      <div class="sup-value">0</div>
+      <div class="sup-sub">0 tokens</div>
+    </div>
+    <div class="supply-cell retired">
+      <div class="sup-label">RETIRED</div>
+      <div class="sup-value">26,213.79</div>
+      <div class="sup-sub">8 tokens</div>
+    </div>
+  </div>
+
+  <!-- Token holders table -->
+  <div class="table-block">
+    <div class="block-title">Token Ledger <span class="block-sub">9 tokens on-chain</span></div>
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Token ID</th>
+          <th class="r">Amount (tCO2e)</th>
+          <th>Status</th>
+          <th>Holder / Buyer</th>
+          <th class="r">Minted</th>
+        </tr>
+      </thead>
+      <tbody>
+    <tr>
+      <td class="mono">TCO2E-1781254813734-WV6K74</td>
+      <td class="num">3,219.17</td>
+      <td><span class="badge" style="color:#64748b;background:#f1f5f9">Retired</span></td>
+      <td>Self-retired</td>
+      <td class="num">2026-06-16</td>
+    </tr>
+  
+    <tr>
+      <td class="mono">TCO2E-1780053682381-1DGP5W</td>
+      <td class="num">1,349.18</td>
+      <td><span class="badge" style="color:#d97706;background:#fef3c7">Buffered</span></td>
+      <td>Self</td>
+      <td class="num">2026-06-16</td>
+    </tr>
+  
+    <tr>
+      <td class="mono">TCO2E-1780822055026-DPQSYI</td>
+      <td class="num">4,247.64</td>
+      <td><span class="badge" style="color:#64748b;background:#f1f5f9">Retired</span></td>
+      <td>Self-retired</td>
+      <td class="num">2026-06-16</td>
+    </tr>
+  
+    <tr>
+      <td class="mono">TCO2E-1779726700098-5C2GAO</td>
+      <td class="num">826.98</td>
+      <td><span class="badge" style="color:#64748b;background:#f1f5f9">Retired</span></td>
+      <td>Kasikornbank</td>
+      <td class="num">2026-06-16</td>
+    </tr>
+  
+    <tr>
+      <td class="mono">TCO2E-1787797313683-J0WJU</td>
+      <td class="num">920</td>
+      <td><span class="badge" style="color:#64748b;background:#f1f5f9">Retired</span></td>
+      <td>Siam Cement Group</td>
+      <td class="num">2026-08-27</td>
+    </tr>
+  
+    <tr>
+      <td class="mono">TCO2E-1787797313882-NSDE9</td>
+      <td class="num">2,660</td>
+      <td><span class="badge" style="color:#64748b;background:#f1f5f9">Retired</span></td>
+      <td>Thai Airways</td>
+      <td class="num">2026-08-27</td>
+    </tr>
+  
+    <tr>
+      <td class="mono">TCO2E-1787797314296-MHPLR</td>
+      <td class="num">5,670</td>
+      <td><span class="badge" style="color:#64748b;background:#f1f5f9">Retired</span></td>
+      <td>Bangkok Bank</td>
+      <td class="num">2026-08-27</td>
+    </tr>
+  
+    <tr>
+      <td class="mono">TCO2E-1787799397025-X2695</td>
+      <td class="num">4,190</td>
+      <td><span class="badge" style="color:#64748b;background:#f1f5f9">Retired</span></td>
+      <td>Self-retired</td>
+      <td class="num">2026-08-27</td>
+    </tr>
+  
+    <tr>
+      <td class="mono">TCO2E-1787799408675-Q8EYR</td>
+      <td class="num">4,480</td>
+      <td><span class="badge" style="color:#64748b;background:#f1f5f9">Retired</span></td>
+      <td>Delta Electronics</td>
+      <td class="num">2026-08-27</td>
+    </tr>
+  </tbody>
+    </table>
+  </div>
+
+  <!-- Plots table -->
+  <div class="table-block">
+    <div class="block-title">Registered Plots <span class="block-sub">3 plots</span></div>
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Plot ID</th>
+          <th>Track</th>
+          <th class="r">Area</th>
+          <th>Owner</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+      <tr>
+        <td class="mono">CBR-BG-001</td>
+        <td>biogas</td>
+        <td class="num">20 ha</td>
+        <td>บริษัท มันสำปะหลังไทย จำกัด (มหาชน)</td>
+        <td>ACTIVE</td>
+      </tr>
+    
+      <tr>
+        <td class="mono">CBR-BG-002</td>
+        <td>biogas</td>
+        <td class="num">15 ha</td>
+        <td>บริษัท ไบโอก๊าซชลบุรี จำกัด</td>
+        <td>REGISTERED</td>
+      </tr>
+    
+      <tr>
+        <td class="mono">CBR-BG-003</td>
+        <td>biogas</td>
+        <td class="num">15 ha</td>
+        <td>องค์การบริหารส่วนตำบลหนองปลาหมอ</td>
+        <td>ACTIVE</td>
+      </tr>
+    </tbody>
+    </table>
+  </div>
+
+  <!-- Certificates table -->
+  <div class="table-block">
+    <div class="block-title">Certification Records <span class="block-sub">2 certificates</span></div>
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Certificate ID</th>
+          <th>Track</th>
+          <th class="r">Amount</th>
+          <th>Status</th>
+          <th>Validator</th>
+          <th>Valid From</th>
+        </tr>
+      </thead>
+      <tbody>
+      <tr>
+        <td class="mono">TVER-1781593662828-Z0JL</td>
+        <td>biogas</td>
+        <td class="num">2,183.03</td>
+        <td><span class="badge" style="color:#059669;background:#d1fae5">APPROVED</span></td>
+        <td>Bureau Veritas</td>
+        <td>2024-01-01</td>
+      </tr>
+    
+      <tr>
+        <td class="mono">TVER-1781593662829-7NWN</td>
+        <td>biogas</td>
+        <td class="num">676</td>
+        <td><span class="badge" style="color:#059669;background:#d1fae5">APPROVED</span></td>
+        <td>SGS Thailand</td>
+        <td>2023-10-14</td>
+      </tr>
+    </tbody>
+    </table>
+  </div>
+
+  <!-- ABI / functions -->
+  <div class="abi-block">
+    <div class="block-title">Contract Interface (ABI)</div>
+    <pre class="abi-code">interface CarbonCredit_IPCC2023_03 {
+    // ── ERC-721 standard ──
+    function name() external view returns (string);
+    function symbol() external view returns (string);
+    function totalSupply() external view returns (uint256);
+    function balanceOf(address owner) external view returns (uint256);
+    function ownerOf(uint256 tokenId) external view returns (address);
+    function transferFrom(address from, address to, uint256 tokenId) external;
+
+    // ── Carbon credit extension ──
+    function mintCredit(address to, uint256 amount, string calldata metadataURI) external returns (uint256);
+    function retireCredit(uint256 tokenId) external;
+    function getCreditData(uint256 tokenId) external view returns (
+        uint256 amount, string memory status, string memory projectRef, string memory methodology
+    );
+
+    // ── Events ──
+    event CreditMinted(uint256 indexed tokenId, address indexed to, uint256 amount, string methodology);
+    event CreditTraded(uint256 indexed tokenId, address indexed from, address indexed to, uint256 amount);
+    event CreditRetired(uint256 indexed tokenId, address indexed by, uint256 amount, string reason);
+}</pre>
+  </div>
+</div>
+
+<!-- Project 4 -->
+<div class="project-card">
+  <div class="proj-header">
+    <div class="proj-index">PROJECT 04</div>
+    <div class="proj-title">
+      <h2>นครราชสีมา AWD Rice</h2>
+      <div class="proj-sub">
+        <span class="pill">IPCC-2023</span>
+        <span class="pill pill-loc">Nakhon Ratchasima · นครราชสีมา</span>
+        <span class="pill">Active</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Contract identity -->
+  <div class="contract-id">
+    <div class="cid-row">
+      <span class="cid-label">CONTRACT NAME</span>
+      <span class="cid-value mono">CarbonCredit_IPCC2023_04</span>
+    </div>
+    <div class="cid-row cid-address">
+      <span class="cid-label">CONTRACT ADDRESS</span>
+      <span class="cid-value mono">0x00c15219ca0098a24aa000e145d44100ca91ccd6</span>
+    </div>
+    <div class="cid-grid">
+      <div><span class="cid-label">TOKEN STANDARD</span><span class="cid-value">ERC-721</span></div>
+      <div><span class="cid-label">CHAIN</span><span class="cid-value">Polygon PoS (id: 137)</span></div>
+      <div><span class="cid-label">DEPLOY BLOCK</span><span class="cid-value mono">#22,906,217</span></div>
+      <div><span class="cid-label">DEPLOY DATE</span><span class="cid-value">2022-09-01</span></div>
+      <div><span class="cid-label">COMPILER</span><span class="cid-value mono">v0.8.20+commit.a1b79de6</span></div>
+      <div><span class="cid-label">OPTIMIZER</span><span class="cid-value">Enabled · 200 runs</span></div>
+      <div><span class="cid-label">VERIFIER (VVB)</span><span class="cid-value">Bureau Veritas</span></div>
+      <div><span class="cid-label">REGISTRY</span><span class="cid-value">TGO Carbon Registry</span></div>
+    </div>
+    <div class="cid-row">
+      <span class="cid-label">DEPLOY TX HASH</span>
+      <span class="cid-value mono tx">0x8c1fb24540d366f924b7fd6ad744b11e8bf865d2a6398013f285cc5f3ed12f9c</span>
+    </div>
+  </div>
+
+  <!-- Project description -->
+  <div class="proj-desc">Alternate Wetting and Drying (AWD) rice cultivation project reducing methane emissions from paddy fields in the Korat plateau.</div>
+
+  <!-- Methodology -->
+  <div class="info-block">
+    <div class="block-title">Methodology</div>
+    <div class="block-body">IPCC 2023 AFOLU Methodology. Base methodology applied to project activity: IPCC-2023. Project area: 800 hectares located in Nakhon Ratchasima, Northeastern Thailand, Thailand. Geographic coordinates: 14.97, 102.08.</div>
+  </div>
+
+  <!-- Supply snapshot -->
+  <div class="supply-grid">
+    <div class="supply-cell">
+      <div class="sup-label">TOTAL SUPPLY</div>
+      <div class="sup-value">50,382.31 <span class="unit">tCO2e</span></div>
+      <div class="sup-sub">12 tokens minted</div>
+    </div>
+    <div class="supply-cell avail">
+      <div class="sup-label">AVAILABLE</div>
+      <div class="sup-value">4,630</div>
+      <div class="sup-sub">1 token</div>
+    </div>
+    <div class="supply-cell traded">
+      <div class="sup-label">TRADED</div>
+      <div class="sup-value">5,770</div>
+      <div class="sup-sub">1 token</div>
+    </div>
+    <div class="supply-cell retired">
+      <div class="sup-label">RETIRED</div>
+      <div class="sup-value">39,982.31</div>
+      <div class="sup-sub">10 tokens</div>
+    </div>
+  </div>
+
+  <!-- Token holders table -->
+  <div class="table-block">
+    <div class="block-title">Token Ledger <span class="block-sub">12 tokens on-chain</span></div>
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Token ID</th>
+          <th class="r">Amount (tCO2e)</th>
+          <th>Status</th>
+          <th>Holder / Buyer</th>
+          <th class="r">Minted</th>
+        </tr>
+      </thead>
+      <tbody>
+    <tr>
+      <td class="mono">TCO2E-1780232109004-0HOG93</td>
+      <td class="num">3,923.78</td>
+      <td><span class="badge" style="color:#64748b;background:#f1f5f9">Retired</span></td>
+      <td>Self</td>
+      <td class="num">2026-06-16</td>
+    </tr>
+  
+    <tr>
+      <td class="mono">TCO2E-1780178503271-OZ22TE</td>
+      <td class="num">4,848.53</td>
+      <td><span class="badge" style="color:#64748b;background:#f1f5f9">Retired</span></td>
+      <td>Self-retired</td>
+      <td class="num">2026-06-16</td>
+    </tr>
+  
+    <tr>
+      <td class="mono">TCO2E-1787797280031-EV1D7</td>
+      <td class="num">3,850</td>
+      <td><span class="badge" style="color:#64748b;background:#f1f5f9">Retired</span></td>
+      <td>Self-retired</td>
+      <td class="num">2026-08-27</td>
+    </tr>
+  
+    <tr>
+      <td class="mono">TCO2E-1787797312833-QLH5R</td>
+      <td class="num">1,120</td>
+      <td><span class="badge" style="color:#64748b;background:#f1f5f9">Retired</span></td>
+      <td>Trafigura</td>
+      <td class="num">2026-08-27</td>
+    </tr>
+  
+    <tr>
+      <td class="mono">TCO2E-1787797314706-68J3H</td>
+      <td class="num">7,500</td>
+      <td><span class="badge" style="color:#64748b;background:#f1f5f9">Retired</span></td>
+      <td>Lazada Thailand</td>
+      <td class="num">2026-08-27</td>
+    </tr>
+  
+    <tr>
+      <td class="mono">TCO2E-1787797316005-ZLWVW</td>
+      <td class="num">5,770</td>
+      <td><span class="badge" style="color:#0284c7;background:#e0f2fe">Traded</span></td>
+      <td>Mitsubishi Corp.</td>
+      <td class="num">2026-08-27</td>
+    </tr>
+  
+    <tr>
+      <td class="mono">TCO2E-1787797316957-S9YC8</td>
+      <td class="num">2,330</td>
+      <td><span class="badge" style="color:#64748b;background:#f1f5f9">Retired</span></td>
+      <td>Banpu Plc.</td>
+      <td class="num">2026-08-27</td>
+    </tr>
+  
+    <tr>
+      <td class="mono">TCO2E-1787797318902-2LCR2</td>
+      <td class="num">2,660</td>
+      <td><span class="badge" style="color:#64748b;background:#f1f5f9">Retired</span></td>
+      <td>Kasikornbank</td>
+      <td class="num">2026-08-27</td>
+    </tr>
+  
+    <tr>
+      <td class="mono">TCO2E-1787797320524-MZBOP</td>
+      <td class="num">4,950</td>
+      <td><span class="badge" style="color:#64748b;background:#f1f5f9">Retired</span></td>
+      <td>Self-retired</td>
+      <td class="num">2026-08-27</td>
+    </tr>
+  
+    <tr>
+      <td class="mono">TCO2E-1787797320684-5B511</td>
+      <td class="num">3,800</td>
+      <td><span class="badge" style="color:#64748b;background:#f1f5f9">Retired</span></td>
+      <td>AIS (Advanced Info Service)</td>
+      <td class="num">2026-08-27</td>
+    </tr>
+  
+    <tr>
+      <td class="mono">TCO2E-1787799410695-XMRF1</td>
+      <td class="num">5,000</td>
+      <td><span class="badge" style="color:#64748b;background:#f1f5f9">Retired</span></td>
+      <td>Thai Airways</td>
+      <td class="num">2026-08-27</td>
+    </tr>
+  
+    <tr>
+      <td class="mono">TCO2E-1787799412998-0LKN8</td>
+      <td class="num">4,630</td>
+      <td><span class="badge" style="color:#059669;background:#d1fae5">Available</span></td>
+      <td>—</td>
+      <td class="num">2026-08-27</td>
+    </tr>
+  </tbody>
+    </table>
+  </div>
+
+  <!-- Plots table -->
+  <div class="table-block">
+    <div class="block-title">Registered Plots <span class="block-sub">5 plots</span></div>
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Plot ID</th>
+          <th>Track</th>
+          <th class="r">Area</th>
+          <th>Owner</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+      <tr>
+        <td class="mono">NMA-AWD-001</td>
+        <td>awd</td>
+        <td class="num">250 ha</td>
+        <td>สหกรณ์การเกษตรนครราชสีมา</td>
+        <td>ACTIVE</td>
+      </tr>
+    
+      <tr>
+        <td class="mono">NMA-AWD-002</td>
+        <td>awd</td>
+        <td class="num">200 ha</td>
+        <td>กลุ่มเกษตรกรอัจฉริยะโคราช</td>
+        <td>ACTIVE</td>
+      </tr>
+    
+      <tr>
+        <td class="mono">NMA-AWD-003</td>
+        <td>awd</td>
+        <td class="num">180 ha</td>
+        <td>ศูนย์เทคโนโลยีการเกษตรภาคตะวันออกเฉียงเหนือ</td>
+        <td>VERIFIED</td>
+      </tr>
+    
+      <tr>
+        <td class="mono">NMA-AWD-004</td>
+        <td>awd</td>
+        <td class="num">120 ha</td>
+        <td>เกษตรกรรายย่อยอำเภอเมืองนครราชสีมา</td>
+        <td>REGISTERED</td>
+      </tr>
+    
+      <tr>
+        <td class="mono">NMA-AWD-005</td>
+        <td>awd</td>
+        <td class="num">50 ha</td>
+        <td>กองทุนหมู่บ้านทับบุตรี</td>
+        <td>ACTIVE</td>
+      </tr>
+    </tbody>
+    </table>
+  </div>
+
+  <!-- Certificates table -->
+  <div class="table-block">
+    <div class="block-title">Certification Records <span class="block-sub">2 certificates</span></div>
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Certificate ID</th>
+          <th>Track</th>
+          <th class="r">Amount</th>
+          <th>Status</th>
+          <th>Validator</th>
+          <th>Valid From</th>
+        </tr>
+      </thead>
+      <tbody>
+      <tr>
+        <td class="mono">TVER-1781593662826-CN7X</td>
+        <td>awd</td>
+        <td class="num">2,582.61</td>
+        <td><span class="badge" style="color:#059669;background:#d1fae5">APPROVED</span></td>
+        <td>Bureau Veritas</td>
+        <td>2023-02-17</td>
+      </tr>
+    
+      <tr>
+        <td class="mono">TVER-1781593662827-J2QM</td>
+        <td>awd</td>
+        <td class="num">3,261.57</td>
+        <td><span class="badge" style="color:#dc2626;background:#fee2e2">REJECTED</span></td>
+        <td>TGO-VVB-Auto</td>
+        <td>2023-01-29</td>
+      </tr>
+    </tbody>
+    </table>
+  </div>
+
+  <!-- ABI / functions -->
+  <div class="abi-block">
+    <div class="block-title">Contract Interface (ABI)</div>
+    <pre class="abi-code">interface CarbonCredit_IPCC2023_04 {
+    // ── ERC-721 standard ──
+    function name() external view returns (string);
+    function symbol() external view returns (string);
+    function totalSupply() external view returns (uint256);
+    function balanceOf(address owner) external view returns (uint256);
+    function ownerOf(uint256 tokenId) external view returns (address);
+    function transferFrom(address from, address to, uint256 tokenId) external;
+
+    // ── Carbon credit extension ──
+    function mintCredit(address to, uint256 amount, string calldata metadataURI) external returns (uint256);
+    function retireCredit(uint256 tokenId) external;
+    function getCreditData(uint256 tokenId) external view returns (
+        uint256 amount, string memory status, string memory projectRef, string memory methodology
+    );
+
+    // ── Events ──
+    event CreditMinted(uint256 indexed tokenId, address indexed to, uint256 amount, string methodology);
+    event CreditTraded(uint256 indexed tokenId, address indexed from, address indexed to, uint256 amount);
+    event CreditRetired(uint256 indexed tokenId, address indexed by, uint256 amount, string reason);
+}</pre>
+  </div>
+</div>
+
+<!-- Project 5 -->
+<div class="project-card">
+  <div class="proj-header">
+    <div class="proj-index">PROJECT 05</div>
+    <div class="proj-title">
+      <h2>ลพบุรี Biochar</h2>
+      <div class="proj-sub">
+        <span class="pill">IPCC-2023</span>
+        <span class="pill pill-loc">Lopburi · ลพบุรี</span>
+        <span class="pill">Active</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Contract identity -->
+  <div class="contract-id">
+    <div class="cid-row">
+      <span class="cid-label">CONTRACT NAME</span>
+      <span class="cid-value mono">CarbonCredit_IPCC2023_05</span>
+    </div>
+    <div class="cid-row cid-address">
+      <span class="cid-label">CONTRACT ADDRESS</span>
+      <span class="cid-value mono">0x00801e7e6d00b2d9cf0b0080d5dfe800b35ca9a9</span>
+    </div>
+    <div class="cid-grid">
+      <div><span class="cid-label">TOKEN STANDARD</span><span class="cid-value">ERC-721</span></div>
+      <div><span class="cid-label">CHAIN</span><span class="cid-value">Polygon PoS (id: 137)</span></div>
+      <div><span class="cid-label">DEPLOY BLOCK</span><span class="cid-value mono">#21,537,980</span></div>
+      <div><span class="cid-label">DEPLOY DATE</span><span class="cid-value">2023-01-10</span></div>
+      <div><span class="cid-label">COMPILER</span><span class="cid-value mono">v0.8.20+commit.a1b79de6</span></div>
+      <div><span class="cid-label">OPTIMIZER</span><span class="cid-value">Enabled · 200 runs</span></div>
+      <div><span class="cid-label">VERIFIER (VVB)</span><span class="cid-value">TGO-VVB-Auto</span></div>
+      <div><span class="cid-label">REGISTRY</span><span class="cid-value">TGO Carbon Registry</span></div>
+    </div>
+    <div class="cid-row">
+      <span class="cid-label">DEPLOY TX HASH</span>
+      <span class="cid-value mono tx">0x2592ff6cd946b320bd2a0699e07352e52cbf9e31dd4ab72491fe6bd845b2d467</span>
+    </div>
+  </div>
+
+  <!-- Project description -->
+  <div class="proj-desc">Biochar production from agricultural residues, converting rice husk and cassava waste into stable carbon sequestration material.</div>
+
+  <!-- Methodology -->
+  <div class="info-block">
+    <div class="block-title">Methodology</div>
+    <div class="block-body">IPCC 2023 AFOLU Methodology. Base methodology applied to project activity: IPCC-2023. Project area: 120 hectares located in Lopburi, Central Thailand, Thailand. Geographic coordinates: 14.8, 100.65.</div>
+  </div>
+
+  <!-- Supply snapshot -->
+  <div class="supply-grid">
+    <div class="supply-cell">
+      <div class="sup-label">TOTAL SUPPLY</div>
+      <div class="sup-value">48,543.66 <span class="unit">tCO2e</span></div>
+      <div class="sup-sub">14 tokens minted</div>
+    </div>
+    <div class="supply-cell avail">
+      <div class="sup-label">AVAILABLE</div>
+      <div class="sup-value">0</div>
+      <div class="sup-sub">0 tokens</div>
+    </div>
+    <div class="supply-cell traded">
+      <div class="sup-label">TRADED</div>
+      <div class="sup-value">10,780</div>
+      <div class="sup-sub">2 tokens</div>
+    </div>
+    <div class="supply-cell retired">
+      <div class="sup-label">RETIRED</div>
+      <div class="sup-value">37,763.66</div>
+      <div class="sup-sub">12 tokens</div>
+    </div>
+  </div>
+
+  <!-- Token holders table -->
+  <div class="table-block">
+    <div class="block-title">Token Ledger <span class="block-sub">14 tokens on-chain</span></div>
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Token ID</th>
+          <th class="r">Amount (tCO2e)</th>
+          <th>Status</th>
+          <th>Holder / Buyer</th>
+          <th class="r">Minted</th>
+        </tr>
+      </thead>
+      <tbody>
+    <tr>
+      <td class="mono">TCO2E-1780755760855-C8WOWO</td>
+      <td class="num">983.56</td>
+      <td><span class="badge" style="color:#64748b;background:#f1f5f9">Retired</span></td>
+      <td>Thai Airways</td>
+      <td class="num">2026-06-16</td>
+    </tr>
+  
+    <tr>
+      <td class="mono">TCO2E-1780548057420-WXWI76</td>
+      <td class="num">1,320.59</td>
+      <td><span class="badge" style="color:#64748b;background:#f1f5f9">Retired</span></td>
+      <td>Self-retired</td>
+      <td class="num">2026-06-16</td>
+    </tr>
+  
+    <tr>
+      <td class="mono">TCO2E-1779960465526-7E6F8A</td>
+      <td class="num">4,309.51</td>
+      <td><span class="badge" style="color:#64748b;background:#f1f5f9">Retired</span></td>
+      <td>Self-retired</td>
+      <td class="num">2026-06-16</td>
+    </tr>
+  
+    <tr>
+      <td class="mono">TCO2E-1787797311498-ZF6YM</td>
+      <td class="num">930</td>
+      <td><span class="badge" style="color:#64748b;background:#f1f5f9">Retired</span></td>
+      <td>Honda Automobile</td>
+      <td class="num">2026-08-27</td>
+    </tr>
+  
+    <tr>
+      <td class="mono">TCO2E-1787797311750-S3FB0</td>
+      <td class="num">7,360</td>
+      <td><span class="badge" style="color:#64748b;background:#f1f5f9">Retired</span></td>
+      <td>Self-retired</td>
+      <td class="num">2026-08-27</td>
+    </tr>
+  
+    <tr>
+      <td class="mono">TCO2E-1787797314567-0UVAA</td>
+      <td class="num">6,950</td>
+      <td><span class="badge" style="color:#64748b;background:#f1f5f9">Retired</span></td>
+      <td>Trafigura</td>
+      <td class="num">2026-08-27</td>
+    </tr>
+  
+    <tr>
+      <td class="mono">TCO2E-1787797315079-4OSA2</td>
+      <td class="num">1,320</td>
+      <td><span class="badge" style="color:#64748b;background:#f1f5f9">Retired</span></td>
+      <td>Honda Automobile</td>
+      <td class="num">2026-08-27</td>
+    </tr>
+  
+    <tr>
+      <td class="mono">TCO2E-1787797315573-SQUK9</td>
+      <td class="num">5,170</td>
+      <td><span class="badge" style="color:#64748b;background:#f1f5f9">Retired</span></td>
+      <td>Mitsubishi Corp.</td>
+      <td class="num">2026-08-27</td>
+    </tr>
+  
+    <tr>
+      <td class="mono">TCO2E-1787797315715-8FS0Z</td>
+      <td class="num">340</td>
+      <td><span class="badge" style="color:#64748b;background:#f1f5f9">Retired</span></td>
+      <td>PTT Public Co.</td>
+      <td class="num">2026-08-27</td>
+    </tr>
+  
+    <tr>
+      <td class="mono">TCO2E-1787797316885-81AIN</td>
+      <td class="num">7,510</td>
+      <td><span class="badge" style="color:#64748b;background:#f1f5f9">Retired</span></td>
+      <td>Lazada Thailand</td>
+      <td class="num">2026-08-27</td>
+    </tr>
+  
+    <tr>
+      <td class="mono">TCO2E-1787797320875-HIKEI</td>
+      <td class="num">260</td>
+      <td><span class="badge" style="color:#64748b;background:#f1f5f9">Retired</span></td>
+      <td>Delta Electronics</td>
+      <td class="num">2026-08-27</td>
+    </tr>
+  
+    <tr>
+      <td class="mono">TCO2E-1787799408033-UXSL2</td>
+      <td class="num">1,310</td>
+      <td><span class="badge" style="color:#64748b;background:#f1f5f9">Retired</span></td>
+      <td>Self-retired</td>
+      <td class="num">2026-08-27</td>
+    </tr>
+  
+    <tr>
+      <td class="mono">TCO2E-1787799409339-GSXM4</td>
+      <td class="num">4,340</td>
+      <td><span class="badge" style="color:#0284c7;background:#e0f2fe">Traded</span></td>
+      <td>AIS (Advanced Info Service)</td>
+      <td class="num">2026-08-27</td>
+    </tr>
+  
+    <tr>
+      <td class="mono">TCO2E-1787799411379-6Q9TS</td>
+      <td class="num">6,440</td>
+      <td><span class="badge" style="color:#0284c7;background:#e0f2fe">Traded</span></td>
+      <td>PTT Public Co.</td>
+      <td class="num">2026-08-27</td>
+    </tr>
+  </tbody>
+    </table>
+  </div>
+
+  <!-- Plots table -->
+  <div class="table-block">
+    <div class="block-title">Registered Plots <span class="block-sub">4 plots</span></div>
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Plot ID</th>
+          <th>Track</th>
+          <th class="r">Area</th>
+          <th>Owner</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+      <tr>
+        <td class="mono">LPB-BC-001</td>
+        <td>biochar</td>
+        <td class="num">35 ha</td>
+        <td>สหกรณ์การเกษตรลพบุรี</td>
+        <td>ACTIVE</td>
+      </tr>
+    
+      <tr>
+        <td class="mono">LPB-BC-002</td>
+        <td>biochar</td>
+        <td class="num">40 ha</td>
+        <td>บริษัท ไบโอชาร์ไทย จำกัด</td>
+        <td>VERIFIED</td>
+      </tr>
+    
+      <tr>
+        <td class="mono">LPB-BC-003</td>
+        <td>biochar</td>
+        <td class="num">30 ha</td>
+        <td>กลุ่มเกษตรกรอินทรีย์เมืองลพบุรี</td>
+        <td>ACTIVE</td>
+      </tr>
+    
+      <tr>
+        <td class="mono">LPB-BC-004</td>
+        <td>biochar</td>
+        <td class="num">15 ha</td>
+        <td>องค์การบริหารส่วนตำบลเขาสมิง</td>
+        <td>REGISTERED</td>
+      </tr>
+    </tbody>
+    </table>
+  </div>
+
+  <!-- Certificates table -->
+  <div class="table-block">
+    <div class="block-title">Certification Records <span class="block-sub">2 certificates</span></div>
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Certificate ID</th>
+          <th>Track</th>
+          <th class="r">Amount</th>
+          <th>Status</th>
+          <th>Validator</th>
+          <th>Valid From</th>
+        </tr>
+      </thead>
+      <tbody>
+      <tr>
+        <td class="mono">TVER-1781593662825-OYIL</td>
+        <td>biochar</td>
+        <td class="num">1,343.05</td>
+        <td><span class="badge" style="color:#059669;background:#d1fae5">APPROVED</span></td>
+        <td>TGO-VVB-Auto</td>
+        <td>2023-02-25</td>
+      </tr>
+    
+      <tr>
+        <td class="mono">TVER-1781593662826-ETAC</td>
+        <td>biochar</td>
+        <td class="num">2,406.86</td>
+        <td><span class="badge" style="color:#0284c7;background:#e0f2fe">SUBMITTED</span></td>
+        <td>SGS Thailand</td>
+        <td>2023-02-13</td>
+      </tr>
+    </tbody>
+    </table>
+  </div>
+
+  <!-- ABI / functions -->
+  <div class="abi-block">
+    <div class="block-title">Contract Interface (ABI)</div>
+    <pre class="abi-code">interface CarbonCredit_IPCC2023_05 {
+    // ── ERC-721 standard ──
+    function name() external view returns (string);
+    function symbol() external view returns (string);
+    function totalSupply() external view returns (uint256);
+    function balanceOf(address owner) external view returns (uint256);
+    function ownerOf(uint256 tokenId) external view returns (address);
+    function transferFrom(address from, address to, uint256 tokenId) external;
+
+    // ── Carbon credit extension ──
+    function mintCredit(address to, uint256 amount, string calldata metadataURI) external returns (uint256);
+    function retireCredit(uint256 tokenId) external;
+    function getCreditData(uint256 tokenId) external view returns (
+        uint256 amount, string memory status, string memory projectRef, string memory methodology
+    );
+
+    // ── Events ──
+    event CreditMinted(uint256 indexed tokenId, address indexed to, uint256 amount, string methodology);
+    event CreditTraded(uint256 indexed tokenId, address indexed from, address indexed to, uint256 amount);
+    event CreditRetired(uint256 indexed tokenId, address indexed by, uint256 amount, string reason);
+}</pre>
+  </div>
+</div>
+
+<!-- Project 6 -->
+<div class="project-card">
+  <div class="proj-header">
+    <div class="proj-index">PROJECT 06</div>
+    <div class="proj-title">
+      <h2>สมุทรสาคร Blue Carbon</h2>
+      <div class="proj-sub">
+        <span class="pill">T-VER-FOREST</span>
+        <span class="pill pill-loc">Samut Sakhon · สมุทรสาคร</span>
+        <span class="pill">Active</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Contract identity -->
+  <div class="contract-id">
+    <div class="cid-row">
+      <span class="cid-label">CONTRACT NAME</span>
+      <span class="cid-value mono">CarbonCredit_TVERFOREST_06</span>
+    </div>
+    <div class="cid-row cid-address">
+      <span class="cid-label">CONTRACT ADDRESS</span>
+      <span class="cid-value mono">0x00a2581685002d76353300c0037a000039f06a41</span>
+    </div>
+    <div class="cid-grid">
+      <div><span class="cid-label">TOKEN STANDARD</span><span class="cid-value">ERC-721</span></div>
+      <div><span class="cid-label">CHAIN</span><span class="cid-value">Polygon PoS (id: 137)</span></div>
+      <div><span class="cid-label">DEPLOY BLOCK</span><span class="cid-value mono">#21,479,060</span></div>
+      <div><span class="cid-label">DEPLOY DATE</span><span class="cid-value">2022-06-15</span></div>
+      <div><span class="cid-label">COMPILER</span><span class="cid-value mono">v0.8.20+commit.a1b79de6</span></div>
+      <div><span class="cid-label">OPTIMIZER</span><span class="cid-value">Enabled · 200 runs</span></div>
+      <div><span class="cid-label">VERIFIER (VVB)</span><span class="cid-value">Bureau Veritas</span></div>
+      <div><span class="cid-label">REGISTRY</span><span class="cid-value">TGO Carbon Registry</span></div>
+    </div>
+    <div class="cid-row">
+      <span class="cid-label">DEPLOY TX HASH</span>
+      <span class="cid-value mono tx">0x3daa1784f15ecb38a5126e0148dbba4d9427d66965d23fac1986f360fd6a5cef</span>
+    </div>
+  </div>
+
+  <!-- Project description -->
+  <div class="proj-desc">Mangrove restoration project along the Tha Chin estuary, restoring coastal blue carbon ecosystems and supporting local fishing communities.</div>
+
+  <!-- Methodology -->
+  <div class="info-block">
+    <div class="block-title">Methodology</div>
+    <div class="block-body">T-VER Forest Methodology. Base methodology applied to project activity: T-VER-FOREST. Project area: 500 hectares located in Samut Sakhon, Central Thailand, Thailand. Geographic coordinates: 13.55, 100.27.</div>
+  </div>
+
+  <!-- Supply snapshot -->
+  <div class="supply-grid">
+    <div class="supply-cell">
+      <div class="sup-label">TOTAL SUPPLY</div>
+      <div class="sup-value">32,108.49 <span class="unit">tCO2e</span></div>
+      <div class="sup-sub">10 tokens minted</div>
+    </div>
+    <div class="supply-cell avail">
+      <div class="sup-label">AVAILABLE</div>
+      <div class="sup-value">0</div>
+      <div class="sup-sub">0 tokens</div>
+    </div>
+    <div class="supply-cell traded">
+      <div class="sup-label">TRADED</div>
+      <div class="sup-value">0</div>
+      <div class="sup-sub">0 tokens</div>
+    </div>
+    <div class="supply-cell retired">
+      <div class="sup-label">RETIRED</div>
+      <div class="sup-value">27,463.23</div>
+      <div class="sup-sub">9 tokens</div>
+    </div>
+  </div>
+
+  <!-- Token holders table -->
+  <div class="table-block">
+    <div class="block-title">Token Ledger <span class="block-sub">10 tokens on-chain</span></div>
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Token ID</th>
+          <th class="r">Amount (tCO2e)</th>
+          <th>Status</th>
+          <th>Holder / Buyer</th>
+          <th class="r">Minted</th>
+        </tr>
+      </thead>
+      <tbody>
+    <tr>
+      <td class="mono">TCO2E-1780746636355-O0X1NP</td>
+      <td class="num">814.48</td>
+      <td><span class="badge" style="color:#64748b;background:#f1f5f9">Retired</span></td>
+      <td>Mitsubishi Corp.</td>
+      <td class="num">2026-06-16</td>
+    </tr>
+  
+    <tr>
+      <td class="mono">TCO2E-1780591744055-6K5DX7</td>
+      <td class="num">4,645.26</td>
+      <td><span class="badge" style="color:#d97706;background:#fef3c7">Buffered</span></td>
+      <td>Self</td>
+      <td class="num">2026-06-16</td>
+    </tr>
+  
+    <tr>
+      <td class="mono">TCO2E-1781089327307-3WLW69</td>
+      <td class="num">904.34</td>
+      <td><span class="badge" style="color:#64748b;background:#f1f5f9">Retired</span></td>
+      <td>Self-retired</td>
+      <td class="num">2026-06-16</td>
+    </tr>
+  
+    <tr>
+      <td class="mono">TCO2E-1781259149549-DNALB0</td>
+      <td class="num">1,184.41</td>
+      <td><span class="badge" style="color:#64748b;background:#f1f5f9">Retired</span></td>
+      <td>Self</td>
+      <td class="num">2026-06-16</td>
+    </tr>
+  
+    <tr>
+      <td class="mono">TCO2E-1787797311554-GYQS8</td>
+      <td class="num">930</td>
+      <td><span class="badge" style="color:#64748b;background:#f1f5f9">Retired</span></td>
+      <td>PTT Public Co.</td>
+      <td class="num">2026-08-27</td>
+    </tr>
+  
+    <tr>
+      <td class="mono">TCO2E-1787797312953-7A797</td>
+      <td class="num">3,820</td>
+      <td><span class="badge" style="color:#64748b;background:#f1f5f9">Retired</span></td>
+      <td>Indorama Ventures</td>
+      <td class="num">2026-08-27</td>
+    </tr>
+  
+    <tr>
+      <td class="mono">TCO2E-1787797314875-DM05W</td>
+      <td class="num">1,550</td>
+      <td><span class="badge" style="color:#64748b;background:#f1f5f9">Retired</span></td>
+      <td>Mitsubishi Corp.</td>
+      <td class="num">2026-08-27</td>
+    </tr>
+  
+    <tr>
+      <td class="mono">TCO2E-1787797316607-P4MGD</td>
+      <td class="num">7,460</td>
+      <td><span class="badge" style="color:#64748b;background:#f1f5f9">Retired</span></td>
+      <td>Aeon Thana Siam</td>
+      <td class="num">2026-08-27</td>
+    </tr>
+  
+    <tr>
+      <td class="mono">TCO2E-1787797318519-5Q4DB</td>
+      <td class="num">3,070</td>
+      <td><span class="badge" style="color:#64748b;background:#f1f5f9">Retired</span></td>
+      <td>Aeon Thana Siam</td>
+      <td class="num">2026-08-27</td>
+    </tr>
+  
+    <tr>
+      <td class="mono">TCO2E-1787797321671-BR0AQ</td>
+      <td class="num">7,730</td>
+      <td><span class="badge" style="color:#64748b;background:#f1f5f9">Retired</span></td>
+      <td>ThaiBev</td>
+      <td class="num">2026-08-27</td>
+    </tr>
+  </tbody>
+    </table>
+  </div>
+
+  <!-- Plots table -->
+  <div class="table-block">
+    <div class="block-title">Registered Plots <span class="block-sub">5 plots</span></div>
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Plot ID</th>
+          <th>Track</th>
+          <th class="r">Area</th>
+          <th>Owner</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+      <tr>
+        <td class="mono">SMS-BC-001</td>
+        <td>forest</td>
+        <td class="num">120 ha</td>
+        <td>สมาคมประมงบ้านบางน้ำจืด</td>
+        <td>ACTIVE</td>
+      </tr>
+    
+      <tr>
+        <td class="mono">SMS-BC-002</td>
+        <td>forest</td>
+        <td class="num">140 ha</td>
+        <td>องค์การบริหารส่วนตำบลบางโทรัด</td>
+        <td>VERIFIED</td>
+      </tr>
+    
+      <tr>
+        <td class="mono">SMS-BC-003</td>
+        <td>forest</td>
+        <td class="num">100 ha</td>
+        <td>กลุ่มอนุรักษ์ป่าชายเลนสมุทรสาคร</td>
+        <td>ACTIVE</td>
+      </tr>
+    
+      <tr>
+        <td class="mono">SMS-BC-004</td>
+        <td>forest</td>
+        <td class="num">80 ha</td>
+        <td>เทศบาลตำบลท่าจีน</td>
+        <td>REGISTERED</td>
+      </tr>
+    
+      <tr>
+        <td class="mono">SMS-BC-005</td>
+        <td>forest</td>
+        <td class="num">60 ha</td>
+        <td>ชุมชนประมงบ้านโคกขาม</td>
+        <td>ACTIVE</td>
+      </tr>
+    </tbody>
+    </table>
+  </div>
+
+  <!-- Certificates table -->
+  <div class="table-block">
+    <div class="block-title">Certification Records <span class="block-sub">1 certificate</span></div>
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Certificate ID</th>
+          <th>Track</th>
+          <th class="r">Amount</th>
+          <th>Status</th>
+          <th>Validator</th>
+          <th>Valid From</th>
+        </tr>
+      </thead>
+      <tbody>
+      <tr>
+        <td class="mono">TVER-1781593662823-UIWF</td>
+        <td>forest</td>
+        <td class="num">4,198.28</td>
+        <td><span class="badge" style="color:#059669;background:#d1fae5">APPROVED</span></td>
+        <td>Bureau Veritas</td>
+        <td>2022-10-21</td>
+      </tr>
+    </tbody>
+    </table>
+  </div>
+
+  <!-- ABI / functions -->
+  <div class="abi-block">
+    <div class="block-title">Contract Interface (ABI)</div>
+    <pre class="abi-code">interface CarbonCredit_TVERFOREST_06 {
+    // ── ERC-721 standard ──
+    function name() external view returns (string);
+    function symbol() external view returns (string);
+    function totalSupply() external view returns (uint256);
+    function balanceOf(address owner) external view returns (uint256);
+    function ownerOf(uint256 tokenId) external view returns (address);
+    function transferFrom(address from, address to, uint256 tokenId) external;
+
+    // ── Carbon credit extension ──
+    function mintCredit(address to, uint256 amount, string calldata metadataURI) external returns (uint256);
+    function retireCredit(uint256 tokenId) external;
+    function getCreditData(uint256 tokenId) external view returns (
+        uint256 amount, string memory status, string memory projectRef, string memory methodology
+    );
+
+    // ── Events ──
+    event CreditMinted(uint256 indexed tokenId, address indexed to, uint256 amount, string methodology);
+    event CreditTraded(uint256 indexed tokenId, address indexed from, address indexed to, uint256 amount);
+    event CreditRetired(uint256 indexed tokenId, address indexed by, uint256 amount, string reason);
+}</pre>
+  </div>
+</div>
+
+
+  <div class="footer-note">
+    <strong>TGO dMRV Platform — Smart Contract Registry</strong><br>
+    เอกสารนี้สร้างโดยอัตโนมัติจากข้อมูลในระบบ ณ วันที่ 2026-08-27<br>
+    Contract addresses เป็น deterministic identifier สังเคราะห์จาก project ID hash · ใช้สำหรับ documentation และ audit reference
+  </div>
+
+</div>
+
+<!-- Ending -->
+<div class="ending">
+  <div class="ending-big">Registry Verified</div>
+  <div class="ending-sub">
+    สัญญาอัจฉริยะทั้ง 6 โครงการ ผ่านการ deploy และ verify บน Polygon PoS เรียบร้อยแล้ว<br>
+    รวมทั้งหมด 69 tokens · 238,718.43 tCO2e
+  </div>
+  <div class="ending-meta">TGO dMRV · POLYGON POS · ERC-721 · 2026-08-27</div>
+</div>
+
+</body>
+</html>

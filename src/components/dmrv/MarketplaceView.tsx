@@ -562,28 +562,51 @@ export default function MarketplaceView() {
             </div>
           </div>
 
-          {/* PDF Document Card */}
-          <a
-            href="/Tokenized-Carbon-Credit-Platform.pdf"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="group flex-shrink-0 w-full lg:w-80 rounded-xl border border-emerald-500/20 bg-white/5 backdrop-blur-sm p-4 hover:bg-white/10 transition-all duration-200 cursor-pointer"
-          >
-            <div className="flex items-start gap-3">
-              <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-lg bg-red-500/20">
-                <FileText className="h-5 w-5 text-red-400" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-white truncate">Tokenized Carbon Credit Platform</p>
-                <p className="text-xs text-emerald-300/50 mt-0.5">เอกสารอธิบายระบบ Tokenization ครบวงจร 11 บท</p>
-                <div className="flex items-center gap-1.5 mt-2 text-xs text-emerald-400 font-medium group-hover:text-emerald-300 transition-colors">
-                  <FileDown className="h-3.5 w-3.5" />
-                  ดาวน์โหลด PDF (17 หน้า)
-                  <ArrowUpRight className="h-3 w-3 ml-auto transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+          {/* PDF Document Cards */}
+          <div className="flex-shrink-0 w-full lg:w-[26rem] grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2 gap-2">
+            <a
+              href="/Smart-Contracts-Carbon-Credits.pdf"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="group rounded-xl border border-violet-500/30 bg-white/5 backdrop-blur-sm p-3.5 hover:bg-white/10 transition-all duration-200 cursor-pointer"
+            >
+              <div className="flex items-start gap-3">
+                <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-violet-500/20">
+                  <FileText className="h-5 w-5 text-violet-300" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-white truncate">Smart Contract Registry</p>
+                  <p className="text-[11px] text-violet-300/50 mt-0.5 leading-tight">สัญญาอัจฉริยะโครงการคาร์บอนเครดิตทุกรายการ</p>
+                  <div className="flex items-center gap-1.5 mt-2 text-xs text-violet-300 font-medium group-hover:text-violet-200 transition-colors">
+                    <FileDown className="h-3 w-3" />
+                    PDF · 15 หน้า
+                    <ArrowUpRight className="h-3 w-3 ml-auto transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+                  </div>
                 </div>
               </div>
-            </div>
-          </a>
+            </a>
+            <a
+              href="/Tokenized-Carbon-Credit-Platform.pdf"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="group rounded-xl border border-emerald-500/20 bg-white/5 backdrop-blur-sm p-3.5 hover:bg-white/10 transition-all duration-200 cursor-pointer"
+            >
+              <div className="flex items-start gap-3">
+                <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-red-500/20">
+                  <FileText className="h-5 w-5 text-red-400" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-white truncate">Tokenization Platform</p>
+                  <p className="text-[11px] text-emerald-300/50 mt-0.5 leading-tight">คู่มือระบบ Tokenization ครบวงจร 11 บท</p>
+                  <div className="flex items-center gap-1.5 mt-2 text-xs text-emerald-400 font-medium group-hover:text-emerald-300 transition-colors">
+                    <FileDown className="h-3 w-3" />
+                    PDF · 17 หน้า
+                    <ArrowUpRight className="h-3 w-3 ml-auto transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+                  </div>
+                </div>
+              </div>
+            </a>
+          </div>
         </div>
       </div>
 
