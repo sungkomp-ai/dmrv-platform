@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   ShoppingCart, Plus, ArrowRightLeft, Ban, Briefcase, Loader2,
   FileDown, ExternalLink, CircleDot, TrendingUp, ShieldCheck,
   Layers, FileText, ArrowUpRight, Coins, RefreshCw,
+  Zap, Play, Pause, Activity, Sparkles, Repeat, Flame,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -17,6 +18,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Progress } from '@/components/ui/progress';
+import { Switch } from '@/components/ui/switch';
+import { Slider } from '@/components/ui/slider';
 import { useToast } from '@/hooks/use-toast';
 
 type CreditStatus = 'Available' | 'Traded' | 'Retired';
@@ -98,6 +101,44 @@ function truncateTokenId(id: string) {
   return `${id.slice(0, 8)}…${id.slice(-4)}`;
 }
 
+// ── Simulation pools ──────────────────────────────────────
+const SIM_BUYERS = [
+  'PTT Public Co.', 'SCG Chemicals', 'Bangkok Bank', 'AIS (Advanced Info Service)',
+  'CP All', 'ThaiBev', 'PTT Exploration', 'Mitsubishi Corp.', 'Trafigura',
+  'Banpu Plc.', 'Delta Electronics', 'Kasikornbank', 'Bangchak Group',
+  'Indorama Ventures', 'Siam Cement Group', 'Thai Airways', 'Aeon Thana Siam',
+  'Toyota Motor Thailand', 'Honda Automobile', 'Lazada Thailand',
+];
+
+const SIM_TRACKS = ['biochar', 'awd', 'biogas', 'solar', 'forest'];
+
+interface SimLogEntry {
+  id: string;
+  ts: number;
+  kind: 'mint' | 'trade' | 'retire' | 'info';
+  message: string;
+  tokenId?: string;
+  amount?: number;
+  detail?: string;
+}
+
+function pick<T>(arr: T[]): T | undefined {
+  if (arr.length === 0) return undefined;
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
+function randAmount() {
+  // 100 – 8000 tCO2e, rounded to nearest 10
+  return Math.round((100 + Math.random() * 7900) / 10) * 10;
+}
+
+const simLogStyles: Record<SimLogEntry['kind'], { dot: string; text: string; icon: React.ElementType }> = {
+  mint: { dot: 'bg-emerald-500', text: 'text-emerald-700', icon: Plus },
+  trade: { dot: 'bg-sky-500', text: 'text-sky-700', icon: ArrowRightLeft },
+  retire: { dot: 'bg-slate-400', text: 'text-slate-600', icon: Ban },
+  info: { dot: 'bg-amber-400', text: 'text-amber-700', icon: Activity },
+};
+
 // ── Stat Card ──────────────────────────────────────────────
 function StatCard({
   icon: Icon, label, value, color, sub,
@@ -144,6 +185,28 @@ export default function MarketplaceView() {
   // Retire form
   const [retireId, setRetireId] = useState('');
   const [retiring, setRetiring] = useState(false);
+
+  // Simulation
+  const [simLog, setSimLog] = useState<SimLogEntry[]>([]);
+  const [autoSim, setAutoSim] = useState(false);
+  const [simSpeed, setSimSpeed] = useState<number[]>([4]); // seconds between ticks
+  const [simBusy, setSimBusy] = useState(false);
+  const [simCount, setSimCount] = useState({ mint: 0, trade: 0, retire: 0 });
+  const autoSimRef = useRef(false);
+  const simLogRef = useRef<SimLogEntry[]>([]);
+
+  const addSimLog = useCallback((entry: Omit<SimLogEntry, 'id' | 'ts'>) => {
+    const full: SimLogEntry = { ...entry, id: `sim-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, ts: Date.now() };
+    setSimLog((prev) => {
+      const next = [full, ...prev].slice(0, 30);
+      simLogRef.current = next;
+      return next;
+    });
+  }, []);
+
+  const incCount = useCallback((k: keyof typeof simCount) => {
+    setSimCount((prev) => ({ ...prev, [k]: prev[k] + 1 }));
+  }, []);
 
   const fetchData = useCallback(async () => {
     try {
@@ -263,6 +326,178 @@ export default function MarketplaceView() {
       setRetiring(false);
     }
   };
+
+  // ── Simulation handlers ────────────────────────────────
+  const simMint = useCallback(async (): Promise<{ ok: boolean; tokenId?: string; amount?: number }> => {
+    const project = pick(projects);
+    if (!project) {
+      addSimLog({ kind: 'info', message: 'No project available to mint from' });
+      return { ok: false };
+    }
+    const amount = randAmount();
+    const track = pick(SIM_TRACKS) || 'biochar';
+    try {
+      const res = await fetch('/api/dmrv/marketplace', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'mint', projectId: project.id, amount, trackType: track }),
+      });
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.error || 'mint failed');
+      }
+      const data = await res.json();
+      const tokenId: string = data.credit?.tokenId || `TCO2E-sim`;
+      addSimLog({ kind: 'mint', message: `Minted ${amount.toLocaleString()} tCO2e from "${project.name}"`, tokenId, amount, detail: `track: ${track}` });
+      incCount('mint');
+      return { ok: true, tokenId, amount };
+    } catch (err) {
+      addSimLog({ kind: 'info', message: `Mint failed: ${err instanceof Error ? err.message : 'unknown'}` });
+      return { ok: false };
+    }
+  }, [projects, addSimLog, incCount]);
+
+  const simTrade = useCallback(async (): Promise<{ ok: boolean; tokenId?: string; amount?: number }> => {
+    const credit = pick(available);
+    if (!credit) {
+      addSimLog({ kind: 'info', message: 'No available credits to trade — try minting first' });
+      return { ok: false };
+    }
+    const buyer = pick(SIM_BUYERS) || 'Anonymous Buyer';
+    try {
+      const res = await fetch('/api/dmrv/marketplace', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'trade', projectId: credit.methodology, creditId: credit.id, buyer }),
+      });
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.error || 'trade failed');
+      }
+      addSimLog({ kind: 'trade', message: `Trade: ${truncateTokenId(credit.tokenId)} → "${buyer}"`, tokenId: credit.tokenId, amount: credit.amount, detail: `buyer: ${buyer}` });
+      incCount('trade');
+      return { ok: true, tokenId: credit.tokenId, amount: credit.amount };
+    } catch (err) {
+      addSimLog({ kind: 'info', message: `Trade failed: ${err instanceof Error ? err.message : 'unknown'}` });
+      return { ok: false };
+    }
+  }, [available, addSimLog, incCount]);
+
+  const simRetire = useCallback(async (): Promise<{ ok: boolean; tokenId?: string; amount?: number }> => {
+    const pool = [...available, ...traded];
+    const credit = pick(pool);
+    if (!credit) {
+      addSimLog({ kind: 'info', message: 'No credits available to retire — try minting first' });
+      return { ok: false };
+    }
+    const projectId = 'methodology' in credit ? (credit as MarketplaceCredit).methodology : (credit as TradedCredit).project;
+    try {
+      const res = await fetch('/api/dmrv/marketplace', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'retire', projectId: projectId || 'unknown', creditId: credit.id }),
+      });
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.error || 'retire failed');
+      }
+      addSimLog({ kind: 'retire', message: `Retired ${truncateTokenId(credit.tokenId)} (${credit.amount.toLocaleString()} tCO2e) permanently`, tokenId: credit.tokenId, amount: credit.amount, detail: 'permanent offset' });
+      incCount('retire');
+      return { ok: true, tokenId: credit.tokenId, amount: credit.amount };
+    } catch (err) {
+      addSimLog({ kind: 'info', message: `Retire failed: ${err instanceof Error ? err.message : 'unknown'}` });
+      return { ok: false };
+    }
+  }, [available, traded, addSimLog, incCount]);
+
+  const simFullCycle = useCallback(async () => {
+    setSimBusy(true);
+    addSimLog({ kind: 'info', message: 'Starting full lifecycle simulation (Mint → Trade → Retire)…' });
+    await fetchData();
+    const m = await simMint();
+    if (m.ok) {
+      await fetchData();
+      await new Promise((r) => setTimeout(r, 400));
+      const t = await simTrade();
+      if (t.ok) {
+        await fetchData();
+        await new Promise((r) => setTimeout(r, 400));
+        await simRetire();
+        await fetchData();
+        addSimLog({ kind: 'info', message: 'Full lifecycle complete: credit minted, traded, and retired.' });
+      } else {
+        addSimLog({ kind: 'info', message: 'Full lifecycle aborted at trade step.' });
+      }
+    } else {
+      addSimLog({ kind: 'info', message: 'Full lifecycle aborted at mint step.' });
+    }
+    setSimBusy(false);
+  }, [fetchData, simMint, simTrade, simRetire, addSimLog]);
+
+  const handleSimTradeClick = useCallback(async () => {
+    setSimBusy(true);
+    await simTrade();
+    await fetchData();
+    setSimBusy(false);
+  }, [simTrade, fetchData]);
+
+  const handleSimRetireClick = useCallback(async () => {
+    setSimBusy(true);
+    await simRetire();
+    await fetchData();
+    setSimBusy(false);
+  }, [simRetire, fetchData]);
+
+  const handleSimMintClick = useCallback(async () => {
+    setSimBusy(true);
+    await simMint();
+    await fetchData();
+    setSimBusy(false);
+  }, [simMint, fetchData]);
+
+  const clearSimLog = useCallback(() => {
+    setSimLog([]);
+    simLogRef.current = [];
+  }, []);
+
+  // Auto-simulation loop
+  useEffect(() => {
+    autoSimRef.current = autoSim;
+    if (!autoSim) return;
+    let cancelled = false;
+
+    const tick = async () => {
+      if (cancelled || !autoSimRef.current) return;
+      // Weighted random action: ensure available pool keeps flowing
+      const hasAvailable = (await fetch('/api/dmrv/marketplace').then((r) => r.json()).catch(() => null));
+      const availCount: number = hasAvailable?.summary?.availableCount ?? 0;
+      const tradedCount: number = hasAvailable?.summary?.tradedCount ?? 0;
+      // decide action based on pool sizes
+      let action: 'mint' | 'trade' | 'retire';
+      if (availCount === 0) action = 'mint';
+      else if (tradedCount > 2 && Math.random() < 0.3) action = 'retire';
+      else if (Math.random() < 0.55) action = 'trade';
+      else action = Math.random() < 0.5 ? 'mint' : 'retire';
+
+      if (action === 'mint') await simMint();
+      else if (action === 'trade') await simTrade();
+      else await simRetire();
+      await fetchData();
+    };
+
+    const run = async () => {
+      while (!cancelled && autoSimRef.current) {
+        await tick();
+        const delayMs = (simSpeed[0] ?? 4) * 1000;
+        await new Promise((r) => setTimeout(r, delayMs));
+      }
+    };
+    run();
+    return () => {
+      cancelled = true;
+      autoSimRef.current = false;
+    };
+  }, [autoSim, simSpeed, simMint, simTrade, simRetire, fetchData]);
 
   const allCredits = [
     ...available.map((c) => ({ ...c, status: 'Available' as CreditStatus, certNumber: c.tokenId, batchId: c.tokenId, projectId: c.project, type: c.methodology, price: (c.metadata?.price as number) || 0, createdAt: '' })),
@@ -401,6 +636,12 @@ export default function MarketplaceView() {
             <ArrowRightLeft className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">Trade / Retire</span>
             <span className="sm:hidden">Trade</span>
+          </TabsTrigger>
+          <TabsTrigger value="simulation" className="gap-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm">
+            <Zap className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Simulation</span>
+            <span className="sm:hidden">Sim</span>
+            {autoSim && <span className="ml-0.5 inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />}
           </TabsTrigger>
           <TabsTrigger value="portfolio" className="gap-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm">
             <Briefcase className="h-3.5 w-3.5" />
@@ -610,6 +851,169 @@ export default function MarketplaceView() {
                 <p className="text-[11px] text-muted-foreground leading-relaxed">
                   ⚠️ เครดิตที่เกษียณแล้วจะถูกถอนออกจากระบบอย่างถาวร และไม่สามารถนำกลับมาซื้อขายได้อีก
                 </p>
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+
+        {/* ── Tab: Simulation ─────────────────────────── */}
+        <TabsContent value="simulation" className="mt-4">
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+            {/* Control Panel */}
+            <Card className="lg:col-span-2 overflow-hidden">
+              <CardHeader className="bg-gradient-to-br from-violet-50 to-fuchsia-50/40 border-b">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <div className="flex h-7 w-7 items-center justify-center rounded-md bg-violet-100">
+                    <Sparkles className="h-4 w-4 text-violet-700" />
+                  </div>
+                  Simulation Control
+                </CardTitle>
+                <CardDescription>จำลองการทำธุรกรรม Trade / Retire อัตโนมัติ เพื่อทดสอบระบบ Marketplace</CardDescription>
+              </CardHeader>
+              <CardContent className="p-6 space-y-5">
+                {/* Quick actions */}
+                <div className="space-y-2">
+                  <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Quick Simulate</p>
+                  <div className="grid grid-cols-1 gap-2">
+                    <Button onClick={handleSimMintClick} disabled={simBusy || autoSim} variant="outline" className="justify-start gap-2 h-10 border-emerald-200 bg-emerald-50/40 hover:bg-emerald-50">
+                      <Plus className="h-4 w-4 text-emerald-600" />
+                      <span className="text-sm">Simulate Mint</span>
+                      <span className="ml-auto text-[11px] text-muted-foreground">random project + amount</span>
+                    </Button>
+                    <Button onClick={handleSimTradeClick} disabled={simBusy || autoSim} variant="outline" className="justify-start gap-2 h-10 border-sky-200 bg-sky-50/40 hover:bg-sky-50">
+                      <ArrowRightLeft className="h-4 w-4 text-sky-600" />
+                      <span className="text-sm">Simulate Trade</span>
+                      <span className="ml-auto text-[11px] text-muted-foreground">random credit → buyer</span>
+                    </Button>
+                    <Button onClick={handleSimRetireClick} disabled={simBusy || autoSim} variant="outline" className="justify-start gap-2 h-10 border-slate-200 bg-slate-50/60 hover:bg-slate-100">
+                      <Ban className="h-4 w-4 text-slate-600" />
+                      <span className="text-sm">Simulate Retire</span>
+                      <span className="ml-auto text-[11px] text-muted-foreground">permanent offset</span>
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Full cycle */}
+                <div className="rounded-lg border border-violet-200 bg-violet-50/30 p-3">
+                  <Button onClick={simFullCycle} disabled={simBusy || autoSim} className="w-full gap-2 bg-violet-600 hover:bg-violet-700 shadow-sm">
+                    {simBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Repeat className="h-4 w-4" />}
+                    {simBusy ? 'Running…' : 'Simulate Full Lifecycle'}
+                  </Button>
+                  <p className="text-[11px] text-violet-600/70 mt-2 text-center">Mint → Trade → Retire ในคลิกเดียว</p>
+                </div>
+
+                {/* Auto simulation */}
+                <div className="space-y-3 rounded-lg border border-slate-200 bg-slate-50/50 p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className={`flex h-8 w-8 items-center justify-center rounded-md ${autoSim ? 'bg-emerald-100' : 'bg-slate-200'}`}>
+                        {autoSim ? <Play className="h-4 w-4 text-emerald-600" /> : <Pause className="h-4 w-4 text-slate-500" />}
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium">Auto-Simulation</p>
+                        <p className="text-[11px] text-muted-foreground">{autoSim ? 'Running…' : 'Paused'}</p>
+                      </div>
+                    </div>
+                    <Switch checked={autoSim} onCheckedChange={setAutoSim} disabled={simBusy} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-muted-foreground">Interval</span>
+                      <span className="font-mono font-medium">{simSpeed[0]}s / tick</span>
+                    </div>
+                    <Slider value={simSpeed} onValueChange={setSimSpeed} min={2} max={15} step={1} disabled={!autoSim && simBusy} />
+                  </div>
+                  <p className="text-[11px] text-muted-foreground leading-relaxed">
+                    ระบบจะสุ่ม Mint / Trade / Retire อัตโนมัติตามช่วงเวลาที่ตั้ง โดยพิจารณาจำนวนเครดิตในระบบเพื่อรักษาสมดุล
+                  </p>
+                </div>
+
+                {/* Stats */}
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="rounded-lg bg-emerald-50/60 border border-emerald-100 p-2.5 text-center">
+                    <p className="text-lg font-bold text-emerald-700 tabular-nums">{simCount.mint}</p>
+                    <p className="text-[10px] text-emerald-600/70 font-medium">Mints</p>
+                  </div>
+                  <div className="rounded-lg bg-sky-50/60 border border-sky-100 p-2.5 text-center">
+                    <p className="text-lg font-bold text-sky-700 tabular-nums">{simCount.trade}</p>
+                    <p className="text-[10px] text-sky-600/70 font-medium">Trades</p>
+                  </div>
+                  <div className="rounded-lg bg-slate-100 border border-slate-200 p-2.5 text-center">
+                    <p className="text-lg font-bold text-slate-700 tabular-nums">{simCount.retire}</p>
+                    <p className="text-[10px] text-slate-500 font-medium">Retires</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Activity Feed */}
+            <Card className="lg:col-span-3 overflow-hidden">
+              <CardHeader className="bg-slate-50/80 border-b px-6 py-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <Activity className="h-4 w-4 text-violet-600" />
+                      Simulation Activity Log
+                    </CardTitle>
+                    <CardDescription className="mt-1">บันทึกธุรกรรมจำลองแบบเรียลไทม์ (ล่าสุด 30 รายการ)</CardDescription>
+                  </div>
+                  <Button variant="ghost" size="sm" onClick={clearSimLog} className="gap-1.5 text-xs">
+                    <RefreshCw className="h-3 w-3" />
+                    Clear
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="p-0">
+                <ScrollArea className="h-[460px]">
+                  {simLog.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center h-[460px] text-center px-6">
+                      <div className="flex h-14 w-14 items-center justify-center rounded-full bg-slate-100 mb-3">
+                        <Flame className="h-6 w-6 text-slate-300" />
+                      </div>
+                      <p className="text-sm font-medium text-muted-foreground">ยังไม่มีธุรกรรมจำลอง</p>
+                      <p className="text-xs text-muted-foreground mt-1 max-w-xs">
+                        กดปุ่ม "Simulate Trade" หรือเปิด "Auto-Simulation" เพื่อเริ่มจำลองการทำงานของ Marketplace
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-slate-100">
+                      {simLog.map((entry) => {
+                        const style = simLogStyles[entry.kind];
+                        const Icon = style.icon;
+                        const time = new Date(entry.ts).toLocaleTimeString('en-GB', { hour12: false });
+                        return (
+                          <div key={entry.id} className="flex items-start gap-3 px-5 py-3 hover:bg-slate-50/60 transition-colors">
+                            <div className={`mt-0.5 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-slate-50`}>
+                              <Icon className={`h-3.5 w-3.5 ${style.text}`} />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <Badge variant="outline" className={`text-[10px] h-5 capitalize ${style.text} border-current/20`}>
+                                  {entry.kind}
+                                </Badge>
+                                {entry.tokenId && (
+                                  <span className="font-mono text-[11px] text-muted-foreground bg-slate-100 px-1.5 py-0.5 rounded">
+                                    {truncateTokenId(entry.tokenId)}
+                                  </span>
+                                )}
+                                {entry.amount !== undefined && (
+                                  <span className="font-mono text-[11px] font-semibold text-gray-700 tabular-nums">
+                                    {entry.amount.toLocaleString()} tCO2e
+                                  </span>
+                                )}
+                                <span className="ml-auto font-mono text-[10px] text-muted-foreground">{time}</span>
+                              </div>
+                              <p className="text-sm text-gray-700 mt-1 leading-snug">{entry.message}</p>
+                              {entry.detail && (
+                                <p className="text-[11px] text-muted-foreground mt-0.5">{entry.detail}</p>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </ScrollArea>
               </CardContent>
             </Card>
           </div>

@@ -1,0 +1,686 @@
+     1→     1→'use client';
+     2→     2→
+     3→     3→import React, { useState, useEffect, useCallback, useMemo } from 'react';
+     4→     4→import {
+     5→     5→  ShoppingCart, Plus, ArrowRightLeft, Ban, Briefcase, Loader2,
+     6→     6→  FileDown, ExternalLink, CircleDot, TrendingUp, ShieldCheck,
+     7→     7→  Layers, FileText, ArrowUpRight, Coins, RefreshCw,
+     8→     8→} from 'lucide-react';
+     9→     9→import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+    10→    10→import { Button } from '@/components/ui/button';
+    11→    11→import { Badge } from '@/components/ui/badge';
+    12→    12→import { Input } from '@/components/ui/input';
+    13→    13→import { Label } from '@/components/ui/label';
+    14→    14→import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+    15→    15→import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+    16→    16→import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+    17→    17→import { ScrollArea } from '@/components/ui/scroll-area';
+    18→    18→import { Skeleton } from '@/components/ui/skeleton';
+    19→    19→import { Progress } from '@/components/ui/progress';
+    20→    20→import { useToast } from '@/hooks/use-toast';
+    21→    21→
+    22→    22→type CreditStatus = 'Available' | 'Traded' | 'Retired';
+    23→    23→
+    24→    24→interface MarketplaceCredit {
+    25→    25→  id: string;
+    26→    26→  tokenId: string;
+    27→    27→  amount: number;
+    28→    28→  project: string;
+    29→    29→  methodology: string;
+    30→    30→  location: string;
+    31→    31→  metadata: Record<string, unknown>;
+    32→    32→}
+    33→    33→
+    34→    34→interface TradedCredit {
+    35→    35→  id: string;
+    36→    36→  tokenId: string;
+    37→    37→  amount: number;
+    38→    38→  buyer: string | null;
+    39→    39→  project: string;
+    40→    40→  tradedAt: string;
+    41→    41→}
+    42→    42→
+    43→    43→interface RetiredCredit {
+    44→    44→  id: string;
+    45→    45→  tokenId: string;
+    46→    46→  amount: number;
+    47→    47→  buyer: string | null;
+    48→    48→  project: string;
+    49→    49→  retiredAt: string;
+    50→    50→}
+    51→    51→
+    52→    52→interface MarketplaceSummary {
+    53→    53→  totalCredits: number;
+    54→    54→  availableVolume: number;
+    55→    55→  tradedVolume: number;
+    56→    56→  retiredVolume: number;
+    57→    57→  availableCount: number;
+    58→    58→  tradedCount: number;
+    59→    59→  retiredCount: number;
+    60→    60→}
+    61→    61→
+    62→    62→interface Project {
+    63→    63→  id: string;
+    64→    64→  name: string;
+    65→    65→}
+    66→    66→
+    67→    67→const statusConfig: Record<CreditStatus, { className: string; dotClass: string; label: string }> = {
+    68→    68→  Available: {
+    69→    69→    className: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    70→    70→    dotClass: 'bg-emerald-500',
+    71→    71→    label: 'Available',
+    72→    72→  },
+    73→    73→  Traded: {
+    74→    74→    className: 'bg-sky-50 text-sky-700 border-sky-200',
+    75→    75→    dotClass: 'bg-sky-500',
+    76→    76→    label: 'Traded',
+    77→    77→  },
+    78→    78→  Retired: {
+    79→    79→    className: 'bg-slate-50 text-slate-500 border-slate-200',
+    80→    80→    dotClass: 'bg-slate-400',
+    81→    81→    label: 'Retired',
+    82→    82→  },
+    83→    83→};
+    84→    84→
+    85→    85→const methodologyColors: Record<string, string> = {
+    86→    86→  'IPCC-2023': 'bg-violet-100 text-violet-700',
+    87→    87→  'T-VER-FOREST': 'bg-green-100 text-green-700',
+    88→    88→  'T-VER-AG-001': 'bg-amber-100 text-amber-700',
+    89→    89→  'T-VER-P-CC-001': 'bg-orange-100 text-orange-700',
+    90→    90→};
+    91→    91→
+    92→    92→function getMethodologyClass(m: string) {
+    93→    93→  return methodologyColors[m] || 'bg-gray-100 text-gray-600';
+    94→    94→}
+    95→    95→
+    96→    96→function truncateTokenId(id: string) {
+    97→    97→  if (id.length <= 12) return id;
+    98→    98→  return `${id.slice(0, 8)}…${id.slice(-4)}`;
+    99→    99→}
+   100→   100→
+   101→   101→// ── Stat Card ──────────────────────────────────────────────
+   102→   102→function StatCard({
+   103→   103→  icon: Icon, label, value, color, sub,
+   104→   104→}: {
+   105→   105→  icon: React.ElementType; label: string; value: string; color: string; sub?: string;
+   106→   106→}) {
+   107→   107→  return (
+   108→   108→    <div className={`relative overflow-hidden rounded-xl border bg-white p-5 transition-shadow hover:shadow-md`}>
+   109→   109→      <div className={`absolute left-0 top-0 bottom-0 w-1 rounded-l-xl ${color}`} />
+   110→   110→      <div className="flex items-start justify-between">
+   111→   111→        <div className="space-y-1 pl-2">
+   112→   112→          <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">{label}</p>
+   113→   113→          <p className="text-2xl font-bold tracking-tight text-gray-900">{value}</p>
+   114→   114→          {sub && <p className="text-xs text-muted-foreground">{sub}</p>}
+   115→   115→        </div>
+   116→   116→        <div className={`rounded-lg p-2.5 ${color.replace('bg-', 'bg-').replace('-600', '-50')}`}>
+   117→   117→          <Icon className={`h-5 w-5 ${color.replace('bg-', 'text-')}`} />
+   118→   118→        </div>
+   119→   119→      </div>
+   120→   120→    </div>
+   121→   121→  );
+   122→   122→}
+   123→   123→
+   124→   124→export default function MarketplaceView() {
+   125→   125→  const { toast } = useToast();
+   126→   126→  const [loading, setLoading] = useState(true);
+   127→   127→  const [available, setAvailable] = useState<MarketplaceCredit[]>([]);
+   128→   128→  const [traded, setTraded] = useState<TradedCredit[]>([]);
+   129→   129→  const [retired, setRetired] = useState<RetiredCredit[]>([]);
+   130→   130→  const [summary, setSummary] = useState<MarketplaceSummary | null>(null);
+   131→   131→  const [projects, setProjects] = useState<Project[]>([]);
+   132→   132→
+   133→   133→  // Mint form
+   134→   134→  const [mintProjectId, setMintProjectId] = useState('');
+   135→   135→  const [mintTrackType, setMintTrackType] = useState('biochar');
+   136→   136→  const [mintAmount, setMintAmount] = useState('');
+   137→   137→  const [minting, setMinting] = useState(false);
+   138→   138→
+   139→   139→  // Trade form
+   140→   140→  const [tradeId, setTradeId] = useState('');
+   141→   141→  const [tradeBuyer, setTradeBuyer] = useState('');
+   142→   142→  const [trading, setTrading] = useState(false);
+   143→   143→
+   144→   144→  // Retire form
+   145→   145→  const [retireId, setRetireId] = useState('');
+   146→   146→  const [retiring, setRetiring] = useState(false);
+   147→   147→
+   148→   148→  const fetchData = useCallback(async () => {
+   149→   149→    try {
+   150→   150→      const [marketRes, projectsRes] = await Promise.all([
+   151→   151→        fetch('/api/dmrv/marketplace'),
+   152→   152→        fetch('/api/dmrv'),
+   153→   153→      ]);
+   154→   154→      if (!marketRes.ok || !projectsRes.ok) throw new Error('Failed to fetch data');
+   155→   155→
+   156→   156→      const marketData = await marketRes.json();
+   157→   157→      const projectsData = await projectsRes.json();
+   158→   158→
+   159→   159→      setAvailable(marketData.marketplace?.available || []);
+   160→   160→      setTraded(marketData.marketplace?.traded || []);
+   161→   161→      setRetired(marketData.marketplace?.retired || []);
+   162→   162→      setSummary(marketData.summary || null);
+   163→   163→      setProjects((projectsData.projects || []).map((p: { id: string; name: string }) => ({ id: p.id, name: p.name })));
+   164→   164→    } catch (err) {
+   165→   165→      toast({ title: 'Error', description: 'Failed to load marketplace data', variant: 'destructive' });
+   166→   166→    } finally {
+   167→   167→      setLoading(false);
+   168→   168→    }
+   169→   169→  }, [toast]);
+   170→   170→
+   171→   171→  useEffect(() => {
+   172→   172→    fetchData();
+   173→   173→  }, [fetchData]);
+   174→   174→
+   175→   175→  const handleMint = async () => {
+   176→   176→    const amount = parseFloat(mintAmount);
+   177→   177→    if (!mintProjectId || isNaN(amount) || amount <= 0) {
+   178→   178→      toast({ title: 'Validation Error', description: 'Project and valid amount are required', variant: 'destructive' });
+   179→   179→      return;
+   180→   180→    }
+   181→   181→    try {
+   182→   182→      setMinting(true);
+   183→   183→      const res = await fetch('/api/dmrv/marketplace', {
+   184→   184→        method: 'POST',
+   185→   185→        headers: { 'Content-Type': 'application/json' },
+   186→   186→        body: JSON.stringify({ action: 'mint', projectId: mintProjectId, amount, trackType: mintTrackType }),
+   187→   187→      });
+   188→   188→      if (!res.ok) {
+   189→   189→        const errData = await res.json();
+   190→   190→        throw new Error(errData.error || 'Mint failed');
+   191→   191→      }
+   192→   192→      toast({ title: 'Credits Minted', description: `${amount.toLocaleString()} tCO2e minted successfully` });
+   193→   193→      setMintAmount('');
+   194→   194→      setMintProjectId('');
+   195→   195→      await fetchData();
+   196→   196→    } catch (err) {
+   197→   197→      toast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to mint credits', variant: 'destructive' });
+   198→   198→    } finally {
+   199→   199→      setMinting(false);
+   200→   200→    }
+   201→   201→  };
+   202→   202→
+   203→   203→  const handleTrade = async () => {
+   204→   204→    if (!tradeId) {
+   205→   205→      toast({ title: 'Validation Error', description: 'Select a credit to trade', variant: 'destructive' });
+   206→   206→      return;
+   207→   207→    }
+   208→   208→    if (!tradeBuyer.trim()) {
+   209→   209→      toast({ title: 'Validation Error', description: 'Buyer name is required', variant: 'destructive' });
+   210→   210→      return;
+   211→   211→    }
+   212→   212→    const credit = available.find((c) => c.id === tradeId);
+   213→   213→    if (!credit) {
+   214→   214→      toast({ title: 'Cannot Trade', description: 'Only available credits can be traded', variant: 'destructive' });
+   215→   215→      return;
+   216→   216→    }
+   217→   217→    try {
+   218→   218→      setTrading(true);
+   219→   219→      const res = await fetch('/api/dmrv/marketplace', {
+   220→   220→        method: 'POST',
+   221→   221→        headers: { 'Content-Type': 'application/json' },
+   222→   222→        body: JSON.stringify({ action: 'trade', projectId: credit.methodology, creditId: tradeId, buyer: tradeBuyer.trim() }),
+   223→   223→      });
+   224→   224→      if (!res.ok) {
+   225→   225→        const errData = await res.json();
+   226→   226→        throw new Error(errData.error || 'Trade failed');
+   227→   227→      }
+   228→   228→      toast({ title: 'Credit Traded', description: `${credit.tokenId} has been traded to ${tradeBuyer.trim()}` });
+   229→   229→      setTradeId('');
+   230→   230→      setTradeBuyer('');
+   231→   231→      await fetchData();
+   232→   232→    } catch (err) {
+   233→   233→      toast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to trade credit', variant: 'destructive' });
+   234→   234→    } finally {
+   235→   235→      setTrading(false);
+   236→   236→    }
+   237→   237→  };
+   238→   238→
+   239→   239→  const handleRetire = async () => {
+   240→   240→    if (!retireId) {
+   241→   241→      toast({ title: 'Validation Error', description: 'Select a credit to retire', variant: 'destructive' });
+   242→   242→      return;
+   243→   243→    }
+   244→   244→    try {
+   245→   245→      setRetiring(true);
+   246→   246→      const credit = [...available, ...traded].find((c) => c.id === retireId);
+   247→   247→      const projectId = credit ? ('methodology' in credit ? (credit as MarketplaceCredit).methodology : (credit as TradedCredit).project) : '';
+   248→   248→      const res = await fetch('/api/dmrv/marketplace', {
+   249→   249→        method: 'POST',
+   250→   250→        headers: { 'Content-Type': 'application/json' },
+   251→   251→        body: JSON.stringify({ action: 'retire', projectId: projectId || 'unknown', creditId: retireId }),
+   252→   252→      });
+   253→   253→      if (!res.ok) {
+   254→   254→        const errData = await res.json();
+   255→   255→        throw new Error(errData.error || 'Retire failed');
+   256→   256→      }
+   257→   257→      toast({ title: 'Credit Retired', description: `Credit has been permanently retired` });
+   258→   258→      setRetireId('');
+   259→   259→      await fetchData();
+   260→   260→    } catch (err) {
+   261→   261→      toast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to retire credit', variant: 'destructive' });
+   262→   262→    } finally {
+   263→   263→      setRetiring(false);
+   264→   264→    }
+   265→   265→  };
+   266→   266→
+   267→   267→  const allCredits = [
+   268→   268→    ...available.map((c) => ({ ...c, status: 'Available' as CreditStatus, certNumber: c.tokenId, batchId: c.tokenId, projectId: c.project, type: c.methodology, price: (c.metadata?.price as number) || 0, createdAt: '' })),
+   269→   269→    ...traded.map((c) => ({ ...c, status: 'Traded' as CreditStatus, certNumber: c.tokenId, batchId: c.tokenId, projectId: c.project, type: '', price: 0, createdAt: c.tradedAt })),
+   270→   270→    ...retired.map((c) => ({ ...c, status: 'Retired' as CreditStatus, certNumber: c.tokenId, batchId: c.tokenId, projectId: c.project, type: '', price: 0, createdAt: c.retiredAt })),
+   271→   271→  ];
+   272→   272→
+   273→   273→  const availablePct = useMemo(() => {
+   274→   274→    if (!summary || summary.totalCredits === 0) return 0;
+   275→   275→    return Math.round((summary.availableVolume / summary.totalCredits) * 100);
+   276→   276→  }, [summary]);
+   277→   277→
+   278→   278→  const tradedPct = useMemo(() => {
+   279→   279→    if (!summary || summary.totalCredits === 0) return 0;
+   280→   280→    return Math.round((summary.tradedVolume / summary.totalCredits) * 100);
+   281→   281→  }, [summary]);
+   282→   282→
+   283→   283→  const retiredPct = useMemo(() => {
+   284→   284→    if (!summary || summary.totalCredits === 0) return 0;
+   285→   285→    return Math.round((summary.retiredVolume / summary.totalCredits) * 100);
+   286→   286→  }, [summary]);
+   287→   287→
+   288→   288→  if (loading) {
+   289→   289→    return (
+   290→   290→      <div className="space-y-6">
+   291→   291→        <Skeleton className="h-40 w-full rounded-2xl" />
+   292→   292→        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+   293→   293→          <Skeleton className="h-28 w-full rounded-xl" />
+   294→   294→          <Skeleton className="h-28 w-full rounded-xl" />
+   295→   295→          <Skeleton className="h-28 w-full rounded-xl" />
+   296→   296→          <Skeleton className="h-28 w-full rounded-xl" />
+   297→   297→        </div>
+   298→   298→        <Skeleton className="h-80 w-full rounded-xl" />
+   299→   299→      </div>
+   300→   300→    );
+   301→   301→  }
+   302→   302→
+   303→   303→  return (
+   304→   304→    <div className="space-y-6">
+   305→   305→      {/* ── Hero Banner ──────────────────────────────── */}
+   306→   306→      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-900 via-emerald-950 to-slate-900 p-6 sm:p-8">
+   307→   307→        {/* Decorative blobs */}
+   308→   308→        <div className="pointer-events-none absolute -right-20 -top-20 h-72 w-72 rounded-full bg-emerald-500/10 blur-3xl" />
+   309→   309→        <div className="pointer-events-none absolute -bottom-16 -left-16 h-56 w-56 rounded-full bg-teal-400/10 blur-3xl" />
+   310→   310→
+   311→   311→        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+   312→   312→          {/* Title block */}
+   313→   313→          <div className="space-y-3">
+   314→   314→            <div className="flex items-center gap-3">
+   315→   315→              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-500/20">
+   316→   316→                <Coins className="h-5 w-5 text-emerald-400" />
+   317→   317→              </div>
+   318→   318→              <h2 className="text-2xl sm:text-3xl font-bold text-white tracking-tight">Marketplace</h2>
+   319→   319→            </div>
+   320→   320→            <p className="text-emerald-200/70 text-sm max-w-xl leading-relaxed">
+   321→   321→              ตลาดซื้อขายคาร์บอนเครดิตแบบ Tokenized สำหรับ Mint, Trade และ Retire เครดิตคาร์บอนจากโครงการที่ผ่านการรับรองแล้ว รองรับมาตรฐาน T-VER, Verra, Gold Standard
+   322→   322→            </p>
+   323→   323→            <div className="flex items-center gap-4 text-xs text-emerald-300/60">
+   324→   324→              <span className="flex items-center gap-1.5"><CircleDot className="h-3 w-3" />{available.length} Available</span>
+   325→   325→              <span className="flex items-center gap-1.5"><ArrowRightLeft className="h-3 w-3" />{traded.length} Traded</span>
+   326→   326→              <span className="flex items-center gap-1.5"><ShieldCheck className="h-3 w-3" />{retired.length} Retired</span>
+   327→   327→            </div>
+   328→   328→          </div>
+   329→   329→
+   330→   330→          {/* PDF Document Card */}
+   331→   331→          <a
+   332→   332→            href="/Tokenized-Carbon-Credit-Platform.pdf"
+   333→   333→            target="_blank"
+   334→   334→            rel="noopener noreferrer"
+   335→   335→            className="group flex-shrink-0 w-full lg:w-80 rounded-xl border border-emerald-500/20 bg-white/5 backdrop-blur-sm p-4 hover:bg-white/10 transition-all duration-200 cursor-pointer"
+   336→   336→          >
+   337→   337→            <div className="flex items-start gap-3">
+   338→   338→              <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-lg bg-red-500/20">
+   339→   339→                <FileText className="h-5 w-5 text-red-400" />
+   340→   340→              </div>
+   341→   341→              <div className="flex-1 min-w-0">
+   342→   342→                <p className="text-sm font-semibold text-white truncate">Tokenized Carbon Credit Platform</p>
+   343→   343→                <p className="text-xs text-emerald-300/50 mt-0.5">เอกสารอธิบายระบบ Tokenization ครบวงจร 11 บท</p>
+   344→   344→                <div className="flex items-center gap-1.5 mt-2 text-xs text-emerald-400 font-medium group-hover:text-emerald-300 transition-colors">
+   345→   345→                  <FileDown className="h-3.5 w-3.5" />
+   346→   346→                  ดาวน์โหลด PDF (17 หน้า)
+   347→   347→                  <ArrowUpRight className="h-3 w-3 ml-auto transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+   348→   348→                </div>
+   349→   349→              </div>
+   350→   350→            </div>
+   351→   351→          </a>
+   352→   352→        </div>
+   353→   353→      </div>
+   354→   354→
+   355→   355→      {/* ── Stats Cards ──────────────────────────────── */}
+   356→   356→      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+   357→   357→        <StatCard
+   358→   358→          icon={Layers}
+   359→   359→          label="Available"
+   360→   360→          value={(summary?.availableVolume ?? 0).toLocaleString()}
+   361→   361→          color="bg-emerald-600"
+   362→   362→          sub={`${summary?.availableCount ?? 0} batches · tCO2e`}
+   363→   363→        />
+   364→   364→        <StatCard
+   365→   365→          icon={ArrowRightLeft}
+   366→   366→          label="Traded"
+   367→   367→          value={(summary?.tradedVolume ?? 0).toLocaleString()}
+   368→   368→          color="bg-sky-600"
+   369→   369→          sub={`${summary?.tradedCount ?? 0} batches · tCO2e`}
+   370→   370→        />
+   371→   371→        <StatCard
+   372→   372→          icon={ShieldCheck}
+   373→   373→          label="Retired"
+   374→   374→          value={(summary?.retiredVolume ?? 0).toLocaleString()}
+   375→   375→          color="bg-slate-500"
+   376→   376→          sub={`${summary?.retiredCount ?? 0} batches · tCO2e`}
+   377→   377→        />
+   378→   378→        <StatCard
+   379→   379→          icon={TrendingUp}
+   380→   380→          label="Total Credits"
+   381→   381→          value={(summary?.totalCredits ?? 0).toLocaleString()}
+   382→   382→          color="bg-teal-600"
+   383→   383→          sub="tCO2e minted"
+   384→   384→        />
+   385→   385→      </div>
+   386→   386→
+   387→   387→      {/* ── Tabs ──────────────────────────────────────── */}
+   388→   388→      <Tabs defaultValue="listing">
+   389→   389→        <TabsList className="bg-slate-100">
+   390→   390→          <TabsTrigger value="listing" className="gap-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm">
+   391→   391→            <Layers className="h-3.5 w-3.5" />
+   392→   392→            <span className="hidden sm:inline">Credit Listing</span>
+   393→   393→            <span className="sm:hidden">Listing</span>
+   394→   394→          </TabsTrigger>
+   395→   395→          <TabsTrigger value="mint" className="gap-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm">
+   396→   396→            <Plus className="h-3.5 w-3.5" />
+   397→   397→            <span className="hidden sm:inline">Mint Credits</span>
+   398→   398→            <span className="sm:hidden">Mint</span>
+   399→   399→          </TabsTrigger>
+   400→   400→          <TabsTrigger value="actions" className="gap-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm">
+   401→   401→            <ArrowRightLeft className="h-3.5 w-3.5" />
+   402→   402→            <span className="hidden sm:inline">Trade / Retire</span>
+   403→   403→            <span className="sm:hidden">Trade</span>
+   404→   404→          </TabsTrigger>
+   405→   405→          <TabsTrigger value="portfolio" className="gap-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm">
+   406→   406→            <Briefcase className="h-3.5 w-3.5" />
+   407→   407→            <span className="hidden sm:inline">Portfolio</span>
+   408→   408→            <span className="sm:hidden">Portfolio</span>
+   409→   409→          </TabsTrigger>
+   410→   410→        </TabsList>
+   411→   411→
+   412→   412→        {/* ── Tab: Credit Listing ─────────────────────── */}
+   413→   413→        <TabsContent value="listing" className="mt-4">
+   414→   414→          <Card className="overflow-hidden">
+   415→   415→            <CardHeader className="bg-slate-50/80 border-b px-6 py-4">
+   416→   416→              <div className="flex items-center justify-between">
+   417→   417→                <div>
+   418→   418→                  <CardTitle className="text-base flex items-center gap-2">
+   419→   419→                    <ShoppingCart className="h-4 w-4 text-emerald-600" />
+   420→   420→                    Credit Listing
+   421→   421→                  </CardTitle>
+   422→   422→                  <CardDescription className="mt-1">รายการเครดิตคาร์บอนทั้งหมดในระบบ Marketplace</CardDescription>
+   423→   423→                </div>
+   424→   424→                <Button variant="outline" size="sm" onClick={fetchData} className="gap-1.5">
+   425→   425→                  <RefreshCw className="h-3.5 w-3.5" />
+   426→   426→                  Refresh
+   427→   427→                </Button>
+   428→   428→              </div>
+   429→   429→            </CardHeader>
+   430→   430→            <CardContent className="p-0">
+   431→   431→              <ScrollArea className="max-h-[420px]">
+   432→   432→                <Table>
+   433→   433→                  <TableHeader>
+   434→   434→                    <TableRow className="bg-slate-50/50 hover:bg-slate-50/50">
+   435→   435→                      <TableHead className="w-[180px]">Token ID</TableHead>
+   436→   436→                      <TableHead>Project</TableHead>
+   437→   437→                      <TableHead className="w-[130px]">Methodology</TableHead>
+   438→   438→                      <TableHead className="text-right w-[120px]">Amount (tCO2e)</TableHead>
+   439→   439→                      <TableHead className="text-center w-[100px]">Status</TableHead>
+   440→   440→                    </TableRow>
+   441→   441→                  </TableHeader>
+   442→   442→                  <TableBody>
+   443→   443→                    {allCredits.length === 0 ? (
+   444→   444→                      <TableRow>
+   445→   445→                        <TableCell colSpan={5} className="text-center text-muted-foreground py-12">
+   446→   446→                          <Coins className="h-8 w-8 mx-auto mb-2 opacity-30" />
+   447→   447→                          <p>No credits found</p>
+   448→   448→                        </TableCell>
+   449→   449→                      </TableRow>
+   450→   450→                    ) : (
+   451→   451→                      allCredits.map((credit) => {
+   452→   452→                        const sc = statusConfig[credit.status];
+   453→   453→                        return (
+   454→   454→                          <TableRow key={credit.id} className="group">
+   455→   455→                            <TableCell className="font-mono text-xs text-muted-foreground">
+   456→   456→                              <span className="bg-slate-100 px-1.5 py-0.5 rounded" title={credit.batchId}>
+   457→   457→                                {truncateTokenId(credit.batchId)}
+   458→   458→                              </span>
+   459→   459→                            </TableCell>
+   460→   460→                            <TableCell className="text-sm font-medium">{credit.projectId}</TableCell>
+   461→   461→                            <TableCell>
+   462→   462→                              {credit.type ? (
+   463→   463→                                <Badge variant="outline" className={`text-[10px] h-5 font-semibold ${getMethodologyClass(credit.type)}`}>
+   464→   464→                                  {credit.type}
+   465→   465→                                </Badge>
+   466→   466→                              ) : (
+   467→   467→                                <span className="text-xs text-muted-foreground">—</span>
+   468→   468→                              )}
+   469→   469→                            </TableCell>
+   470→   470→                            <TableCell className="text-right font-mono text-sm font-semibold tabular-nums">
+   471→   471→                              {credit.amount.toLocaleString()}
+   472→   472→                            </TableCell>
+   473→   473→                            <TableCell className="text-center">
+   474→   474→                              <Badge variant="outline" className={`text-[10px] h-5 gap-1 font-medium ${sc.className}`}>
+   475→   475→                                <span className={`h-1.5 w-1.5 rounded-full ${sc.dotClass}`} />
+   476→   476→                                {sc.label}
+   477→   477→                              </Badge>
+   478→   478→                            </TableCell>
+   479→   479→                          </TableRow>
+   480→   480→                        );
+   481→   481→                      })
+   482→   482→                    )}
+   483→   483→                  </TableBody>
+   484→   484→                </Table>
+   485→   485→              </ScrollArea>
+   486→   486→            </CardContent>
+   487→   487→          </Card>
+   488→   488→        </TabsContent>
+   489→   489→
+   490→   490→        {/* ── Tab: Mint Credits ────────────────────────── */}
+   491→   491→        <TabsContent value="mint" className="mt-4">
+   492→   492→          <Card>
+   493→   493→            <CardHeader className="bg-emerald-50/50 border-b">
+   494→   494→              <CardTitle className="text-base flex items-center gap-2">
+   495→   495→                <div className="flex h-7 w-7 items-center justify-center rounded-md bg-emerald-100">
+   496→   496→                  <Plus className="h-4 w-4 text-emerald-700" />
+   497→   497→                </div>
+   498→   498→                Mint New Credits
+   499→   499→              </CardTitle>
+   500→   500→              <CardDescription>สร้างเครดิตคาร์บอนใหม่จากใบรับรองที่ได้รับอนุมัติแล้ว (Minting / Tokenization)</CardDescription>
+   501→   501→            </CardHeader>
+   502→   502→            <CardContent className="p-6 space-y-5">
+   503→   503→              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+   504→   504→                <div className="space-y-2">
+   505→   505→                  <Label className="text-xs font-medium">Project</Label>
+   506→   506→                  <Select value={mintProjectId} onValueChange={setMintProjectId}>
+   507→   507→                    <SelectTrigger className="bg-white"><SelectValue placeholder="เลือกโครงการ" /></SelectTrigger>
+   508→   508→                    <SelectContent>
+   509→   509→                      {projects.map((p) => (
+   510→   510→                        <SelectItem key={p.id} value={p.id}>{p.name} ({p.id})</SelectItem>
+   511→   511→                      ))}
+   512→   512→                    </SelectContent>
+   513→   513→                  </Select>
+   514→   514→                </div>
+   515→   515→                <div className="space-y-2">
+   516→   516→                  <Label className="text-xs font-medium">Track Type</Label>
+   517→   517→                  <Select value={mintTrackType} onValueChange={setMintTrackType}>
+   518→   518→                    <SelectTrigger className="bg-white"><SelectValue /></SelectTrigger>
+   519→   519→                    <SelectContent>
+   520→   520→                      {['biochar', 'awd', 'biogas', 'solar', 'forest'].map((t) => (
+   521→   521→                        <SelectItem key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</SelectItem>
+   522→   522→                      ))}
+   523→   523→                    </SelectContent>
+   524→   524→                  </Select>
+   525→   525→                </div>
+   526→   526→                <div className="space-y-2">
+   527→   527→                  <Label className="text-xs font-medium">Amount (tCO2e)</Label>
+   528→   528→                  <Input type="number" placeholder="เช่น 5000" value={mintAmount} onChange={(e) => setMintAmount(e.target.value)} className="bg-white" />
+   529→   529→                </div>
+   530→   530→              </div>
+   531→   531→              <Button onClick={handleMint} disabled={minting} className="bg-emerald-600 hover:bg-emerald-700 gap-2 shadow-sm">
+   532→   532→                {minting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+   533→   533→                {minting ? 'Minting...' : 'Mint Credits'}
+   534→   534→              </Button>
+   535→   535→            </CardContent>
+   536→   536→          </Card>
+   537→   537→        </TabsContent>
+   538→   538→
+   539→   539→        {/* ── Tab: Trade / Retire ─────────────────────── */}
+   540→   540→        <TabsContent value="actions" className="mt-4">
+   541→   541→          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+   542→   542→            <Card className="overflow-hidden">
+   543→   543→              <CardHeader className="bg-sky-50/50 border-b">
+   544→   544→                <CardTitle className="text-base flex items-center gap-2">
+   545→   545→                  <div className="flex h-7 w-7 items-center justify-center rounded-md bg-sky-100">
+   546→   546→                    <ArrowRightLeft className="h-4 w-4 text-sky-700" />
+   547→   547→                  </div>
+   548→   548→                  Trade Credits
+   549→   549→                </CardTitle>
+   550→   550→                <CardDescription>โอนเครดิตที่พร้อมซื้อขายไปยังผู้ซื้อ</CardDescription>
+   551→   551→              </CardHeader>
+   552→   552→              <CardContent className="p-6 space-y-4">
+   553→   553→                <div className="space-y-2">
+   554→   554→                  <Label className="text-xs font-medium">Select Credit</Label>
+   555→   555→                  <Select value={tradeId} onValueChange={setTradeId}>
+   556→   556→                    <SelectTrigger className="bg-white"><SelectValue placeholder="เลือกเครดิต" /></SelectTrigger>
+   557→   557→                    <SelectContent>
+   558→   558→                      {available.map((c) => (
+   559→   559→                        <SelectItem key={c.id} value={c.id}>
+   560→   560→                          {truncateTokenId(c.tokenId)} — {c.amount.toLocaleString()} tCO2e
+   561→   561→                        </SelectItem>
+   562→   562→                      ))}
+   563→   563→                    </SelectContent>
+   564→   564→                  </Select>
+   565→   565→                </div>
+   566→   566→                <div className="space-y-2">
+   567→   567→                  <Label className="text-xs font-medium">Buyer Name</Label>
+   568→   568→                  <Input placeholder="เช่น PTT Public Co." value={tradeBuyer} onChange={(e) => setTradeBuyer(e.target.value)} className="bg-white" />
+   569→   569→                </div>
+   570→   570→                <Button onClick={handleTrade} disabled={trading} className="w-full bg-sky-600 hover:bg-sky-700 gap-2 shadow-sm">
+   571→   571→                  {trading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRightLeft className="h-4 w-4" />}
+   572→   572→                  {trading ? 'Trading...' : 'Execute Trade'}
+   573→   573→                </Button>
+   574→   574→              </CardContent>
+   575→   575→            </Card>
+   576→   576→
+   577→   577→            <Card className="overflow-hidden">
+   578→   578→              <CardHeader className="bg-slate-50 border-b">
+   579→   579→                <CardTitle className="text-base flex items-center gap-2">
+   580→   580→                  <div className="flex h-7 w-7 items-center justify-center rounded-md bg-slate-200">
+   581→   581→                    <Ban className="h-4 w-4 text-slate-700" />
+   582→   582→                  </div>
+   583→   583→                  Retire Credits
+   584→   584→                </CardTitle>
+   585→   585→                <CardDescription>เกษียณเครดิตถาวร เพื่อนำไปใช้ Offset ก๊าซเรือนกระจก</CardDescription>
+   586→   586→              </CardHeader>
+   587→   587→              <CardContent className="p-6 space-y-4">
+   588→   588→                <div className="space-y-2">
+   589→   589→                  <Label className="text-xs font-medium">Select Credit</Label>
+   590→   590→                  <Select value={retireId} onValueChange={setRetireId}>
+   591→   591→                    <SelectTrigger className="bg-white"><SelectValue placeholder="เลือกเครดิต" /></SelectTrigger>
+   592→   592→                    <SelectContent>
+   593→   593→                      {available.map((c) => (
+   594→   594→                        <SelectItem key={c.id} value={c.id}>
+   595→   595→                          {truncateTokenId(c.tokenId)} — {c.amount.toLocaleString()} tCO2e (Available)
+   596→   596→                        </SelectItem>
+   597→   597→                      ))}
+   598→   598→                      {traded.map((c) => (
+   599→   599→                        <SelectItem key={c.id} value={c.id}>
+   600→   600→                          {truncateTokenId(c.tokenId)} — {c.amount.toLocaleString()} tCO2e (Traded)
+   601→   601→                        </SelectItem>
+   602→   602→                      ))}
+   603→   603→                    </SelectContent>
+   604→   604→                  </Select>
+   605→   605→                </div>
+   606→   606→                <Button onClick={handleRetire} disabled={retiring} variant="destructive" className="w-full gap-2">
+   607→   607→                  {retiring ? <Loader2 className="h-4 w-4 animate-spin" /> : <Ban className="h-4 w-4" />}
+   608→   608→                  {retiring ? 'Retiring...' : 'Retire Credits'}
+   609→   609→                </Button>
+   610→   610→                <p className="text-[11px] text-muted-foreground leading-relaxed">
+   611→   611→                  ⚠️ เครดิตที่เกษียณแล้วจะถูกถอนออกจากระบบอย่างถาวร และไม่สามารถนำกลับมาซื้อขายได้อีก
+   612→   612→                </p>
+   613→   613→              </CardContent>
+   614→   614→            </Card>
+   615→   615→          </div>
+   616→   616→        </TabsContent>
+   617→   617→
+   618→   618→        {/* ── Tab: Portfolio ───────────────────────────── */}
+   619→   619→        <TabsContent value="portfolio" className="mt-4">
+   620→   620→          <Card>
+   621→   621→            <CardHeader className="bg-gradient-to-r from-slate-50 to-teal-50/30 border-b">
+   622→   622→              <CardTitle className="text-base flex items-center gap-2">
+   623→   623→                <div className="flex h-7 w-7 items-center justify-center rounded-md bg-teal-100">
+   624→   624→                  <Briefcase className="h-4 w-4 text-teal-700" />
+   625→   625→                </div>
+   626→   626→                Portfolio Summary
+   627→   627→              </CardTitle>
+   628→   628→              <CardDescription>ภาพรวมสถานะเครดิตคาร์บอนทั้งหมดในระบบ</CardDescription>
+   629→   629→            </CardHeader>
+   630→   630→            <CardContent className="p-6">
+   631→   631→              {/* Progress overview */}
+   632→   632→              <div className="space-y-4 mb-6">
+   633→   633→                <div className="flex items-center justify-between text-xs text-muted-foreground">
+   634→   634→                  <span>Credit Distribution</span>
+   635→   635→                  <span>{allCredits.length} total batches</span>
+   636→   636→                </div>
+   637→   637→                <div className="flex h-3 overflow-hidden rounded-full bg-slate-100">
+   638→   638→                  <div className="bg-emerald-500 transition-all duration-500" style={{ width: `${availablePct}%` }} />
+   639→   639→                  <div className="bg-sky-500 transition-all duration-500" style={{ width: `${tradedPct}%` }} />
+   640→   640→                  <div className="bg-slate-400 transition-all duration-500" style={{ width: `${retiredPct}%` }} />
+   641→   641→                </div>
+   642→   642→                <div className="flex items-center gap-5 text-xs">
+   643→   643→                  <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />Available {availablePct}%</span>
+   644→   644→                  <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-sky-500" />Traded {tradedPct}%</span>
+   645→   645→                  <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-slate-400" />Retired {retiredPct}%</span>
+   646→   646→                </div>
+   647→   647→              </div>
+   648→   648→
+   649→   649→              {/* Detail cards */}
+   650→   650→              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+   651→   651→                <div className="rounded-xl border border-emerald-200 bg-emerald-50/30 p-5 text-center">
+   652→   652→                  <div className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-emerald-100">
+   653→   653→                    <Layers className="h-5 w-5 text-emerald-600" />
+   654→   654→                  </div>
+   655→   655→                  <p className="text-2xl font-bold text-emerald-700 tabular-nums">{(summary?.availableVolume ?? 0).toLocaleString()}</p>
+   656→   656→                  <p className="text-xs text-emerald-600/70 font-medium mt-0.5">Available tCO2e</p>
+   657→   657→                  <Progress value={availablePct} className="mt-3 h-1.5 bg-emerald-100" />
+   658→   658→                  <p className="text-[11px] text-emerald-600/50 mt-1.5">{summary?.availableCount ?? 0} batches</p>
+   659→   659→                </div>
+   660→   660→                <div className="rounded-xl border border-sky-200 bg-sky-50/30 p-5 text-center">
+   661→   661→                  <div className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-sky-100">
+   662→   662→                    <ArrowRightLeft className="h-5 w-5 text-sky-600" />
+   663→   663→                  </div>
+   664→   664→                  <p className="text-2xl font-bold text-sky-700 tabular-nums">{(summary?.tradedVolume ?? 0).toLocaleString()}</p>
+   665→   665→                  <p className="text-xs text-sky-600/70 font-medium mt-0.5">Traded tCO2e</p>
+   666→   666→                  <Progress value={tradedPct} className="mt-3 h-1.5 bg-sky-100" />
+   667→   667→                  <p className="text-[11px] text-sky-600/50 mt-1.5">{summary?.tradedCount ?? 0} batches</p>
+   668→   668→                </div>
+   669→   669→                <div className="rounded-xl border border-slate-200 bg-slate-50/30 p-5 text-center">
+   670→   670→                  <div className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-slate-200">
+   671→   671→                    <ShieldCheck className="h-5 w-5 text-slate-600" />
+   672→   672→                  </div>
+   673→   673→                  <p className="text-2xl font-bold text-slate-600 tabular-nums">{(summary?.retiredVolume ?? 0).toLocaleString()}</p>
+   674→   674→                  <p className="text-xs text-slate-500 font-medium mt-0.5">Retired tCO2e</p>
+   675→   675→                  <Progress value={retiredPct} className="mt-3 h-1.5 bg-slate-200" />
+   676→   676→                  <p className="text-[11px] text-slate-400 mt-1.5">{summary?.retiredCount ?? 0} batches</p>
+   677→   677→                </div>
+   678→   678→              </div>
+   679→   679→            </CardContent>
+   680→   680→          </Card>
+   681→   681→        </TabsContent>
+   682→   682→      </Tabs>
+   683→   683→    </div>
+   684→   684→  );
+   685→   685→}
+   686→   686→

@@ -68,13 +68,20 @@ export async function POST(request: NextRequest) {
 
     const { action, projectId, amount, buyer, creditId, trackType } = body;
 
-    if (!action || !projectId) {
-      return NextResponse.json({ error: 'action and projectId are required' }, { status: 400 });
+    if (!action) {
+      return NextResponse.json({ error: 'action is required' }, { status: 400 });
     }
 
-    const project = await db.project.findUnique({ where: { id: projectId } });
-    if (!project) {
-      return NextResponse.json({ error: 'Project not found' }, { status: 404 });
+    // Project lookup is only required for minting (trade/retire resolve project via creditId)
+    let project: { id: string } | null = null;
+    if (action === 'mint') {
+      if (!projectId) {
+        return NextResponse.json({ error: 'projectId is required for minting' }, { status: 400 });
+      }
+      project = await db.project.findUnique({ where: { id: projectId }, select: { id: true } });
+      if (!project) {
+        return NextResponse.json({ error: 'Project not found' }, { status: 404 });
+      }
     }
 
     switch (action) {

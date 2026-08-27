@@ -516,3 +516,36 @@ Stage Summary:
 - Key improvements: gradient hero banner, PDF document card, icon stat cards with left borders, clean table with truncated IDs and color-coded badges, portfolio with stacked progress bar
 - All verified via Agent Browser + VLM analysis
 - No functional changes — all existing Mint/Trade/Retire/Portfolio logic preserved
+
+---
+Task ID: 12
+Agent: Main Agent
+Task: เพิ่มการจำลองการ trade/retire ให้กับ Marketplace (Add trade/retire simulation)
+
+Work Log:
+- Read existing MarketplaceView.tsx (686 lines, redesigned in Task 11) and /api/dmrv/marketplace/route.ts
+- Identified a pre-existing API bug: route validated `projectId` for ALL actions (mint/trade/retire) but frontend passed `credit.methodology` (e.g. "T-VER-FOREST") as projectId for trade/retire — caused "Project not found" 404. Fixed by making project lookup conditional on `action === 'mint'` only (trade/retire resolve project via creditId).
+- Added simulation infrastructure to MarketplaceView.tsx:
+  - New imports: useRef, Switch, Slider, lucide icons (Zap, Play, Pause, Activity, Sparkles, Repeat, Flame)
+  - Simulation pools: 20 real Thai buyer names (PTT, SCG, Bangkok Bank, AIS, CP All, ThaiBev, ...), 5 track types
+  - SimLogEntry type + simLogStyles record for color-coded badges
+  - pick<T>() and randAmount() helpers
+- Added simulation state: simLog, autoSim, simSpeed[4s], simBusy, simCount{mint,trade,retire}
+- Implemented handlers: simMint, simTrade, simRetire (each picks random credit + random buyer, calls API, logs entry), simFullCycle (mint→trade→retire sequence with 400ms delays), and click wrappers
+- Auto-simulation useEffect loop: weighted action selection based on pool sizes (mints if pool empty, retires if traded>2, else trade/mint/retire mix), respects simSpeed slider, autoSimRef for clean cancellation
+- Added new "Simulation" tab (between Trade/Retire and Portfolio) with:
+  - Left card "Simulation Control": 3 quick-simulate buttons (Mint/Trade/Retire with colored borders), Full Lifecycle button (violet), Auto-Simulation toggle + interval slider (2-15s), 3 stat counters
+  - Right card "Simulation Activity Log": scrollable feed (max 30 entries), empty state with flame icon, color-coded entries with badge/tokenId/amount/timestamp
+  - Pulse indicator dot on the Simulation tab trigger when autoSim is active
+- Verified via Agent Browser + VLM:
+  - Simulate Trade: created entry "Trade: TCO2E-17_ONXS → Indorama Ventures, 2,000 tCO2e" ✓
+  - Simulate Full Lifecycle: full sequence logged (info→mint 3850 tCO2e from AWD Rice→trade to Trafigura→retire 4247.64 tCO2e→info complete) ✓
+  - Auto-Simulation: generated 5 mixed entries (retire/mint/mint/trade/retire) over 12s ✓
+  - No console/runtime errors ✓
+- Lint: MarketplaceView.tsx and marketplace/route.ts both clean (4 remaining errors are in pre-existing script files, not touched)
+
+Stage Summary:
+- Added a complete trade/retire/mint simulation system to the Marketplace with one-click simulate buttons, full-lifecycle demo, and auto-simulation mode
+- Fixed a pre-existing API bug that blocked ALL trade/retire operations (manual + simulated) due to projectId validation
+- The Simulation tab provides a violet-themed control panel + real-time activity log feed, fully functional end-to-end
+- Files modified: src/components/dmrv/MarketplaceView.tsx, src/app/api/dmrv/marketplace/route.ts
