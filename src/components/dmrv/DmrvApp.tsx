@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useSyncExternalStore } from 'react';
 import {
   LayoutDashboard,
   Workflow,
@@ -443,6 +443,16 @@ export default function DmrvApp() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [systemStatus, setSystemStatus] = useState<SystemStatus | null>(null);
   const [itemsWithBadges, setItemsWithBadges] = useState<MenuItem[]>(menuItems);
+  // Gate Radix interactive components (Sheet, Popover) to client-only render.
+  // Radix uses React's useId() to generate aria-controls IDs which can mismatch
+  // between server and client SSR renders. useSyncExternalStore returns false
+  // during SSR and initial hydration (matching server HTML exactly), then true
+  // after mount — eliminating the hydration mismatch without cascading renders.
+  const mounted = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false
+  );
 
   const ActiveComponent = moduleComponents[activeModule];
 
@@ -573,18 +583,24 @@ export default function DmrvApp() {
       {/* Header */}
       <header className="sticky top-0 z-40 flex h-14 items-center gap-4 border-b bg-white px-4 shadow-sm lg:px-6">
         {/* Mobile menu trigger */}
-        <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-          <SheetTrigger asChild>
-            <Button variant="ghost" size="icon" className="lg:hidden">
-              <Menu className="h-5 w-5" />
-              <span className="sr-only">Toggle navigation menu</span>
-            </Button>
-          </SheetTrigger>
-          <SheetContent side="left" className="w-72 p-0">
-            <SheetTitle className="sr-only">Navigation Menu</SheetTitle>
-            <SidebarContent activeModule={activeModule} onModuleChange={handleModuleChange} menuItemsWithBadges={itemsWithBadges} />
-          </SheetContent>
-        </Sheet>
+        {mounted ? (
+          <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+            <SheetTrigger asChild>
+              <Button variant="ghost" size="icon" className="lg:hidden">
+                <Menu className="h-5 w-5" />
+                <span className="sr-only">Toggle navigation menu</span>
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="left" className="w-72 p-0">
+              <SheetTitle className="sr-only">Navigation Menu</SheetTitle>
+              <SidebarContent activeModule={activeModule} onModuleChange={handleModuleChange} menuItemsWithBadges={itemsWithBadges} />
+            </SheetContent>
+          </Sheet>
+        ) : (
+          <Button variant="ghost" size="icon" className="lg:hidden" aria-hidden tabIndex={-1}>
+            <Menu className="h-5 w-5" />
+          </Button>
+        )}
 
         {/* Breadcrumb / Title */}
         <div className="flex items-center gap-2">
@@ -620,80 +636,86 @@ export default function DmrvApp() {
           <Separator orientation="vertical" className="h-6 hidden sm:block" />
 
           {/* Notification Bell */}
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button variant="ghost" size="icon" className="relative">
-                <Bell className="h-4 w-4" />
-                {unresolvedCount > 0 && (
-                  <span className={`absolute -top-0.5 -right-0.5 h-3.5 w-3.5 rounded-full text-[9px] text-white flex items-center justify-center font-bold ${
-                    notifications.some((n) => n.severity === 'CRITICAL' && !n.resolved) ? 'bg-red-500' : 'bg-amber-500'
-                  }`}>
-                    {unresolvedCount > 9 ? '9+' : unresolvedCount}
-                  </span>
-                )}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-80 p-0" align="end">
-              <div className="flex items-center justify-between px-4 py-3 border-b">
-                <h4 className="text-sm font-semibold">Notifications</h4>
-                <Button variant="ghost" size="sm" onClick={fetchSystemData} className="h-7 gap-1 text-xs">
-                  <RefreshCw className="h-3 w-3" />
-                  Refresh
+          {mounted ? (
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="ghost" size="icon" className="relative">
+                  <Bell className="h-4 w-4" />
+                  {unresolvedCount > 0 && (
+                    <span className={`absolute -top-0.5 -right-0.5 h-3.5 w-3.5 rounded-full text-[9px] text-white flex items-center justify-center font-bold ${
+                      notifications.some((n) => n.severity === 'CRITICAL' && !n.resolved) ? 'bg-red-500' : 'bg-amber-500'
+                    }`}>
+                      {unresolvedCount > 9 ? '9+' : unresolvedCount}
+                    </span>
+                  )}
                 </Button>
-              </div>
-              <ScrollArea className="max-h-80">
-                {notifications.length === 0 ? (
-                  <div className="py-8 text-center text-sm text-muted-foreground">
-                    No notifications
-                  </div>
-                ) : (
-                  <div className="px-4">
-                    {notifications.slice(0, 10).map((notif, idx) => {
-                      const Icon = severityIcons[notif.severity] || Info;
-                      return (
-                        <React.Fragment key={notif.id}>
-                          <div className={`flex items-start gap-3 py-3 ${notif.resolved ? 'opacity-50' : ''}`}>
-                            <Icon className={`mt-0.5 h-4 w-4 shrink-0 ${severityColors[notif.severity] || 'text-slate-400'}`} />
-                            <div className="flex-1 min-w-0">
-                              <p className="text-xs leading-relaxed">{notif.message}</p>
-                              <div className="flex items-center gap-2 mt-1">
-                                <Badge variant="secondary" className={`text-[9px] h-4 ${
-                                  notif.severity === 'CRITICAL' ? 'bg-red-100 text-red-700 hover:bg-red-100' :
-                                  notif.severity === 'WARNING' ? 'bg-amber-100 text-amber-700 hover:bg-amber-100' :
-                                  'bg-slate-100 text-slate-600 hover:bg-slate-100'
-                                }`}>
-                                  {notif.severity}
-                                </Badge>
-                                {notif.resolved && (
-                                  <Badge variant="secondary" className="text-[9px] h-4 bg-emerald-50 text-emerald-600 hover:bg-emerald-50">
-                                    RESOLVED
-                                  </Badge>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                          {idx < Math.min(notifications.length, 10) - 1 && <Separator />}
-                        </React.Fragment>
-                      );
-                    })}
-                  </div>
-                )}
-              </ScrollArea>
-              {unresolvedCount > 0 && (
-                <div className="border-t px-4 py-2">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="w-full text-xs gap-1"
-                    onClick={() => handleModuleChange('monitoring')}
-                  >
-                    <Activity className="h-3 w-3" />
-                    View All Alerts in Monitoring
+              </PopoverTrigger>
+              <PopoverContent className="w-80 p-0" align="end">
+                <div className="flex items-center justify-between px-4 py-3 border-b">
+                  <h4 className="text-sm font-semibold">Notifications</h4>
+                  <Button variant="ghost" size="sm" onClick={fetchSystemData} className="h-7 gap-1 text-xs">
+                    <RefreshCw className="h-3 w-3" />
+                    Refresh
                   </Button>
                 </div>
-              )}
-            </PopoverContent>
-          </Popover>
+                <ScrollArea className="max-h-80">
+                  {notifications.length === 0 ? (
+                    <div className="py-8 text-center text-sm text-muted-foreground">
+                      No notifications
+                    </div>
+                  ) : (
+                    <div className="px-4">
+                      {notifications.slice(0, 10).map((notif, idx) => {
+                        const Icon = severityIcons[notif.severity] || Info;
+                        return (
+                          <React.Fragment key={notif.id}>
+                            <div className={`flex items-start gap-3 py-3 ${notif.resolved ? 'opacity-50' : ''}`}>
+                              <Icon className={`mt-0.5 h-4 w-4 shrink-0 ${severityColors[notif.severity] || 'text-slate-400'}`} />
+                              <div className="flex-1 min-w-0">
+                                <p className="text-xs leading-relaxed">{notif.message}</p>
+                                <div className="flex items-center gap-2 mt-1">
+                                  <Badge variant="secondary" className={`text-[9px] h-4 ${
+                                    notif.severity === 'CRITICAL' ? 'bg-red-100 text-red-700 hover:bg-red-100' :
+                                    notif.severity === 'WARNING' ? 'bg-amber-100 text-amber-700 hover:bg-amber-100' :
+                                    'bg-slate-100 text-slate-600 hover:bg-slate-100'
+                                  }`}>
+                                    {notif.severity}
+                                  </Badge>
+                                  {notif.resolved && (
+                                    <Badge variant="secondary" className="text-[9px] h-4 bg-emerald-50 text-emerald-600 hover:bg-emerald-50">
+                                      RESOLVED
+                                    </Badge>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                            {idx < Math.min(notifications.length, 10) - 1 && <Separator />}
+                          </React.Fragment>
+                        );
+                      })}
+                    </div>
+                  )}
+                </ScrollArea>
+                {unresolvedCount > 0 && (
+                  <div className="border-t px-4 py-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="w-full text-xs gap-1"
+                      onClick={() => handleModuleChange('monitoring')}
+                    >
+                      <Activity className="h-3 w-3" />
+                      View All Alerts in Monitoring
+                    </Button>
+                  </div>
+                )}
+              </PopoverContent>
+            </Popover>
+          ) : (
+            <Button variant="ghost" size="icon" className="relative" aria-hidden tabIndex={-1}>
+              <Bell className="h-4 w-4" />
+            </Button>
+          )}
 
           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 text-xs font-bold">
             AD

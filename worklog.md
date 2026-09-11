@@ -581,3 +581,34 @@ Stage Summary:
 - Added violet PDF download card in Marketplace hero next to existing emerald Tokenization card
 - Files created: scripts/generate-smart-contract-pdf.js, public/Smart-Contracts-Carbon-Credits.pdf, public/Smart-Contracts-Carbon-Credits.html
 - Files modified: src/components/dmrv/MarketplaceView.tsx (added second PDF card in hero)
+
+---
+Task ID: 14
+Agent: Main Agent
+Task: Fix React hydration error (Radix aria-controls ID mismatch) in DmrvApp header
+
+Work Log:
+- Analyzed the hydration error: "A tree hydrated but some attributes of the server rendered HTML didn't match the client properties" with diff showing `aria-controls="radix-_R_5atmlb_"` (server) vs `radix-_R_matmlb_` (client) on SheetTrigger and PopoverTrigger buttons
+- Root cause: Radix UI components (Sheet, Popover) use React 19's `useId()` to generate `aria-controls` IDs. These IDs can mismatch between server and client SSR renders — a known React 19 + Radix UI issue
+- Verified app state is deterministic on initial render (all useState defaults are static, data fetching is in useEffect), confirming the mismatch is from Radix's internal ID generation, not app logic
+- Fix: Gate Radix interactive components (Sheet, Popover) behind a client-only mount check using `useSyncExternalStore`:
+  - `getServerSnapshot = () => false` → server renders static placeholder buttons (no Radix useId calls → no mismatch possible)
+  - `getSnapshot = () => true` → client returns true after hydration, Radix components mount with client-generated IDs
+  - Initial client render matches server (both return false), then React updates to client value — no hydration mismatch, no cascading renders
+  - Placeholder buttons use identical className/variant as the real Radix triggers, so there's no visual flash during the swap
+- Used `useSyncExternalStore` instead of `useState + useEffect(setMounted)` because the latter triggers a Next.js 16 lint error ("Calling setState synchronously within an effect can trigger cascading renders")
+- Applied to both Radix components in the header:
+  1. Sheet (mobile menu trigger, `lg:hidden`) — placeholder Button with Menu icon when !mounted
+  2. Popover (notification bell) — placeholder Button with Bell icon when !mounted
+- Lint: DmrvApp.tsx now clean (4 remaining errors are pre-existing require() in script files)
+- Verified via Agent Browser:
+  - Fresh page load: zero hydration errors, zero console errors, zero page errors ✓
+  - Mobile viewport (400x800): Sheet opens with full navigation menu ✓
+  - Desktop viewport (1440x900): Popover opens with Notifications panel ✓
+  - No `aria-controls` mismatch warnings ✓
+
+Stage Summary:
+- Fixed the Radix UI hydration mismatch by gating Sheet and Popover behind `useSyncExternalStore` client-mount detection
+- Server renders static placeholder buttons (visually identical), client swaps to Radix interactive components after hydration
+- No visual flash, no cascading renders, no lint errors
+- File modified: src/components/dmrv/DmrvApp.tsx
