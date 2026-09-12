@@ -47,6 +47,10 @@ import {
   Droplets,
   Bug,
   Building2,
+  Users,
+  LogIn,
+  LogOut,
+  UserCircle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from '@/components/ui/sheet';
@@ -61,6 +65,7 @@ const MapDashboardView = dynamic(() => import('./MapDashboardView'), { ssr: fals
 const OrchestratorView = dynamic(() => import('./OrchestratorView'), { ssr: false });
 const IngestionView = dynamic(() => import('./IngestionView'), { ssr: false });
 const AuthView = dynamic(() => import('./AuthView'), { ssr: false });
+const UserManagementView = dynamic(() => import('./UserManagementView'), { ssr: false });
 const CarbonView = dynamic(() => import('./CarbonView'), { ssr: false });
 const CertificationView = dynamic(() => import('./CertificationView'), { ssr: false });
 const VerificationView = dynamic(() => import('./VerificationView'), { ssr: false });
@@ -98,6 +103,7 @@ const IoTIngestionView = dynamic(() => import('./IoTIngestionView'), { ssr: fals
 const LowCarbonBuildingAgentView = dynamic(() => import('./LowCarbonBuildingAgentView'), { ssr: false });
 const SoilCarbonAgentView = dynamic(() => import('./SoilCarbonAgentView'), { ssr: false });
 import { ErrorBoundary } from './ErrorBoundary';
+import { LoginDialog, LogoutButton } from './LoginDialog';
 
 type ModuleKey =
   | 'dashboard'
@@ -140,7 +146,8 @@ type ModuleKey =
   | 'bio-simulator'
   | 'iot-ingestion'
   | 'soil-carbon'
-  | 'low-carbon-building';
+  | 'low-carbon-building'
+  | 'users';
 
 interface MenuItem {
   key: ModuleKey;
@@ -173,6 +180,7 @@ const menuItems: MenuItem[] = [
   { key: 'orchestrator', label: 'Orchestrator', icon: Workflow },
   { key: 'ingestion', label: 'Ingestion', icon: Upload },
   { key: 'auth', label: 'Auth & RBAC', icon: Shield },
+  { key: 'users', label: 'User Management', icon: Users },
 
   // Carbon Management
   { key: 'carbon', label: 'Carbon', icon: Leaf, section: 'CARBON' },
@@ -235,6 +243,7 @@ const moduleComponents: Record<ModuleKey, React.ComponentType> = {
   orchestrator: OrchestratorView,
   ingestion: IngestionView,
   auth: AuthView,
+  users: UserManagementView,
   carbon: CarbonView,
   certification: CertificationView,
   verification: VerificationView,
@@ -278,6 +287,118 @@ interface SidebarContentProps {
   activeModule: ModuleKey;
   onModuleChange: (key: ModuleKey) => void;
   menuItemsWithBadges?: MenuItem[];
+}
+
+// ── User menu / login button ───────────────────────────────────────────────
+interface CurrentUser {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  username: string;
+  status: string;
+}
+
+function UserMenuButton({ onNavigateToUsers }: { onNavigateToUsers: () => void }) {
+  const [user, setUser] = useState<CurrentUser | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [loginOpen, setLoginOpen] = useState(false);
+
+  const refresh = useCallback(async () => {
+    try {
+      const res = await fetch('/api/dmrv/me');
+      if (res.ok) {
+        const data = await res.json();
+        setUser(data.user || null);
+      } else {
+        setUser(null);
+      }
+    } catch {
+      setUser(null);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    refresh();
+    // Poll every 30s so logout from another tab reflects here
+    const t = setInterval(refresh, 30000);
+    return () => clearInterval(t);
+  }, [refresh]);
+
+  if (loading) {
+    return <div className="h-8 w-8 rounded-full bg-slate-200 animate-pulse" />;
+  }
+
+  if (!user) {
+    return (
+      <>
+        <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setLoginOpen(true)}>
+          <LogIn className="h-3.5 w-3.5" />
+          <span className="hidden sm:inline">Sign in</span>
+        </Button>
+        <LoginDialog open={loginOpen} onOpenChange={setLoginOpen} onSuccess={refresh} />
+      </>
+    );
+  }
+
+  const isDev = user.id.startsWith('dev-');
+  const initials = (user.name || user.username).charAt(0).toUpperCase();
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button variant="ghost" size="sm" className="gap-2 px-2">
+          <div className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold ${
+            user.role === 'admin' ? 'bg-red-100 text-red-700' :
+            user.role === 'validator' ? 'bg-violet-100 text-violet-700' :
+            user.role === 'buyer' ? 'bg-sky-100 text-sky-700' :
+            'bg-emerald-100 text-emerald-700'
+          }`}>
+            {initials}
+          </div>
+          <div className="hidden sm:flex flex-col items-start leading-tight">
+            <span className="text-xs font-semibold max-w-[100px] truncate">{user.name || user.username}</span>
+            <span className="text-[10px] text-muted-foreground">{user.role}{isDev ? ' · dev' : ''}</span>
+          </div>
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-64 p-0" align="end">
+        <div className="border-b p-4">
+          <div className="flex items-center gap-3">
+            <div className={`flex h-10 w-10 items-center justify-center rounded-full text-sm font-bold ${
+              user.role === 'admin' ? 'bg-red-100 text-red-700' :
+              user.role === 'validator' ? 'bg-violet-100 text-violet-700' :
+              user.role === 'buyer' ? 'bg-sky-100 text-sky-700' :
+              'bg-emerald-100 text-emerald-700'
+            }`}>
+              {initials}
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold truncate">{user.name || user.username}</p>
+              <p className="text-[11px] text-muted-foreground truncate">{user.email}</p>
+            </div>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            <Badge variant="outline" className="text-[10px] capitalize">{user.role}</Badge>
+            {isDev ? (
+              <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-700 border-amber-200">dev fallback</Badge>
+            ) : (
+              <Badge variant="outline" className="text-[10px] bg-emerald-50 text-emerald-700 border-emerald-200">{user.status}</Badge>
+            )}
+          </div>
+        </div>
+        <div className="p-2">
+          <Button variant="ghost" size="sm" className="w-full justify-start gap-2 text-xs" onClick={onNavigateToUsers}>
+            <Users className="h-3.5 w-3.5" />
+            User Management
+          </Button>
+          <LogoutButton onLoggedOut={refresh} className="w-full justify-start gap-2 text-xs" />
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
 }
 
 function SidebarContent({ collapsed = false, activeModule, onModuleChange, menuItemsWithBadges }: SidebarContentProps) {
@@ -720,6 +841,9 @@ export default function DmrvApp() {
           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 text-xs font-bold">
             AD
           </div>
+
+          {/* User menu / login */}
+          <UserMenuButton onNavigateToUsers={() => handleModuleChange('users')} />
         </div>
       </header>
 

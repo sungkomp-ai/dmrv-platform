@@ -3,12 +3,11 @@
  *
  * Design:
  *  - `getCurrentUser()` resolves the active user from a NextAuth session.
- *  - In development (NODE_ENV !== 'production') we fall back to a dev role
- *    so the demo keeps working without a login UI. The fallback role can be
- *    overridden per-request via the `x-dev-role` header or `?devRole=` query
- *    parameter — this lets you exercise different permission profiles.
- *  - In production, no fallback is provided: a missing session yields null
- *    and `requirePermission` will reject with 401.
+ *  - NextAuth's CredentialsProvider now does a REAL DB lookup + bcrypt password
+ *    verify against the `User` table.
+ *  - In development (NODE_ENV !== 'production') we ALSO support a dev fallback
+ *    role (via x-dev-role header / ?devRole= query) so API tests work without
+ *    going through the browser login UI. This fallback is OFF in production.
  *  - `requirePermission(module, action)` returns a discriminated union
  *    `{ ok: true, user } | { ok: false, response }` so route handlers can
  *    `if (!auth.ok) return auth.response;` early-return on denial.
@@ -18,6 +17,8 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import type { NextAuthOptions } from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
+import bcrypt from 'bcryptjs';
+import { db } from '@/lib/db';
 import { RBAC_ROLES, hasPermission, type RoleKey } from '@/lib/rbac';
 
 export interface AppUser {
@@ -25,22 +26,30 @@ export interface AppUser {
   name: string;
   email: string;
   role: RoleKey;
+  username: string;
+  status: string;
 }
 
-export interface AuthSession {
-  user: AppUser;
-  via: 'session' | 'dev-fallback';
+// ── Password hashing helpers ──────────────────────────────────────────────
+const SALT_ROUNDS = 10;
+
+export async function hashPassword(plain: string): Promise<string> {
+  return bcrypt.hash(plain, SALT_ROUNDS);
 }
 
-/** Allowed dev fallback roles (for the `?devRole=` / `x-dev-role` overrides). */
-const DEV_ROLE_OVERRIDE_HEADER = 'x-dev-role';
-const DEV_ROLE_OVERRIDE_QUERY = 'devrole';
+export async function verifyPassword(plain: string, hash: string): Promise<boolean> {
+  try {
+    return await bcrypt.compare(plain, hash);
+  } catch {
+    return false;
+  }
+}
 
 // ── NextAuth configuration ────────────────────────────────────────────────
 /**
- * Credentials provider that maps a username → role.
- * For demo/dev purposes the password is not checked strictly; in production
- * replace this with a real user store (DB lookup + bcrypt + email verify).
+ * Credentials provider that performs a real DB lookup + bcrypt password
+ * verify against the User table. On success it returns the user's id, name,
+ * email, role, username and status — these are persisted in the JWT.
  */
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -51,17 +60,27 @@ export const authOptions: NextAuthOptions = {
         password: { label: 'Password', type: 'password' },
       },
       async authorize(credentials) {
-        if (!credentials?.username) return null;
-        // Dev-friendly mapping: username === role name (admin/buyer/...).
-        // Anything else defaults to admin so demo logins always work.
-        const role = (Object.keys(RBAC_ROLES).includes(credentials.username)
-          ? credentials.username
-          : 'admin') as RoleKey;
+        const username = credentials?.username?.trim().toLowerCase();
+        const password = credentials?.password ?? '';
+        if (!username || !password) return null;
+
+        const user = await db.user.findUnique({ where: { username } });
+        if (!user) return null;
+        if (user.status !== 'ACTIVE') return null; // SUSPENDED / LOCKED denied
+
+        const ok = await verifyPassword(password, user.passwordHash);
+        if (!ok) return null;
+
+        // Update last login timestamp (fire-and-forget)
+        db.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } }).catch(() => {});
+
         return {
-          id: `u-${role}`,
-          name: role.replace('_', ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
-          email: `${role}@dmrv.local`,
-          role,
+          id: user.id,
+          name: user.name || user.username,
+          email: user.email,
+          role: user.role as RoleKey,
+          username: user.username,
+          status: user.status,
         } as AppUser;
       },
     }),
@@ -73,6 +92,8 @@ export const authOptions: NextAuthOptions = {
         const u = user as unknown as AppUser;
         token.role = u.role;
         token.id = u.id;
+        token.username = u.username;
+        token.status = u.status;
       }
       return token;
     },
@@ -83,19 +104,22 @@ export const authOptions: NextAuthOptions = {
           name: (token.name as string) || '',
           email: (token.email as string) || '',
           role: token.role as RoleKey,
+          username: (token.username as string) || '',
+          status: (token.status as string) || 'ACTIVE',
         };
       }
       return session;
     },
   },
   pages: {
-    // No custom sign-in page yet — API-only auth for now.
-    signIn: '/api/dmrv/auth/signin',
+    signIn: '/login',
   },
   secret: process.env.NEXTAUTH_SECRET || 'dev-only-insecure-secret-DO-NOT-USE-IN-PROD',
 };
 
-// ── Dev fallback ──────────────────────────────────────────────────────────
+// ── Dev fallback (development only) ────────────────────────────────────────
+const DEV_ROLE_OVERRIDE_HEADER = 'x-dev-role';
+const DEV_ROLE_OVERRIDE_QUERY = 'devrole';
 const DEV_DEFAULT_ROLE: RoleKey = 'admin';
 
 function isProd(): boolean {
@@ -103,32 +127,27 @@ function isProd(): boolean {
 }
 
 function resolveDevRole(req?: NextRequest): RoleKey {
-  if (isProd()) {
-    // No dev fallback in production. Callers must check null.
-    return 'viewer' as RoleKey; // unused — caller checks isProd first
-  }
-  // 1. Header override: x-dev-role: buyer
   const headerRole = req?.headers.get(DEV_ROLE_OVERRIDE_HEADER);
   if (headerRole && Object.keys(RBAC_ROLES).includes(headerRole)) {
     return headerRole as RoleKey;
   }
-  // 2. Query override: ?devrole=viewer
   const queryRole = req?.nextUrl?.searchParams.get(DEV_ROLE_OVERRIDE_QUERY);
   if (queryRole && Object.keys(RBAC_ROLES).includes(queryRole)) {
     return queryRole as RoleKey;
   }
-  // 3. Default dev role
   return DEV_DEFAULT_ROLE;
 }
 
 // ── Session resolution ────────────────────────────────────────────────────
 /**
- * Resolve the current user. In production requires a NextAuth session.
- * In development, falls back to a role derived from request headers/query
- * (defaults to `admin`) so the demo keeps working without login UI.
+ * Resolve the current user from a NextAuth session.
+ * In development, if no session is present, falls back to a dev role
+ * (overridable via x-dev-role header / ?devRole= query, default admin)
+ * so the demo keeps working without logging in through the browser.
+ * In production, no fallback — missing session yields null.
  */
 export async function getCurrentUser(req?: NextRequest): Promise<AppUser | null> {
-  // Lazy-import NextAuth to avoid pulling it into client bundles.
+  // Lazy-import to avoid pulling NextAuth into client bundles.
   const { getServerSession } = await import('next-auth');
   const session = await getServerSession(authOptions);
   if (session?.user) {
@@ -145,6 +164,8 @@ export async function getCurrentUser(req?: NextRequest): Promise<AppUser | null>
     name: `Dev ${role.replace('_', ' ').replace(/\b\w/g, (c) => c.toUpperCase())}`,
     email: `dev-${role}@dmrv.local`,
     role,
+    username: `dev-${role}`,
+    status: 'ACTIVE',
   };
 }
 
@@ -195,7 +216,7 @@ export async function requirePermission(
         {
           error: 'Forbidden',
           reason: `Role '${user.role}' does not have '${action}' permission on '${module}'`,
-          user: { id: user.id, name: user.name, role: user.role },
+          user: { id: user.id, name: user.name, role: user.role, username: user.username },
           required: { module, action },
         },
         { status: 403 },

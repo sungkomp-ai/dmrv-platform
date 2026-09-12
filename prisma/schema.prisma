@@ -760,3 +760,21 @@ model BuildingMaterialRecord {
 
   building          LowCarbonBuilding @relation(fields: [buildingId], references: [buildingId], onDelete: Cascade)
 }
+
+// ─── User & Authentication ────────────────────────────────────────────────
+
+model User {
+  id            String   @id @default(cuid())
+  username      String   @unique
+  email         String   @unique
+  passwordHash  String
+  role          String   @default("viewer") // admin, validator, project_developer, buyer, auditor, viewer
+  name          String   @default("")
+  status        String   @default("ACTIVE") // ACTIVE, SUSPENDED, LOCKED
+  lastLoginAt   DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([role])
+  @@index([status])
+}
