@@ -96,3 +96,6 @@ Caddyfile
 
 # examples (sandbox-specific)
 /examples/
+
+# sandbox PID files
+.zscripts/
