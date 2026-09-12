@@ -612,3 +612,67 @@ Stage Summary:
 - Server renders static placeholder buttons (visually identical), client swaps to Radix interactive components after hydration
 - No visual flash, no cascading renders, no lint errors
 - File modified: src/components/dmrv/DmrvApp.tsx
+
+---
+Task ID: 15
+Agent: Main Agent
+Task: Implement #1 — Auth helper + wrap marketplace routes with RBAC enforcement
+
+Work Log:
+- Created src/lib/rbac.ts — single source of truth for RBAC roles/permissions
+  - Extracted RBAC_ROLES, RoleKey, ModuleKey types from /api/dmrv/auth/route.ts
+  - Added hasPermission(role, module, action) helper function
+  - Added getRoleList() for documentation/UI rendering
+  - 6 roles: admin, validator, project_developer, buyer, auditor, viewer
+  - 13 modules: dmrv, ingestion, carbon, certification, verification, marketplace, governance, audit, reporting, monitoring, logistics, footprint, simulation
+- Created src/lib/auth.ts — NextAuth config + permission enforcement
+  - authOptions: NextAuth config with CredentialsProvider
+    - Username maps to role (admin/buyer/...) for demo purposes
+    - JWT strategy, 30-day sessions, role persisted in token
+  - getCurrentUser(req): resolves user from session OR dev fallback
+    - Production: requires real NextAuth session (no fallback)
+    - Development: falls back to admin role by default
+    - Dev override via x-dev-role header or ?devRole= query (to test different roles)
+  - requirePermission(req, module, action): discriminated union return
+    - Returns { ok: true, user } on success
+    - Returns { ok: false, response } with 401 (no user) or 403 (no permission)
+    - Error responses include role, required permission, user identity
+  - requireRead(req, module): convenience wrapper for read permission
+- Refactored src/app/api/dmrv/auth/route.ts to import from rbac.ts (DRY)
+  - GET still returns full RBAC role list for documentation
+  - POST still validates role+module+action combinations
+  - No more duplicated RBAC_ROLES definition
+- Wrapped src/app/api/dmrv/marketplace/route.ts with permission checks:
+  - GET: requires marketplace:read permission
+  - POST mint: requires marketplace:mint permission
+  - POST trade: requires marketplace:trade permission
+  - POST retire: requires marketplace:retire permission
+  - Audit logs now record the authenticated user (agentName: "Dev Admin (admin)" instead of hardcoded "MarketplaceAgent")
+- Lint: all new/modified files clean (4 remaining errors are pre-existing require() in script files)
+- Verified via curl tests:
+  - GET marketplace (default dev=admin): 200 ✓
+  - GET marketplace with x-dev-role: viewer (has read): 200 ✓
+  - GET marketplace with ?devRole=buyer (has read): 200 ✓
+  - POST mint with x-dev-role: viewer (NO mint perm): 403 Forbidden ✓
+  - POST mint with x-dev-role: admin (has mint): 201 Created ✓
+  - POST mint with x-dev-role: buyer (NO mint, only trade/retire): 403 ✓
+  - POST trade with x-dev-role: buyer (has trade): 200 success ✓
+  - POST trade with x-dev-role: viewer (NO trade): 403 ✓
+  - 403 response body: { error, reason, user: {id,name,role}, required: {module, action} }
+  - Audit log: "Dev Buyer (buyer) | trade_credits" and "Dev Admin (admin) | mint_credits" ✓
+- Verified via Agent Browser:
+  - Marketplace UI loads with default dev=admin (no auth UI needed) ✓
+  - Simulation tab "Simulate Trade" works — created entry "Trade: TCO2E-17... → Mitsubishi Corp., 5,830 tCO2e" ✓
+  - No console errors, no hydration errors, no 401/403 in browser ✓
+
+Stage Summary:
+- Implemented full RBAC enforcement on marketplace routes without breaking the demo (dev fallback = admin)
+- Auth helper pattern is reusable: `requirePermission(req, module, action)` returns discriminated union
+  that other routes can adopt with the same 2-line pattern:
+    const auth = await requirePermission(req, 'module', 'action');
+    if (!auth.ok) return auth.response;
+- In production, set NEXTAUTH_SECRET env var and require real NextAuth sessions (no dev fallback)
+- Dev role switching via x-dev-role header or ?devRole= query lets you test permission denial paths
+- Files created: src/lib/rbac.ts, src/lib/auth.ts
+- Files modified: src/app/api/dmrv/auth/route.ts (DRY refactor), src/app/api/dmrv/marketplace/route.ts (auth + audit)
+- Next steps (future tasks): wrap remaining 73 API routes with requirePermission; add Zod input validation

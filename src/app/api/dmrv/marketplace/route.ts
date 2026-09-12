@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { requirePermission, requireRead, type AppUser } from '@/lib/auth';
 
-// GET /api/dmrv/marketplace — List credits with status
-export async function GET() {
+// GET /api/dmrv/marketplace — List credits with status (requires marketplace:read)
+export async function GET(request: NextRequest) {
+  const auth = await requireRead(request, 'marketplace');
+  if (!auth.ok) return auth.response;
+
   try {
     const credits = await db.carbonCredit.findMany({
       include: { project: { select: { id: true, name: true, methodology: true, location: true } } },
@@ -72,6 +76,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'action is required' }, { status: 400 });
     }
 
+    // ── Permission check (per-action) ────────────────────────────
+    // mint → marketplace:mint, trade → marketplace:trade, retire → marketplace:retire
+    const auth = await requirePermission(request, 'marketplace', action);
+    if (!auth.ok) return auth.response;
+    const user: AppUser = auth.user;
+
     // Project lookup is only required for minting (trade/retire resolve project via creditId)
     let project: { id: string } | null = null;
     if (action === 'mint') {
@@ -103,10 +113,10 @@ export async function POST(request: NextRequest) {
 
         await db.auditLog.create({
           data: {
-            agentName: 'MarketplaceAgent',
+            agentName: `${user.name} (${user.role})`,
             action: 'mint_credits',
             projectId,
-            details: JSON.stringify({ tokenId, amount, trackType }),
+            details: JSON.stringify({ tokenId, amount, trackType, userId: user.id, role: user.role }),
             severity: 'INFO',
           },
         });
@@ -144,10 +154,10 @@ export async function POST(request: NextRequest) {
 
         await db.auditLog.create({
           data: {
-            agentName: 'MarketplaceAgent',
+            agentName: `${user.name} (${user.role})`,
             action: 'trade_credits',
             projectId: credit.projectId,
-            details: JSON.stringify({ tokenId: credit.tokenId, amount: credit.amount, buyer }),
+            details: JSON.stringify({ tokenId: credit.tokenId, amount: credit.amount, buyer, userId: user.id, role: user.role }),
             severity: 'INFO',
           },
         });
@@ -175,10 +185,10 @@ export async function POST(request: NextRequest) {
 
         await db.auditLog.create({
           data: {
-            agentName: 'MarketplaceAgent',
+            agentName: `${user.name} (${user.role})`,
             action: 'retire_credits',
             projectId: credit.projectId,
-            details: JSON.stringify({ tokenId: credit.tokenId, amount: credit.amount, retiredBy: buyer ?? 'Self-retired' }),
+            details: JSON.stringify({ tokenId: credit.tokenId, amount: credit.amount, retiredBy: buyer ?? 'Self-retired', userId: user.id, role: user.role }),
             severity: 'INFO',
           },
         });
