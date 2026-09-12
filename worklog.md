@@ -759,3 +759,45 @@ Stage Summary:
 - Files created: src/lib/rbac.ts (from Task 15), src/lib/auth.ts (rewritten), src/app/api/auth/[...nextauth]/route.ts, src/app/api/dmrv/users/route.ts, src/app/api/dmrv/me/route.ts, scripts/seed-users.ts, src/components/Providers.tsx, src/components/dmrv/LoginDialog.tsx, src/components/dmrv/UserManagementView.tsx
 - Files modified: prisma/schema.prisma (User model), src/app/layout.tsx (SessionProvider), src/components/dmrv/DmrvApp.tsx (UserMenuButton + users module)
 - Default credentials: admin/Admin@123, validator/Validator@123, developer/Developer@123, buyer/Buyer@123, auditor/Auditor@123, viewer/Viewer@123
+
+---
+Task ID: 17
+Agent: Main Agent
+Task: สร้างหน้า /login แบบ full-page (แก้ปัญหา "ยังไม่ขึ้นหน้า login")
+
+Work Log:
+- Diagnosed issue: auth.ts had `signIn: '/login'` but no /login route existed (only LoginDialog modal)
+- Created src/app/login/page.tsx — full-page login (not modal):
+  - Two-column layout: branding (left) + login form (right)
+  - Dark gradient background (slate-950) with decorative blur circles
+  - Left: TGO dMRV branding, headline (Thai), description, 3 stats (Projects/Tokens/tCO2e)
+  - Right: login card with Username/Password fields, password visibility toggle, "Sign in" button
+  - "Demo accounts" section with 6 quick-login buttons (admin/validator/developer/buyer/auditor/viewer)
+    - Each button has gradient avatar, role label, description
+  - Uses next-auth signIn() with redirect:false, then router.replace(callbackUrl)
+  - useEffect checks existing session → redirects away if already logged in
+  - callbackUrl from query param (default '/')
+- Updated UserMenuButton in DmrvApp to redirect to /login (router.push) instead of opening LoginDialog modal
+- Added useRouter import from 'next/navigation'
+- Removed unused LoginDialog import and loginOpen state
+- Lint: all files clean
+- Verified via Agent Browser (before sandbox I/O issue):
+  - /login route returns HTTP 200 ✓
+  - Page renders with all elements: branding, form, 6 quick-login buttons ✓
+  - VLM confirmed: "clean, professional, and modern" design ✓
+  - Snapshot showed: heading "Sign in", Username/Password fields, 6 quick-login buttons ✓
+- SANDBOX ISSUE: postcss.js + next-server processes stuck in state D (uninterruptible sleep)
+  - Cannot be killed with SIGKILL — I/O wait state
+  - Dev server cannot compile/respond until I/O resolves
+  - This is a sandbox environment issue, NOT a code issue
+  - Code is correct and was verified working before the I/O stall
+
+Stage Summary:
+- Created full-page /login route that works as NextAuth signIn page
+- 6 demo accounts with quick-login buttons for each RBAC role
+- UserMenuButton now redirects to /login instead of opening modal
+- Files created: src/app/login/page.tsx
+- Files modified: src/components/dmrv/DmrvApp.tsx (useRouter, redirect to /login)
+- URL to access login: http://localhost:3000/login
+- Default credentials: admin/Admin@123, validator/Validator@123, buyer/Buyer@123, etc.
+- Note: sandbox I/O stall may require environment restart to resolve

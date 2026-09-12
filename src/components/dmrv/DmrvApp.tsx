@@ -59,6 +59,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import dynamic from 'next/dynamic';
+import { useRouter } from 'next/navigation';
 // Dynamic imports with ssr:false to reduce initial compilation overhead
 const DashboardView = dynamic(() => import('./DashboardView'), { ssr: false });
 const MapDashboardView = dynamic(() => import('./MapDashboardView'), { ssr: false });
@@ -103,7 +104,7 @@ const IoTIngestionView = dynamic(() => import('./IoTIngestionView'), { ssr: fals
 const LowCarbonBuildingAgentView = dynamic(() => import('./LowCarbonBuildingAgentView'), { ssr: false });
 const SoilCarbonAgentView = dynamic(() => import('./SoilCarbonAgentView'), { ssr: false });
 import { ErrorBoundary } from './ErrorBoundary';
-import { LoginDialog, LogoutButton } from './LoginDialog';
+import { LogoutButton } from './LoginDialog';
 
 type ModuleKey =
   | 'dashboard'
@@ -300,9 +301,9 @@ interface CurrentUser {
 }
 
 function UserMenuButton({ onNavigateToUsers }: { onNavigateToUsers: () => void }) {
+  const router = useRouter();
   const [user, setUser] = useState<CurrentUser | null>(null);
   const [loading, setLoading] = useState(true);
-  const [loginOpen, setLoginOpen] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
@@ -333,13 +334,10 @@ function UserMenuButton({ onNavigateToUsers }: { onNavigateToUsers: () => void }
 
   if (!user) {
     return (
-      <>
-        <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setLoginOpen(true)}>
-          <LogIn className="h-3.5 w-3.5" />
-          <span className="hidden sm:inline">Sign in</span>
-        </Button>
-        <LoginDialog open={loginOpen} onOpenChange={setLoginOpen} onSuccess={refresh} />
-      </>
+      <Button variant="outline" size="sm" className="gap-1.5" onClick={() => router.push('/login')}>
+        <LogIn className="h-3.5 w-3.5" />
+        <span className="hidden sm:inline">Sign in</span>
+      </Button>
     );
   }
 
