@@ -117,16 +117,21 @@ export const authOptions: NextAuthOptions = {
   secret: process.env.NEXTAUTH_SECRET || 'dev-only-insecure-secret-DO-NOT-USE-IN-PROD',
 };
 
-// ── Dev fallback (development only) ────────────────────────────────────────
+// ── Dev fallback (development only, explicit override only) ────────────────
 const DEV_ROLE_OVERRIDE_HEADER = 'x-dev-role';
 const DEV_ROLE_OVERRIDE_QUERY = 'devrole';
-const DEV_DEFAULT_ROLE: RoleKey = 'admin';
 
 function isProd(): boolean {
   return process.env.NODE_ENV === 'production';
 }
 
-function resolveDevRole(req?: NextRequest): RoleKey {
+/**
+ * Resolve a dev role ONLY when an explicit override is provided via
+ * x-dev-role header or ?devRole= query parameter. This allows API testing
+ * with curl without logging in, but does NOT auto-login browser requests.
+ * Returns null when no override is present (browser users must log in).
+ */
+function resolveDevRole(req?: NextRequest): RoleKey | null {
   const headerRole = req?.headers.get(DEV_ROLE_OVERRIDE_HEADER);
   if (headerRole && Object.keys(RBAC_ROLES).includes(headerRole)) {
     return headerRole as RoleKey;
@@ -135,15 +140,15 @@ function resolveDevRole(req?: NextRequest): RoleKey {
   if (queryRole && Object.keys(RBAC_ROLES).includes(queryRole)) {
     return queryRole as RoleKey;
   }
-  return DEV_DEFAULT_ROLE;
+  return null;
 }
 
 // ── Session resolution ────────────────────────────────────────────────────
 /**
  * Resolve the current user from a NextAuth session.
- * In development, if no session is present, falls back to a dev role
- * (overridable via x-dev-role header / ?devRole= query, default admin)
- * so the demo keeps working without logging in through the browser.
+ * In development, if no session is present but an explicit dev-role override
+ * is provided (x-dev-role header / ?devRole= query), uses that role — this
+ * allows API testing with curl. Browser requests (no override) require login.
  * In production, no fallback — missing session yields null.
  */
 export async function getCurrentUser(req?: NextRequest): Promise<AppUser | null> {
@@ -157,8 +162,10 @@ export async function getCurrentUser(req?: NextRequest): Promise<AppUser | null>
 
   if (isProd()) return null;
 
-  // Dev fallback
+  // Dev fallback — ONLY with explicit override (header/query), not by default
   const role = resolveDevRole(req);
+  if (!role) return null;
+
   return {
     id: `dev-${role}`,
     name: `Dev ${role.replace('_', ' ').replace(/\b\w/g, (c) => c.toUpperCase())}`,

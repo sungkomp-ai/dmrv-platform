@@ -328,6 +328,13 @@ function UserMenuButton({ onNavigateToUsers }: { onNavigateToUsers: () => void }
     return () => clearInterval(t);
   }, [refresh]);
 
+  // Redirect to /login if not authenticated (after initial check completes)
+  useEffect(() => {
+    if (!loading && !user) {
+      router.replace('/login');
+    }
+  }, [loading, user, router]);
+
   if (loading) {
     return <div className="h-8 w-8 rounded-full bg-slate-200 animate-pulse" />;
   }
