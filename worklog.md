@@ -801,3 +801,33 @@ Stage Summary:
 - URL to access login: http://localhost:3000/login
 - Default credentials: admin/Admin@123, validator/Validator@123, buyer/Buyer@123, etc.
 - Note: sandbox I/O stall may require environment restart to resolve
+
+---
+Task ID: 18
+Agent: Main Agent
+Task: ปรับแก้ให้ขึ้นหน้า login อัตโนมัติ (Auto-redirect to login page)
+
+Work Log:
+- Diagnosed: no middleware existed, so unauthenticated users could access / directly (got dev fallback admin)
+- Created src/middleware.ts using next-auth/middleware:
+  - Protects all routes EXCEPT: /login, /api/auth/*, /api/dmrv/auth, _next/static, _next/image, favicon, PNG/PDF/HTML files
+  - Unauthenticated requests to protected routes get 307 redirect to /login
+- Added NEXTAUTH_SECRET and NEXTAUTH_URL to .env (NextAuth middleware requires a real secret)
+- Verified dev fallback in auth.ts already requires explicit override (header/query) — browser users without session get null → middleware redirects to /login
+- Tested via curl:
+  - GET / without session → HTTP 307 redirect ✓
+  - GET /login → HTTP 200 ✓
+  - Follow redirect: / → /login?callbackUrl=... → HTTP 200 ✓
+- Verified via Agent Browser + VLM:
+  - Opened http://localhost:3000/ → auto-redirected to /login ✓
+  - Login page rendered with: branding (left), login form (right), 6 quick-login buttons ✓
+  - VLM confirmed: "clean, professional, modern dark mode" design ✓
+  - All form elements present: Username, Password, Sign in button, demo accounts ✓
+
+Stage Summary:
+- System now auto-redirects unauthenticated users to /login page
+- Middleware protects all app routes (except login + public APIs)
+- NextAuth secret configured in .env for proper JWT signing
+- Files created: src/middleware.ts
+- Files modified: .env (added NEXTAUTH_SECRET, NEXTAUTH_URL)
+- Login flow: visit / → middleware checks session → no session → redirect to /login → user logs in → redirect back to original URL
