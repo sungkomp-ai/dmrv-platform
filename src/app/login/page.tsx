@@ -37,6 +37,7 @@ export default function LoginPage() {
   const [checkingSession, setCheckingSession] = useState(true);
 
   const callbackUrl = searchParams.get('callbackUrl') || '/';
+  const staleReason = searchParams.get('reason') === 'stale';
 
   // If already logged in, redirect away
   useEffect(() => {
@@ -48,6 +49,17 @@ export default function LoginPage() {
       }
     });
   }, [router, callbackUrl]);
+
+  // Show toast if redirected due to stale session
+  useEffect(() => {
+    if (staleReason) {
+      toast({
+        title: 'เซสชันหมดอายุ',
+        description: 'กรุณาเข้าสู่ระบบใหม่อีกครั้ง',
+        variant: 'destructive',
+      });
+    }
+  }, [staleReason, toast]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
