@@ -67,8 +67,10 @@ export default function LoginPage() {
       return;
     }
     toast({ title: 'ยินดีต้อนรับ', description: `เข้าสู่ระบบสำเร็จในฐานะ "${username.trim().toLowerCase()}"` });
-    router.replace(callbackUrl);
-    router.refresh();
+    // Use hard redirect (not router.replace) to ensure the new session cookie
+    // is sent to the server on the next request. Client-side navigation via
+    // router.replace can miss the freshly-set cookie.
+    window.location.href = callbackUrl;
   };
 
   const quickLogin = async (acc: QuickAccount) => {
@@ -86,8 +88,7 @@ export default function LoginPage() {
       return;
     }
     toast({ title: 'ยินดีต้อนรับ', description: `เข้าสู่ระบบในฐานะ ${acc.role}` });
-    router.replace(callbackUrl);
-    router.refresh();
+    window.location.href = callbackUrl;
   };
 
   if (checkingSession) {
