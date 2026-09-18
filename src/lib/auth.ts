@@ -64,7 +64,12 @@ export const authOptions: NextAuthOptions = {
         const password = credentials?.password ?? '';
         if (!username || !password) return null;
 
-        const user = await db.user.findUnique({ where: { username } });
+        let user;
+        try {
+          user = await db.user.findUnique({ where: { username } });
+        } catch {
+          return null;
+        }
         if (!user) return null;
         if (user.status !== 'ACTIVE') return null; // SUSPENDED / LOCKED denied
 
