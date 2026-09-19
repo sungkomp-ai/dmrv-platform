@@ -328,12 +328,9 @@ function UserMenuButton({ onNavigateToUsers }: { onNavigateToUsers: () => void }
     return () => clearInterval(t);
   }, [refresh]);
 
-  // Redirect to /login if not authenticated (after initial check completes)
-  useEffect(() => {
-    if (!loading && !user) {
-      router.replace('/login');
-    }
-  }, [loading, user, router]);
+  // Note: do NOT auto-redirect to /login when no user.
+  // The dashboard should render regardless — the UserMenuButton
+  // shows a "Sign in" button for unauthenticated users instead.
 
   if (loading) {
     return <div className="h-8 w-8 rounded-full bg-slate-200 animate-pulse" />;
