@@ -21,17 +21,93 @@ const trackingPositions: TrackingPosition[] = [];
 const inventoryItems: InventoryItem[] = [];
 
 // GET /api/dmrv/logistics — Get tracking/inventory/settlement data
+//
+// Data is DERIVED from the live CarbonCredit lifecycle so that every page in the
+// platform shows consistent, related numbers:
+//   • tracking   = Traded credits  → shipments on their way to buyers
+//   • inventory  = Available credits → stock held at the registry warehouse
+//   • settlements = Settlement table (auto-backfilled for Traded credits)
+// Manual updates via POST still work and are overlaid on top of the derived data.
 export async function GET() {
   try {
+    const credits = await db.carbonCredit.findMany({ include: { project: true } });
+
+    // ── Derive tracking positions from TRADED credits ───────────────────────
+    // Stage is derived from a deterministic hash of the tokenId (stable across
+    // reloads) so the demo dataset exercises the full shipment lifecycle:
+    //   pending_pickup → in_transit → at_warehouse → delivered
+    const STAGE_AGES_DAYS = [0.5, 3, 10, 20]; // representative age per stage
+    const traded = credits.filter((c) => c.status === 'Traded');
+
+    const hashToken = (tokenId: string): number => {
+      let h = 0;
+      for (let i = 0; i < tokenId.length; i++) h = (h * 31 + tokenId.charCodeAt(i)) % 997;
+      return h;
+    };
+
+    const derivedTracking: TrackingPosition[] = traded.map((credit, idx) => {
+      const ageDays = STAGE_AGES_DAYS[hashToken(credit.tokenId) % STAGE_AGES_DAYS.length];
+      const status =
+        ageDays < 1 ? 'pending_pickup' : ageDays < 7 ? 'in_transit' : ageDays < 14 ? 'at_warehouse' : 'delivered';
+      // Deterministic small offset so multiple assets from the same project
+      // do not overlap exactly on a map.
+      const jitterLat = ((idx % 5) - 2) * 0.015;
+      const jitterLng = ((idx % 3) - 1) * 0.015;
+      return {
+        assetId: credit.tokenId,
+        latitude: (credit.project?.centerLat ?? 13.75) + jitterLat,
+        longitude: (credit.project?.centerLng ?? 100.5) + jitterLng,
+        timestamp: new Date(credit.updatedAt).toISOString(),
+        status,
+      };
+    });
+
+    // Manual POST updates take precedence over derived positions
+    const mergedTracking = [...derivedTracking];
+    for (const manual of trackingPositions) {
+      const i = mergedTracking.findIndex((t) => t.assetId === manual.assetId);
+      if (i >= 0) mergedTracking[i] = manual;
+      else mergedTracking.push(manual);
+    }
+
+    // ── Derive inventory from AVAILABLE credits ────────────────────────────
+    const available = credits.filter((c) => c.status === 'Available');
+    const derivedInventory: InventoryItem[] = available.map((credit) => ({
+      assetId: credit.tokenId,
+      stock: credit.amount,
+      unit: 'tCO2e',
+      lastUpdated: new Date(credit.updatedAt).toISOString(),
+    }));
+    const mergedInventory = [...derivedInventory];
+    for (const manual of inventoryItems) {
+      const i = mergedInventory.findIndex((it) => it.assetId === manual.assetId);
+      if (i >= 0) mergedInventory[i] = manual;
+      else mergedInventory.push(manual);
+    }
+
+    // ── Settlements: idempotent backfill for Traded credits ───────────────
+    const existing = await db.settlement.findMany();
+    const settledCreditIds = new Set(existing.map((s) => s.creditId));
+    const missing = traded.filter((c) => !settledCreditIds.has(c.id));
+    if (missing.length > 0) {
+      await db.settlement.createMany({
+        data: missing.map((credit) => ({
+          creditId: credit.id,
+          assetId: credit.tokenId,
+          amount: credit.amount,
+          status: 'processed',
+        })),
+      });
+    }
     const settlements = await db.settlement.findMany({ orderBy: { timestamp: 'desc' } });
 
     return NextResponse.json({
-      tracking: trackingPositions,
-      inventory: inventoryItems,
+      tracking: mergedTracking,
+      inventory: mergedInventory,
       settlements,
       summary: {
-        trackingPoints: trackingPositions.length,
-        inventoryItems: inventoryItems.length,
+        trackingPoints: mergedTracking.length,
+        inventoryItems: mergedInventory.length,
         totalSettlements: settlements.length,
         totalSettlementAmount: settlements.reduce((sum, s) => sum + s.amount, 0),
         processedSettlements: settlements.filter((s) => s.status === 'processed').length,

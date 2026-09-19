@@ -82,7 +82,7 @@ export default function LoginPage() {
     // Use hard redirect (not router.replace) to ensure the new session cookie
     // is sent to the server on the next request. Client-side navigation via
     // router.replace can miss the freshly-set cookie.
-    window.location.href = callbackUrl;
+    window.location.assign(callbackUrl);
   };
 
   const quickLogin = async (acc: QuickAccount) => {
@@ -100,7 +100,7 @@ export default function LoginPage() {
       return;
     }
     toast({ title: 'ยินดีต้อนรับ', description: `เข้าสู่ระบบในฐานะ ${acc.role}` });
-    window.location.href = callbackUrl;
+    window.location.assign(callbackUrl);
   };
 
   if (checkingSession) {

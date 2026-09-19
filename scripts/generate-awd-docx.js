@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-require-imports */
 /**
  * Generate AWD Carbon Credit Assessment Model Documentation (Word)
  * Recipe: R1 + Palette FG-1 (Forest Mint - ESG/environmental/sustainability/agriculture)

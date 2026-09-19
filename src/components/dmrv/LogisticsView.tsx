@@ -466,7 +466,7 @@ export default function LogisticsView() {
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <Card>
               <CardContent className="p-4 text-center">
-                <p className="text-2xl font-bold text-emerald-600">฿{(totalProcessedAmount).toLocaleString()}</p>
+                <p className="text-2xl font-bold text-emerald-600">{(totalProcessedAmount).toLocaleString()} <span className="text-sm font-medium">tCO₂e</span></p>
                 <p className="text-xs text-muted-foreground">Processed</p>
               </CardContent>
             </Card>
@@ -506,8 +506,8 @@ export default function LogisticsView() {
                   <Input placeholder="e.g., TCO2E-xxx" value={settleAssetId} onChange={(e) => setSettleAssetId(e.target.value)} />
                 </div>
                 <div className="space-y-2">
-                  <Label>Amount (THB)</Label>
-                  <Input type="number" placeholder="e.g., 2450000" value={settleAmount} onChange={(e) => setSettleAmount(e.target.value)} />
+                  <Label>Amount (tCO₂e)</Label>
+                  <Input type="number" placeholder="e.g., 2450.5" value={settleAmount} onChange={(e) => setSettleAmount(e.target.value)} />
                 </div>
                 <div className="flex items-end">
                   <Button onClick={handleProcessSettlement} disabled={submittingSettlement} className="w-full bg-emerald-600 hover:bg-emerald-700 gap-2">
@@ -545,7 +545,7 @@ export default function LogisticsView() {
                         <TableRow key={record.id}>
                           <TableCell className="font-mono text-xs font-semibold">{record.id}</TableCell>
                           <TableCell className="text-xs">{record.assetId}</TableCell>
-                          <TableCell className="font-mono text-sm">฿{record.amount.toLocaleString()}</TableCell>
+                          <TableCell className="font-mono text-sm">{record.amount.toLocaleString()} tCO₂e</TableCell>
                           <TableCell>
                             <Badge variant="secondary" className={`text-[10px] h-5 ${settlementStatusStyles[record.status] || 'bg-slate-100 text-slate-700'}`}>
                               {formatStatus(record.status)}

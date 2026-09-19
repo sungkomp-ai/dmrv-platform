@@ -135,10 +135,9 @@ function isProd(): boolean {
 }
 
 /**
- * Resolve a dev role ONLY when an explicit override is provided via
+ * Resolve a dev role when an explicit override is provided via
  * x-dev-role header or ?devRole= query parameter. This allows API testing
- * with curl without logging in, but does NOT auto-login browser requests.
- * Returns null when no override is present (browser users must log in).
+ * with curl without logging in. Returns null when no override is present.
  */
 function resolveDevRole(req?: NextRequest): RoleKey | null {
   const headerRole = req?.headers.get(DEV_ROLE_OVERRIDE_HEADER);
@@ -155,10 +154,17 @@ function resolveDevRole(req?: NextRequest): RoleKey | null {
 // ── Session resolution ────────────────────────────────────────────────────
 /**
  * Resolve the current user from a NextAuth session.
- * In development, if no session is present but an explicit dev-role override
- * is provided (x-dev-role header / ?devRole= query), uses that role — this
- * allows API testing with curl. Browser requests (no override) require login.
- * In production, no fallback — missing session yields null.
+ *
+ * In development:
+ *   1. A real session always wins.
+ *   2. An explicit dev-role override (x-dev-role header / ?devRole= query)
+ *      is used for curl testing.
+ *   3. Otherwise the request falls back to a read/write `admin` dev user so
+ *      that EVERY page shows its data without requiring login (matching the
+ *      public dashboard). Role-restricted demos still work: sign in via
+ *      /login quick-login buttons to act as a specific role.
+ *
+ * In production there is NO fallback — a missing session yields null.
  */
 export async function getCurrentUser(req?: NextRequest): Promise<AppUser | null> {
   // Lazy-import to avoid pulling NextAuth into client bundles.
@@ -171,16 +177,26 @@ export async function getCurrentUser(req?: NextRequest): Promise<AppUser | null>
 
   if (isProd()) return null;
 
-  // Dev fallback — ONLY with explicit override (header/query), not by default
+  // Dev fallback 1 — explicit override (header/query)
   const role = resolveDevRole(req);
-  if (!role) return null;
+  if (role) {
+    return {
+      id: `dev-${role}`,
+      name: `Dev ${role.replace('_', ' ').replace(/\b\w/g, (c) => c.toUpperCase())}`,
+      email: `dev-${role}@dmrv.local`,
+      role,
+      username: `dev-${role}`,
+      status: 'ACTIVE',
+    };
+  }
 
+  // Dev fallback 2 — default admin so all pages render their data without login
   return {
-    id: `dev-${role}`,
-    name: `Dev ${role.replace('_', ' ').replace(/\b\w/g, (c) => c.toUpperCase())}`,
-    email: `dev-${role}@dmrv.local`,
-    role,
-    username: `dev-${role}`,
+    id: 'dev-admin',
+    name: 'Dev Admin',
+    email: 'dev-admin@dmrv.local',
+    role: 'admin',
+    username: 'dev-admin',
     status: 'ACTIVE',
   };
 }

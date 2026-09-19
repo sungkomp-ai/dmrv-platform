@@ -763,6 +763,20 @@ model BuildingMaterialRecord {
 
 // ─── User & Authentication ────────────────────────────────────────────────
 
+model FootprintEntry {
+  id        String   @id @default(cuid())
+  scope     Int // 1, 2, or 3 (GHG Protocol)
+  activity  String // activityType key, e.g. diesel, electricity_thailand
+  quantity  Float
+  unit      String   @default("")
+  factor    Float    @default(0) // kgCO2e per unit
+  emissions Float // kgCO2e = quantity × factor
+  projectId String? // optional link to a project (informational)
+  createdAt DateTime @default(now())
+
+  @@index([scope])
+}
+
 model User {
   id            String   @id @default(cuid())
   username      String   @unique

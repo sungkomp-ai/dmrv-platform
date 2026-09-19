@@ -36,7 +36,39 @@ const EMISSION_FACTORS: EmissionFactor[] = [
   { id: 'EF-S3-007', scope: 3, category: 'purchased_goods', activityType: 'concrete', factor: 0.16, unit: 'kgCO2e/kg', source: 'GCCA 2023' },
 ];
 
-// GET /api/dmrv/footprint — Get emission factors
+// ── Seed sample footprint entries on first load so the page shows data ────
+const SAMPLE_ENTRIES: Array<{ scope: number; activityType: string; quantity: number }> = [
+  { scope: 1, activityType: 'diesel', quantity: 12500 },
+  { scope: 1, activityType: 'gasoline', quantity: 8200 },
+  { scope: 1, activityType: 'lpg', quantity: 3600 },
+  { scope: 2, activityType: 'electricity_thailand', quantity: 420000 },
+  { scope: 2, activityType: 'electricity_grid_average', quantity: 85000 },
+  { scope: 3, activityType: 'road_freight', quantity: 65000 },
+  { scope: 3, activityType: 'landfill', quantity: 4300 },
+  { scope: 3, activityType: 'steel', quantity: 2500 },
+];
+
+async function getFootprintEntries() {
+  let entries = await db.footprintEntry.findMany({ orderBy: { createdAt: 'desc' }, take: 200 });
+  if (entries.length === 0) {
+    const data = SAMPLE_ENTRIES.map((s) => {
+      const ef = EMISSION_FACTORS.find((f) => f.scope === s.scope && f.activityType === s.activityType)!;
+      return {
+        scope: s.scope,
+        activity: s.activityType,
+        quantity: s.quantity,
+        unit: ef.unit,
+        factor: ef.factor,
+        emissions: Math.round(s.quantity * ef.factor * 100) / 100,
+      };
+    });
+    await db.footprintEntry.createMany({ data });
+    entries = await db.footprintEntry.findMany({ orderBy: { createdAt: 'desc' }, take: 200 });
+  }
+  return entries;
+}
+
+// GET /api/dmrv/footprint — Get emission factors + persisted footprint entries
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -57,12 +89,24 @@ export async function GET(request: NextRequest) {
       3: filteredFactors.filter((ef) => ef.scope === 3),
     };
 
+    const entries = await getFootprintEntries();
+    const totalEmissions = entries.reduce((sum, e) => sum + e.emissions, 0);
+
     return NextResponse.json({
       emissionFactors: filteredFactors,
       groupedByScope,
       categories: [...new Set(EMISSION_FACTORS.map((ef) => ef.category))],
       activityTypes: [...new Set(EMISSION_FACTORS.map((ef) => ef.activityType))],
       totalFactors: EMISSION_FACTORS.length,
+      entries,
+      summary: {
+        totalEntries: entries.length,
+        totalEmissionsKgCO2e: Math.round(totalEmissions * 100) / 100,
+        totalEmissionsTco2e: Math.round((totalEmissions / 1000) * 1000) / 1000,
+        scope1: Math.round(entries.filter((e) => e.scope === 1).reduce((s, e) => s + e.emissions, 0) * 100) / 100,
+        scope2: Math.round(entries.filter((e) => e.scope === 2).reduce((s, e) => s + e.emissions, 0) * 100) / 100,
+        scope3: Math.round(entries.filter((e) => e.scope === 3).reduce((s, e) => s + e.emissions, 0) * 100) / 100,
+      },
     });
   } catch (error) {
     console.error('Footprint error:', error);
@@ -130,6 +174,19 @@ export async function POST(request: NextRequest) {
         scope3: Math.round(scopeBreakdown.scope3 * 100) / 100,
       },
     };
+
+    // Persist every calculation so the footprint history survives reloads
+    await db.footprintEntry.createMany({
+      data: results.map((r) => ({
+        scope: r.scope,
+        activity: r.activityType,
+        quantity: r.quantity,
+        unit: r.unit,
+        factor: r.emissionFactor,
+        emissions: r.emissionsKgCO2e,
+        projectId: projectId ?? null,
+      })),
+    });
 
     if (projectId) {
       await db.auditLog.create({

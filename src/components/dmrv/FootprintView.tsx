@@ -100,6 +100,19 @@ export default function FootprintView() {
       setEmissionFactors(factors);
       setProjects((projectsData.projects as Project[]).map((p: Project) => ({ id: p.id, name: p.name })));
 
+      // Load persisted footprint entries (seeded with samples on first run)
+      type ApiEntry = { id: string; scope: number; activity: string; quantity: number; unit: string; factor: number; emissions: number };
+      const apiEntries = (footprintData.entries as ApiEntry[]) || [];
+      setEntries(apiEntries.map((e) => ({
+        id: e.id,
+        scope: `Scope ${e.scope}`,
+        activity: e.activity,
+        quantity: e.quantity,
+        unit: e.unit,
+        factor: e.factor,
+        emissions: e.emissions,
+      })));
+
       if (factors.length > 0) {
         setSelectedActivity(factors[0].activityType);
       }
