@@ -25,6 +25,10 @@ node_modules/
 *.pem
 Thumbs.db
 
+# zip archives / build exports
+*.zip
+zip1ZYUY*
+
 # debug
 npm-debug.log*
 yarn-debug.log*
