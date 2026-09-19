@@ -62,18 +62,22 @@ export const authOptions: NextAuthOptions = {
       async authorize(credentials) {
         const username = credentials?.username?.trim().toLowerCase();
         const password = credentials?.password ?? '';
+        console.log('[auth] authorize for:', username, '| has password:', !!password);
         if (!username || !password) return null;
 
         let user;
         try {
           user = await db.user.findUnique({ where: { username } });
-        } catch {
+          console.log('[auth] DB result:', user ? `${user.username} ${user.role} ${user.status}` : 'NOT FOUND');
+        } catch (e) {
+          console.error('[auth] DB ERROR:', String(e));
           return null;
         }
         if (!user) return null;
-        if (user.status !== 'ACTIVE') return null; // SUSPENDED / LOCKED denied
+        if (user.status !== 'ACTIVE') return null;
 
         const ok = await verifyPassword(password, user.passwordHash);
+        console.log('[auth] verifyPassword:', ok);
         if (!ok) return null;
 
         // Update last login timestamp (fire-and-forget)
