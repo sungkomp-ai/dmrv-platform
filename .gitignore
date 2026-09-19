@@ -103,3 +103,4 @@ Caddyfile
 
 # sandbox PID files
 .zscripts/
+tool-results/
