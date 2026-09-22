@@ -36348,6 +36348,10 @@ var CSV_COLUMNS = [
   "simDAP",
   "simHour",
   "growthStage",
+  "profileKey",
+  "varietyName",
+  "awdActive",
+  "drainForced",
   "awdPhase",
   "awdCycles",
   "waterLevelCm",
@@ -36427,6 +36431,50 @@ var TVER_EF_CF_DRY = 0.7;
 var MG_M2_HR_TO_KG_HA_DAY = 0.24;
 var KG_CH4_TO_TCO2E = GWP_CH4 / 1000;
 var KG_N2O_TO_TCO2E = GWP_N2O / 1000;
+var VARIETY_PROFILES = {
+  KDML105_IRRIGATED: {
+    variety: "KDML105",
+    varietyName: "\u0E02\u0E49\u0E32\u0E27\u0E2B\u0E2D\u0E21\u0E21\u0E30\u0E25\u0E34 105 (\u0E19\u0E32\u0E0A\u0E25\u0E1B\u0E23\u0E30\u0E17\u0E32\u0E19)",
+    photosensitive: false,
+    establishmentEndPct: 12.5,
+    vegetativeEndPct: 66.7,
+    reproductiveEndPct: 83.3,
+    maturityEndPct: 91.7,
+    awdFloodTargetCm: 5,
+    awdDryThresholdCm: -15,
+    awdFloodDays: 7,
+    awdDryDays: 5,
+    maxKgPerHa: 3500
+  },
+  PTT1_RAINFED: {
+    variety: "PTT1",
+    varietyName: "\u0E02\u0E49\u0E32\u0E27\u0E40\u0E08\u0E49\u0E32 \u0E1B\u0E17\u0E38\u0E21\u0E18\u0E32\u0E19\u0E35 1 (\u0E19\u0E32\u0E19\u0E49\u0E33\u0E1D\u0E19)",
+    photosensitive: false,
+    establishmentEndPct: 14.3,
+    vegetativeEndPct: 76.2,
+    reproductiveEndPct: 95.2,
+    maturityEndPct: 100,
+    awdFloodTargetCm: 5,
+    awdDryThresholdCm: -12,
+    awdFloodDays: 6,
+    awdDryDays: 4,
+    maxKgPerHa: 4500
+  },
+  RD43_DRY: {
+    variety: "RD43",
+    varietyName: "\u0E02\u0E49\u0E32\u0E27\u0E40\u0E08\u0E49\u0E32 \u0E01\u0E02 43 (\u0E19\u0E32\u0E41\u0E25\u0E49\u0E07)",
+    photosensitive: false,
+    establishmentEndPct: 15.8,
+    vegetativeEndPct: 84.2,
+    reproductiveEndPct: 105.3,
+    maturityEndPct: 100,
+    awdFloodTargetCm: 5,
+    awdDryThresholdCm: -10,
+    awdFloodDays: 5,
+    awdDryDays: 3,
+    maxKgPerHa: 4200
+  }
+};
 function createFields() {
   return [
     {
@@ -36440,6 +36488,7 @@ function createFields() {
       waterSource: "\u0E0A\u0E25\u0E1B\u0E23\u0E30\u0E17\u0E32\u0E19 \u0E40\u0E02\u0E37\u0E48\u0E2D\u0E19\u0E25\u0E33\u0E15\u0E30\u0E04\u0E2D\u0E07",
       riceVariety: "\u0E02\u0E49\u0E32\u0E27\u0E2B\u0E2D\u0E21\u0E21\u0E30\u0E25\u0E34 105 (KDML105)",
       totalDays: 120,
+      profileKey: "KDML105_IRRIGATED",
       boundary: [
         [14.985, 102.06],
         [14.985, 102.1],
@@ -36452,7 +36501,7 @@ function createFields() {
       baseTempMax: 34,
       baseHumidity: 72,
       annualRainfallMm: 1100,
-      floodTargetCm: 10,
+      floodTargetCm: 5,
       dryThresholdCm: -15,
       floodDays: 7,
       dryDays: 5,
@@ -36483,6 +36532,7 @@ function createFields() {
       waterSource: "\u0E19\u0E49\u0E33\u0E1D\u0E19 + \u0E23\u0E30\u0E1A\u0E1A\u0E2A\u0E39\u0E1A\u0E19\u0E49\u0E33\u0E2A\u0E33\u0E23\u0E2D\u0E07",
       riceVariety: "\u0E02\u0E49\u0E32\u0E27\u0E40\u0E08\u0E49\u0E32 \u0E1B\u0E17\u0E38\u0E21\u0E18\u0E32\u0E19\u0E35 1 (PTT1)",
       totalDays: 105,
+      profileKey: "PTT1_RAINFED",
       boundary: [
         [14.485, 100.105],
         [14.485, 100.14],
@@ -36494,7 +36544,7 @@ function createFields() {
       baseTempMax: 35,
       baseHumidity: 78,
       annualRainfallMm: 1400,
-      floodTargetCm: 12,
+      floodTargetCm: 5,
       dryThresholdCm: -12,
       floodDays: 6,
       dryDays: 4,
@@ -36525,6 +36575,7 @@ function createFields() {
       waterSource: "\u0E1D\u0E19\u0E15\u0E01\u0E40\u0E17\u0E48\u0E32\u0E19\u0E31\u0E49\u0E19 (Rainfed)",
       riceVariety: "\u0E02\u0E49\u0E32\u0E27\u0E01\u0E02 43 (RD43)",
       totalDays: 95,
+      profileKey: "RD43_DRY",
       boundary: [
         [15.255, 104.835],
         [15.255, 104.87],
@@ -36536,10 +36587,10 @@ function createFields() {
       baseTempMax: 36,
       baseHumidity: 65,
       annualRainfallMm: 800,
-      floodTargetCm: 8,
-      dryThresholdCm: -18,
+      floodTargetCm: 5,
+      dryThresholdCm: -10,
       floodDays: 5,
-      dryDays: 6,
+      dryDays: 3,
       currentDAP: 0,
       currentHour: 6,
       waterLevelCm: 0,
@@ -36558,23 +36609,35 @@ function createFields() {
     }
   ];
 }
-function getGrowthStage(dap, totalDays) {
-  const p = dap / totalDays;
-  if (p < 0.05)
-    return "GERMINATION";
-  if (p < 0.2)
-    return "TILLERING";
-  if (p < 0.4)
-    return "STEM_ELONGATION";
-  if (p < 0.55)
-    return "BOOTING";
-  if (p < 0.65)
-    return "FLOWERING";
-  if (p < 0.85)
-    return "GRAIN_FILLING";
-  if (p < 1)
+function getGrowthStage(dap, totalDays, profileKey) {
+  const profile = profileKey ? VARIETY_PROFILES[profileKey] : undefined;
+  const p = Math.min(dap / totalDays, 1);
+  const est = profile?.establishmentEndPct ?? 12.5;
+  const veg = profile?.vegetativeEndPct ?? 66.7;
+  const rep = profile?.reproductiveEndPct ?? 83.3;
+  const mat = profile?.maturityEndPct ?? 91.7;
+  if (p >= 1)
+    return "HARVESTED";
+  if (p * 100 >= mat)
     return "MATURITY";
-  return "HARVESTED";
+  if (p * 100 >= rep)
+    return "REPRODUCTIVE";
+  if (p * 100 >= veg)
+    return "REPRODUCTIVE";
+  if (p * 100 >= est)
+    return "VEGETATIVE";
+  return "ESTABLISHMENT";
+}
+function getFieldProfile(field) {
+  return VARIETY_PROFILES[field.profileKey];
+}
+function isAWDActive(field) {
+  const stage = getGrowthStage(field.currentDAP, field.totalDays, field.profileKey);
+  return stage === "VEGETATIVE";
+}
+function isDrainForced(field) {
+  const stage = getGrowthStage(field.currentDAP, field.totalDays, field.profileKey);
+  return stage === "MATURITY" || stage === "HARVESTED";
 }
 function getTemperature(field, hour) {
   const avgTemp = (field.baseTempMin + field.baseTempMax) / 2;
@@ -36602,26 +36665,17 @@ function getRainfallMm(field, dap, hour) {
   return Math.round(intensity * 10) / 10;
 }
 function getCH4Emission(field, hour) {
-  const stage = getGrowthStage(field.currentDAP, field.totalDays);
+  const stage = getGrowthStage(field.currentDAP, field.totalDays, field.profileKey);
   let baseFlux = 0;
   switch (stage) {
-    case "GERMINATION":
-      baseFlux = 2;
+    case "ESTABLISHMENT":
+      baseFlux = 5;
       break;
-    case "TILLERING":
-      baseFlux = 15;
-      break;
-    case "STEM_ELONGATION":
+    case "VEGETATIVE":
       baseFlux = 25;
       break;
-    case "BOOTING":
+    case "REPRODUCTIVE":
       baseFlux = 30;
-      break;
-    case "FLOWERING":
-      baseFlux = 28;
-      break;
-    case "GRAIN_FILLING":
-      baseFlux = 18;
       break;
     case "MATURITY":
       baseFlux = 8;
@@ -36630,20 +36684,25 @@ function getCH4Emission(field, hour) {
       baseFlux = 1;
       break;
   }
+  const awdOn = isAWDActive(field);
   let waterFactor = 1;
-  switch (field.currentAWDPhase) {
-    case "FLOODED":
-      waterFactor = 1;
-      break;
-    case "DRAINING":
-      waterFactor = 0.6;
-      break;
-    case "DRY":
-      waterFactor = 0.15;
-      break;
-    case "REFLOODING":
-      waterFactor = 0.7;
-      break;
+  if (awdOn) {
+    switch (field.currentAWDPhase) {
+      case "FLOODED":
+        waterFactor = 1;
+        break;
+      case "DRAINING":
+        waterFactor = 0.6;
+        break;
+      case "DRY":
+        waterFactor = 0.15;
+        break;
+      case "REFLOODING":
+        waterFactor = 0.7;
+        break;
+    }
+  } else {
+    waterFactor = isDrainForced(field) ? 0.2 : 1;
   }
   const temp = getTemperature(field, hour);
   const tempFactor = 1 + (temp - 28) * 0.03;
@@ -36651,26 +36710,17 @@ function getCH4Emission(field, hour) {
   return Math.max(0, baseFlux * waterFactor * tempFactor * soilFactor);
 }
 function getN2OEmission(field) {
-  const stage = getGrowthStage(field.currentDAP, field.totalDays);
+  const stage = getGrowthStage(field.currentDAP, field.totalDays, field.profileKey);
   let baseFlux = 0;
   switch (stage) {
-    case "GERMINATION":
-      baseFlux = 0.3;
+    case "ESTABLISHMENT":
+      baseFlux = 0.4;
       break;
-    case "TILLERING":
+    case "VEGETATIVE":
+      baseFlux = 1.5;
+      break;
+    case "REPRODUCTIVE":
       baseFlux = 1.2;
-      break;
-    case "STEM_ELONGATION":
-      baseFlux = 1.5;
-      break;
-    case "BOOTING":
-      baseFlux = 1.8;
-      break;
-    case "FLOWERING":
-      baseFlux = 1.5;
-      break;
-    case "GRAIN_FILLING":
-      baseFlux = 1;
       break;
     case "MATURITY":
       baseFlux = 0.5;
@@ -36679,79 +36729,101 @@ function getN2OEmission(field) {
       baseFlux = 0.1;
       break;
   }
+  const awdOn = isAWDActive(field);
   let phaseFactor = 1;
-  switch (field.currentAWDPhase) {
-    case "FLOODED":
-      phaseFactor = 0.5;
-      break;
-    case "DRAINING":
-      phaseFactor = 2.5;
-      break;
-    case "DRY":
-      phaseFactor = 1.2;
-      break;
-    case "REFLOODING":
-      phaseFactor = 2.8;
-      break;
+  if (awdOn) {
+    switch (field.currentAWDPhase) {
+      case "FLOODED":
+        phaseFactor = 0.5;
+        break;
+      case "DRAINING":
+        phaseFactor = 2.5;
+        break;
+      case "DRY":
+        phaseFactor = 1.2;
+        break;
+      case "REFLOODING":
+        phaseFactor = 2.8;
+        break;
+    }
+  } else {
+    phaseFactor = isDrainForced(field) ? 1.8 : 0.5;
   }
   const soilFactor = field.soilType.includes("Sandy") ? 1.4 : field.soilType.includes("Clay") ? 0.8 : 1;
   return Math.max(0, baseFlux * phaseFactor * soilFactor);
 }
 function updateWaterLevel(field, rainfall) {
   const hour = field.currentHour;
+  const awdOn = isAWDActive(field);
+  const drainForced = isDrainForced(field);
   const temp = getTemperature(field, hour);
   const dayETmm = 3 + (temp - 25) * 0.15;
   const hourETmm = dayETmm / 24;
   const percMmPerDay = field.soilType.includes("Sandy") ? 8 : field.soilType.includes("Clay") ? 1.5 : 3.5;
   const percMmPerHr = percMmPerDay / 24;
   const inflowMm = rainfall;
-  const outflowMm = hourETmm + percMmPerHr;
+  const drainBoost = drainForced ? 3 : 1;
+  const outflowMm = hourETmm + percMmPerHr * drainBoost;
   const waterChangeCm = (inflowMm - outflowMm) / 10;
   let irrigationCm = 0;
-  if (field.waterSource.includes("\u0E0A\u0E25\u0E1B\u0E23\u0E30\u0E17\u0E32\u0E19") && (field.currentAWDPhase === "FLOODED" || field.currentAWDPhase === "REFLOODING") && hour === 7) {
+  if (field.waterSource.includes("\u0E0A\u0E25\u0E1B\u0E23\u0E30\u0E17\u0E32\u0E19") && !drainForced && (field.currentAWDPhase === "FLOODED" || field.currentAWDPhase === "REFLOODING") && hour === 7) {
     irrigationCm = 0.5;
   }
-  if (field.waterSource.includes("\u0E2A\u0E33\u0E23\u0E2D\u0E07") && field.currentAWDPhase === "FLOODED" && field.waterLevelCm < 3 && hour === 8) {
+  if (field.waterSource.includes("\u0E2A\u0E33\u0E23\u0E2D\u0E07") && !drainForced && field.currentAWDPhase === "FLOODED" && field.waterLevelCm < 3 && hour === 8) {
     irrigationCm = 0.3;
   }
   field.waterLevelCm += waterChangeCm + irrigationCm;
-  field.awdPhaseDayCounter += 1 / 24;
-  switch (field.currentAWDPhase) {
-    case "FLOODED":
-      if (field.awdPhaseDayCounter >= field.floodDays) {
-        field.currentAWDPhase = "DRAINING";
-        field.awdPhaseDayCounter = 0;
-      }
-      if (field.waterLevelCm < 2 && field.waterSource.includes("\u0E0A\u0E25\u0E1B\u0E23\u0E30\u0E17\u0E32\u0E19")) {
-        field.waterLevelCm = Math.max(field.waterLevelCm, 3);
-      }
-      break;
-    case "DRAINING":
-      if (field.waterLevelCm <= field.dryThresholdCm) {
-        field.currentAWDPhase = "DRY";
-        field.awdPhaseDayCounter = 0;
-      }
-      break;
-    case "DRY":
-      if (field.awdPhaseDayCounter >= field.dryDays) {
-        field.currentAWDPhase = "REFLOODING";
-        field.awdPhaseDayCounter = 0;
-      }
-      if (rainfall > 5 && field.waterLevelCm > 0) {
-        field.currentAWDPhase = "REFLOODING";
-        field.awdPhaseDayCounter = 0;
-      }
-      break;
-    case "REFLOODING":
-      if (field.waterLevelCm >= field.floodTargetCm) {
-        field.currentAWDPhase = "FLOODED";
-        field.awdPhaseDayCounter = 0;
-        field.totalAWDCycles++;
-      }
-      if (field.waterSource.includes("\u0E0A\u0E25\u0E1B\u0E23\u0E30\u0E17\u0E32\u0E19") && field.waterLevelCm < 5) {
-        field.waterLevelCm += 0.3;
-      }
-      break;
+  if (drainForced) {
+    field.currentAWDPhase = "DRY";
+    field.awdPhaseDayCounter = 0;
+  } else if (!awdOn) {
+    field.currentAWDPhase = "FLOODED";
+    field.awdPhaseDayCounter = 0;
+    if (field.waterLevelCm < 3) {
+      field.waterLevelCm = Math.max(field.waterLevelCm, 3);
+    }
+    if (field.waterLevelCm > field.floodTargetCm + 2) {
+      field.waterLevelCm = field.floodTargetCm + 2;
+    }
+  } else {
+    field.awdPhaseDayCounter += 1 / 24;
+    switch (field.currentAWDPhase) {
+      case "FLOODED":
+        if (field.awdPhaseDayCounter >= field.floodDays) {
+          field.currentAWDPhase = "DRAINING";
+          field.awdPhaseDayCounter = 0;
+        }
+        if (field.waterLevelCm < 2 && field.waterSource.includes("\u0E0A\u0E25\u0E1B\u0E23\u0E30\u0E17\u0E32\u0E19")) {
+          field.waterLevelCm = Math.max(field.waterLevelCm, 3);
+        }
+        break;
+      case "DRAINING":
+        if (field.waterLevelCm <= field.dryThresholdCm) {
+          field.currentAWDPhase = "DRY";
+          field.awdPhaseDayCounter = 0;
+        }
+        break;
+      case "DRY":
+        if (field.awdPhaseDayCounter >= field.dryDays) {
+          field.currentAWDPhase = "REFLOODING";
+          field.awdPhaseDayCounter = 0;
+        }
+        if (rainfall > 5 && field.waterLevelCm > 0) {
+          field.currentAWDPhase = "REFLOODING";
+          field.awdPhaseDayCounter = 0;
+        }
+        break;
+      case "REFLOODING":
+        if (field.waterLevelCm >= field.floodTargetCm) {
+          field.currentAWDPhase = "FLOODED";
+          field.awdPhaseDayCounter = 0;
+          field.totalAWDCycles++;
+        }
+        if (field.waterSource.includes("\u0E0A\u0E25\u0E1B\u0E23\u0E30\u0E17\u0E32\u0E19") && field.waterLevelCm < 5) {
+          field.waterLevelCm += 0.3;
+        }
+        break;
+    }
   }
   field.waterLevelCm = Math.max(-25, Math.min(20, field.waterLevelCm));
 }
@@ -36787,26 +36859,24 @@ function estimateYieldKgPerHa(field) {
 }
 function getCO2Flux(field, hour) {
   const temp = getTemperature(field, hour);
-  const stage = getGrowthStage(field.currentDAP, field.totalDays);
+  const stage = getGrowthStage(field.currentDAP, field.totalDays, field.profileKey);
   let baseFlux = 50;
   switch (stage) {
-    case "TILLERING":
-      baseFlux = 120;
+    case "ESTABLISHMENT":
+      baseFlux = 60;
       break;
-    case "STEM_ELONGATION":
+    case "VEGETATIVE":
       baseFlux = 150;
       break;
-    case "BOOTING":
-      baseFlux = 160;
-      break;
-    case "FLOWERING":
+    case "REPRODUCTIVE":
       baseFlux = 140;
       break;
-    case "GRAIN_FILLING":
-      baseFlux = 110;
+    case "MATURITY":
+      baseFlux = 80;
       break;
-    default:
-      baseFlux = 60;
+    case "HARVESTED":
+      baseFlux = 30;
+      break;
   }
   const tempFactor = Math.exp(0.05 * (temp - 25));
   const moisture = getSoilMoisture(field);
@@ -36846,7 +36916,7 @@ function simTick() {
     const soilMoisture = getSoilMoisture(field);
     const soilPH = 5.5 + Math.sin(field.currentDAP * 0.1) * 0.3;
     const soilTempC = temp - 2 + Math.sin(field.currentDAP * 0.3) * 0.5;
-    const growthStage = getGrowthStage(field.currentDAP, field.totalDays);
+    const growthStage = getGrowthStage(field.currentDAP, field.totalDays, field.profileKey);
     const yieldKgPerHa = estimateYieldKgPerHa(field);
     const areaM2 = field.areaHa * 1e4;
     const ch4KgPerHaThisHour = ch4Flux * MG_M2_HR_TO_KG_HA_DAY / 24;
@@ -36879,6 +36949,11 @@ function simTick() {
       simDAP: field.currentDAP,
       simHour: field.currentHour,
       growthStage,
+      profileKey: field.profileKey,
+      varietyName: getFieldProfile(field)?.varietyName ?? field.riceVariety,
+      photosensitive: getFieldProfile(field)?.photosensitive ?? false,
+      awdActive: isAWDActive(field),
+      drainForced: isDrainForced(field),
       awdPhase: field.currentAWDPhase,
       awdCycles: field.totalAWDCycles,
       waterLevelCm: Math.round(field.waterLevelCm * 10) / 10,
@@ -36954,13 +37029,24 @@ function getStatus() {
       waterSource: f.waterSource,
       riceVariety: f.riceVariety,
       totalDays: f.totalDays,
+      profileKey: f.profileKey,
+      varietyName: getFieldProfile(f)?.varietyName ?? f.riceVariety,
+      photosensitive: getFieldProfile(f)?.photosensitive ?? false,
+      stageThresholds: getFieldProfile(f) ? {
+        establishmentEndPct: getFieldProfile(f).establishmentEndPct,
+        vegetativeEndPct: getFieldProfile(f).vegetativeEndPct,
+        reproductiveEndPct: getFieldProfile(f).reproductiveEndPct,
+        maturityEndPct: getFieldProfile(f).maturityEndPct
+      } : undefined,
       boundary: f.boundary,
       currentDAP: f.currentDAP,
       currentHour: f.currentHour,
       waterLevelCm: Math.round(f.waterLevelCm * 10) / 10,
       currentAWDPhase: f.currentAWDPhase,
+      awdActive: isAWDActive(f),
+      drainForced: isDrainForced(f),
       awdCycles: f.totalAWDCycles,
-      growthStage: getGrowthStage(f.currentDAP, f.totalDays),
+      growthStage: getGrowthStage(f.currentDAP, f.totalDays, f.profileKey),
       cumulativeCH4kg: Math.round(f.totalCH4kg * 1000) / 1000,
       cumulativeN2Okg: Math.round(f.totalN2Okg * 1000) / 1000,
       cumulativeCH4tCO2e: Math.round(f.totalCH4tCO2e * 1e4) / 1e4,

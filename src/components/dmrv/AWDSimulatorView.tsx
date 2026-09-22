@@ -33,6 +33,12 @@ interface AWDReading {
   simDAP: number;
   simHour: number;
   growthStage: string;
+  // Variety profile (ใหม่)
+  profileKey?: string;
+  varietyName?: string;
+  photosensitive?: boolean;
+  awdActive?: boolean;
+  drainForced?: boolean;
   awdPhase: string;
   awdCycles: number;
   waterLevelCm: number;
@@ -90,6 +96,19 @@ interface AWDFieldStatus {
   riceVariety: string;
   totalDays: number;
   boundary: number[][];
+  // ─── Variety profile fields (ใหม่: ปรับตามพันธุ์ + สภาพแวดล้อม) ───
+  profileKey?: string;
+  varietyName?: string;
+  photosensitive?: boolean;
+  stageThresholds?: {
+    establishmentEndPct: number;
+    vegetativeEndPct: number;
+    reproductiveEndPct: number;
+    maturityEndPct: number;
+  };
+  // AWD state flags (gate ตาม growth stage)
+  awdActive?: boolean;
+  drainForced?: boolean;
   currentDAP: number;
   currentHour: number;
   waterLevelCm: number;
@@ -140,10 +159,31 @@ const AWD_PHASE_CONFIG: Record<string, { color: string; bg: string; label: strin
   REFLOODING: { color: 'text-cyan-600', bg: 'bg-cyan-50', label: 'Reflooding', labelTh: 'เติมน้ำ' },
 };
 
+// ─── Growth Stage 4 ช่วงหลัก (ปรับตามพันธุ์ + สภาพแวดล้อม) ─────────────
+// แทนที่ 8 stages เดิม (GERMINATION/TILLERING/...) ด้วย 4 ช่วงตาม TGO/T-VER
+const GROWTH_STAGE_CONFIG: Record<string, { icon: string; color: string; bg: string; label: string; labelTh: string }> = {
+  ESTABLISHMENT: { icon: '🌱', color: 'text-emerald-700', bg: 'bg-emerald-50', label: 'Establishment', labelTh: 'ตั้งตัว' },
+  VEGETATIVE:    { icon: '🌿', color: 'text-green-700',   bg: 'bg-green-50',   label: 'Vegetative',    labelTh: 'แตกกอ' },
+  REPRODUCTIVE:  { icon: '🌸', color: 'text-pink-700',    bg: 'bg-pink-50',    label: 'Reproductive',  labelTh: 'ออกดอก/ผสมเกสร' },
+  MATURITY:      { icon: '🌾', color: 'text-amber-700',    bg: 'bg-amber-50',   label: 'Maturity',       labelTh: 'สุกแก่' },
+  HARVESTED:     { icon: '✅', color: 'text-slate-600',    bg: 'bg-slate-50',   label: 'Harvested',      labelTh: 'เก็บเกี่ยวแล้ว' },
+};
+
+// ─── AWD Active State (gate ตาม growth stage) ───────────────────────
+// แสดงว่า AWD เปิดทำงานอยู่ (ช่วง Vegetative) หรือปิด (ช่วงอื่น ๆ)
+const AWD_ACTIVE_CONFIG = {
+  active:  { color: 'text-green-700',  bg: 'bg-green-100',   label: 'AWD Active',   labelTh: 'AWD เปิด'    },
+  inactive:{ color: 'text-slate-600',  bg: 'bg-slate-100',   label: 'AWD Inactive', labelTh: 'AWD ปิด'    },
+  drain:   { color: 'text-orange-700', bg: 'bg-orange-100',  label: 'Drain Forced', labelTh: 'บังคับระบาย' },
+};
+
+// Backward-compat: stage icons map (ใช้สำหรับ legacy stage names ถ้ายังมี)
 const GROWTH_STAGE_ICONS: Record<string, string> = {
+  ESTABLISHMENT: '🌱', VEGETATIVE: '🌿',
+  REPRODUCTIVE: '🌸', MATURITY: '🌾', HARVESTED: '✅',
+  // legacy (fallback)
   GERMINATION: '🌱', TILLERING: '🌿', STEM_ELONGATION: '🎋',
   BOOTING: '🎍', FLOWERING: '🌸', GRAIN_FILLING: '🌾',
-  MATURITY: '🏞️', HARVESTED: '✅',
 };
 
 const mountedEmptySub = () => () => {};
@@ -679,7 +719,12 @@ export default function AWDSimulatorView() {
             const latest = latestByField[fid];
             const awdPhase = latest?.awdPhase || field?.currentAWDPhase || 'FLOODED';
             const phaseCfg = AWD_PHASE_CONFIG[awdPhase] || AWD_PHASE_CONFIG.FLOODED;
-            const growthStage = latest?.growthStage || field?.growthStage || 'GERMINATION';
+            const growthStage = latest?.growthStage || field?.growthStage || 'ESTABLISHMENT';
+            const stageCfg = GROWTH_STAGE_CONFIG[growthStage] || GROWTH_STAGE_CONFIG.ESTABLISHMENT;
+            // AWD active state (gate ตาม growth stage — ปรับตามพันธุ์ + สภาพแวดล้อม)
+            const awdActive = latest?.awdActive ?? field?.awdActive ?? false;
+            const drainForced = latest?.drainForced ?? field?.drainForced ?? false;
+            const awdStateCfg = drainForced ? AWD_ACTIVE_CONFIG.drain : (awdActive ? AWD_ACTIVE_CONFIG.active : AWD_ACTIVE_CONFIG.inactive);
             const progress = field ? Math.min((field.currentDAP / field.totalDays) * 100, 100) : 0;
             const isSelected = selectedFieldId === fid;
 
@@ -695,7 +740,9 @@ export default function AWDSimulatorView() {
                     <span className="text-lg">{cfg.emoji}</span>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-bold truncate">{standardMode === 'tgo' ? cfg.labelTh : cfg.label}</p>
-                      <p className="text-[10px] text-muted-foreground">{field?.riceVariety} &middot; {field?.soilType}</p>
+                      <p className="text-[10px] text-muted-foreground">
+                        {field?.varietyName || field?.riceVariety} &middot; {field?.soilType}
+                      </p>
                     </div>
                     <Badge className={`${phaseCfg.bg} ${phaseCfg.color} text-[9px] h-5 shrink-0`}>
                       <Waves className="h-2.5 w-2.5 mr-1" />
@@ -703,16 +750,42 @@ export default function AWDSimulatorView() {
                     </Badge>
                   </div>
 
+                  {/* AWD Active/Inactive badge — บอกว่า growth stage ปัจจุบันอนุญาตให้ AWD ทำงานหรือไม่ */}
+                  <div className="flex items-center gap-1.5">
+                    <Badge className={`${awdStateCfg.bg} ${awdStateCfg.color} text-[9px] h-4 shrink-0`}>
+                      <Zap className="h-2.5 w-2.5 mr-1" />
+                      {standardMode === 'tgo' ? awdStateCfg.labelTh : awdStateCfg.label}
+                    </Badge>
+                    {field?.profileKey && (
+                      <span className="text-[9px] text-muted-foreground">
+                        {field.photosensitive ? '☀️ ไวแสง' : '📜 ไม่ไวแสง'}
+                      </span>
+                    )}
+                  </div>
+
                   {/* Progress */}
                   <div>
                     <div className="flex items-center justify-between text-xs mb-1">
                       <span className="flex items-center gap-1">
-                        <span>{GROWTH_STAGE_ICONS[growthStage] || '🌱'}</span>
-                        <span className="font-medium text-[11px]">{growthStage.replace(/_/g, ' ')}</span>
+                        <span>{stageCfg.icon}</span>
+                        <span className="font-medium text-[11px]">
+                          {standardMode === 'tgo' ? stageCfg.labelTh : stageCfg.label}
+                        </span>
                       </span>
                       <span className="text-muted-foreground text-[10px]">DAP {field?.currentDAP || 0}/{field?.totalDays || '?'}</span>
                     </div>
                     <Progress value={progress} className="h-1.5" />
+                    {/* Growth stage threshold markers — แสดงขอบเขต 4 ช่วงตามพันธุ์ */}
+                    {field?.stageThresholds && (
+                      <div className="relative h-1 mt-0.5">
+                        <div className="absolute inset-0 flex">
+                          <div className="bg-emerald-200/60" style={{ width: `${field.stageThresholds.establishmentEndPct}%` }} title="Establishment" />
+                          <div className="bg-green-300/60" style={{ width: `${field.stageThresholds.vegetativeEndPct - field.stageThresholds.establishmentEndPct}%` }} title="Vegetative (AWD active)" />
+                          <div className="bg-pink-200/60" style={{ width: `${Math.min(field.stageThresholds.reproductiveEndPct, 100) - field.stageThresholds.vegetativeEndPct}%` }} title="Reproductive" />
+                          <div className="bg-amber-200/60" style={{ width: `${100 - Math.min(field.stageThresholds.reproductiveEndPct, 100)}%` }} title="Maturity" />
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* Metrics Grid */}

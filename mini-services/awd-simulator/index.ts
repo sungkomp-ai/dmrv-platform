@@ -259,7 +259,7 @@ let csvHeaderWritten = false;
 
 const CSV_COLUMNS = [
   'timestamp', 'tick', 'fieldId', 'fieldName', 'province', 'edgeNodeId',
-  'simDAP', 'simHour', 'growthStage', 'awdPhase', 'awdCycles',
+  'simDAP', 'simHour', 'growthStage', 'profileKey', 'varietyName', 'awdActive', 'drainForced', 'awdPhase', 'awdCycles',
   'waterLevelCm', 'soilMoisturePct', 'rainfallMmHr',
   'airTempC', 'soilTempC', 'humidityPct', 'soilPH',
   'ch4FluxMgM2Hr', 'ch4EfKgHaDay', 'n2oFluxMgM2Hr', 'n2oEfKgHaDay', 'co2FluxMgM2Hr',
@@ -327,6 +327,90 @@ const KG_N2O_TO_TCO2E = GWP_N2O / 1000;
 // ─── AWD Water Management Phases ─────────────────────────────────────
 type AWDPhase = 'FLOODED' | 'DRAINING' | 'DRY' | 'REFLOODING';
 
+// ─── Growth Stage (สี่ช่วงหลักตาม TGO/T-VER) ──────────────────────────
+// แต่ละพันธุ์ + สภาพแวดล้อม มี threshold เป็นเปอร์เซ็นต์ของ totalDays
+//   ESTABLISHMENT (ตั้งตัว)      — AWD ปิด (ขังน้ำ +3..+5 ซม.)
+//   VEGETATIVE (แตกกอ)           — AWD เปิด (เปียกสลับแห้ง +5..-15 ซม.)
+//   REPRODUCTIVE (ออกดอก/ผสมเกสร) — AWD ปิด (รักษาน้ำ)
+//   MATURITY (สุกแก่)            — AWD ปิด + ระบายน้ำ
+type GrowthStageKey = 'ESTABLISHMENT' | 'VEGETATIVE' | 'REPRODUCTIVE' | 'MATURITY' | 'HARVESTED';
+
+/**
+ * VarietyProfile — growth-stage thresholds เป็นเปอร์เซ็นต์ของ totalDays.
+ * ปรับตามพันธุ์ข้าว + สภาพแวดล้อม:
+ *  - พันธุ์ไวแสง (KDML105, PTT1, RD43): ช่วง Vegetative สั้น ออกดอกเร็ว
+ *  - พันธุ์ไม่ไวแสง (RD6, RD15): ช่วง Vegetative ยาว ตอบสนอง photoperiod
+ *  - นาแล้ง: establishment สั้นกว่า (เสี่ยงเครียดน้ำ) แต่ maturity เร็วกว่า
+ *  - นาชลประทาน: สามารถยืด vegetative ได้นานขึ้น (น้ำคุมได้)
+ */
+interface VarietyProfile {
+  variety: string;       // รหัสพันธุ์ (เช่น 'KDML105', 'PTT1', 'RD6')
+  varietyName: string;   // ชื่อพันธุ์ภาษาไทย
+  photosensitive: boolean; // ไวแสง? (true = ไม่ไวแสง ออกดอกตามฤดู)
+  // thresholds เป็นเปอร์เซ็นต์ของ totalDays (cumulative)
+  // ผลรวมต้อง = 100 (4 ช่วง + harvested)
+  establishmentEndPct: number;  // สิ้นสุดช่วงตั้งตัว
+  vegetativeEndPct: number;    // สิ้นสุดช่วงแตกกอ (AWD active สิ้นสุดที่นี่)
+  reproductiveEndPct: number;  // สิ้นสุดช่วงออกดอก
+  maturityEndPct: number;       // สิ้นสุดช่วงสุกแก่ (= 100)
+  // AWD configuration ที่เหมาะกับพันธุ์/สภาพแวดล้อม
+  awdFloodTargetCm: number;     // ระดับน้ำท่วมเป้าหมาย (cm จากผิวดิน)
+  awdDryThresholdCm: number;    // ระดับน้ำแห้งเกณฑ์ (cm ติดลบ = ต่ำกว่าผิวดิน)
+  awdFloodDays: number;         // วันท่วมต่อรอบ
+  awdDryDays: number;           // วันแห้งต่อรอบ
+  // ผลผลิตสูงสุด kg/ha ประมาณการณ์
+  maxKgPerHa: number;
+}
+
+// ─── 3 พันธุ์ × สภาพแวดล้อม (อ้างอิง TGO Rice Cultivation Guide 2566) ───
+const VARIETY_PROFILES: Record<string, VarietyProfile> = {
+  // ข้าวหอมมะลิ 105 — ไวแสน นาชลประทาน 120 วัน
+  KDML105_IRRIGATED: {
+    variety: 'KDML105',
+    varietyName: 'ข้าวหอมมะลิ 105 (นาชลประทาน)',
+    photosensitive: false,
+    establishmentEndPct: 12.5,   // วัน 1-15  (12.5% ของ 120d)
+    vegetativeEndPct: 66.7,      // วัน 16-80 (AWD active ~55% ของฤดู)
+    reproductiveEndPct: 83.3,    // วัน 81-100
+    maturityEndPct: 91.7,        // วัน 101-110
+    awdFloodTargetCm: 5,
+    awdDryThresholdCm: -15,
+    awdFloodDays: 7,
+    awdDryDays: 5,
+    maxKgPerHa: 3500,
+  },
+  // ข้าวเจ้า ปทุมธานี 1 — ไวแสง นาน้ำฝน 105 วัน
+  PTT1_RAINFED: {
+    variety: 'PTT1',
+    varietyName: 'ข้าวเจ้า ปทุมธานี 1 (นาน้ำฝน)',
+    photosensitive: false,
+    establishmentEndPct: 14.3,   // วัน 1-15  (14.3% ของ 105d)
+    vegetativeEndPct: 76.2,      // วัน 16-80
+    reproductiveEndPct: 95.2,     // วัน 81-100
+    maturityEndPct: 100.0,       // วัน 101-105
+    awdFloodTargetCm: 5,
+    awdDryThresholdCm: -12,      // ดินเหนียว hold น้ำดี → ไม่ต้องแห้งลึก
+    awdFloodDays: 6,
+    awdDryDays: 4,
+    maxKgPerHa: 4500,
+  },
+  // ข้าวกข 43 (RD43) — ไวแสง นาแล้ง 95 วัน (early-maturing, drought-tolerant)
+  RD43_DRY: {
+    variety: 'RD43',
+    varietyName: 'ข้าวเจ้า กข 43 (นาแล้ง)',
+    photosensitive: false,
+    establishmentEndPct: 15.8,   // วัน 1-15  (15.8% ของ 95d)
+    vegetativeEndPct: 84.2,     // วัน 16-80
+    reproductiveEndPct: 105.3,   // วัน 81-100 → เกิน totalDays → cap at 100%
+    maturityEndPct: 100.0,      // 95 วันสุดท้าย
+    awdFloodTargetCm: 5,
+    awdDryThresholdCm: -10,      // นาแล้ง: น้ำน้อยอยู่แล้ว → ไม่แห้งลึก
+    awdFloodDays: 5,
+    awdDryDays: 3,
+    maxKgPerHa: 4200,
+  },
+};
+
 interface AWDField {
   id: string;
   name: string;
@@ -340,6 +424,8 @@ interface AWDField {
   totalDays: number;   // รวมฤดูกาล (วัน)
   // พิกัดขอบเขตพื้นที่ [[lat,lng],...]
   boundary: number[][];
+  // Variety profile key — index into VARIETY_PROFILES (พันธุ์ + สภาพแวดล้อม)
+  profileKey: string;
   // สภาพแวดล้อมพื้นฐาน
   baseTempMin: number;  // °C ต่ำสุดเฉลี่ย
   baseTempMax: number;  // °C สูงสุดเฉลี่ย
@@ -384,6 +470,7 @@ function createFields(): AWDField[] {
       waterSource: 'ชลประทาน เขื่อนลำตะคอง',
       riceVariety: 'ข้าวหอมมะลิ 105 (KDML105)',
       totalDays: 120,
+      profileKey: 'KDML105_IRRIGATED',
       boundary: [
         [14.985, 102.060], [14.985, 102.100],
         [14.960, 102.100], [14.960, 102.080],
@@ -393,7 +480,8 @@ function createFields(): AWDField[] {
       baseTempMax: 34,
       baseHumidity: 72,
       annualRainfallMm: 1100,
-      floodTargetCm: 10,
+      // AWD params สอดคล้องกับ KDML105_IRRIGATED profile
+      floodTargetCm: 5,
       dryThresholdCm: -15,
       floodDays: 7,
       dryDays: 5,
@@ -424,6 +512,7 @@ function createFields(): AWDField[] {
       waterSource: 'น้ำฝน + ระบบสูบน้ำสำรอง',
       riceVariety: 'ข้าวเจ้า ปทุมธานี 1 (PTT1)',
       totalDays: 105,
+      profileKey: 'PTT1_RAINFED',
       boundary: [
         [14.485, 100.105], [14.485, 100.140],
         [14.460, 100.140], [14.458, 100.120],
@@ -433,7 +522,8 @@ function createFields(): AWDField[] {
       baseTempMax: 35,
       baseHumidity: 78,
       annualRainfallMm: 1400,
-      floodTargetCm: 12,
+      // AWD params สอดคล้องกับ PTT1_RAINFED profile
+      floodTargetCm: 5,
       dryThresholdCm: -12,
       floodDays: 6,
       dryDays: 4,
@@ -464,6 +554,7 @@ function createFields(): AWDField[] {
       waterSource: 'ฝนตกเท่านั้น (Rainfed)',
       riceVariety: 'ข้าวกข 43 (RD43)',
       totalDays: 95,
+      profileKey: 'RD43_DRY',
       boundary: [
         [15.255, 104.835], [15.255, 104.870],
         [15.230, 104.870], [15.228, 104.850],
@@ -473,10 +564,11 @@ function createFields(): AWDField[] {
       baseTempMax: 36,
       baseHumidity: 65,
       annualRainfallMm: 800,
-      floodTargetCm: 8,
-      dryThresholdCm: -18,
+      // AWD params สอดคล้องกับ RD43_DRY profile
+      floodTargetCm: 5,
+      dryThresholdCm: -10,
       floodDays: 5,
-      dryDays: 6,
+      dryDays: 3,
       currentDAP: 0,
       currentHour: 6,
       waterLevelCm: 0,
@@ -496,17 +588,51 @@ function createFields(): AWDField[] {
   ];
 }
 
-// ─── Growth Stage ────────────────────────────────────────────────────
-function getGrowthStage(dap: number, totalDays: number): string {
-  const p = dap / totalDays;
-  if (p < 0.05) return 'GERMINATION';
-  if (p < 0.20) return 'TILLERING';
-  if (p < 0.40) return 'STEM_ELONGATION';
-  if (p < 0.55) return 'BOOTING';
-  if (p < 0.65) return 'FLOWERING';
-  if (p < 0.85) return 'GRAIN_FILLING';
-  if (p < 1.00) return 'MATURITY';
-  return 'HARVESTED';
+// ─── Growth Stage (ปรับตามพันธุ์ + สภาพแวดล้อม) ───────────────────────
+// สี่ช่วงหลักตาม TGO/T-VER Rice Cultivation Guideline:
+//   ESTABLISHMENT → VEGETATIVE → REPRODUCTIVE → MATURITY → HARVESTED
+// แต่ละพันธุ์มี threshold เป็นเปอร์เซ็นต์ของ totalDays (เก็บใน VARIETY_PROFILES)
+function getGrowthStage(dap: number, totalDays: number, profileKey?: string): string {
+  const profile = profileKey ? VARIETY_PROFILES[profileKey] : undefined;
+  const p = Math.min(dap / totalDays, 1.0);
+
+  // ใช้ profile threshold ถ้ามี, ไม่งั้นใช้ default (KDML105 สไตล์เดิม)
+  const est = profile?.establishmentEndPct ?? 12.5;
+  const veg = profile?.vegetativeEndPct ?? 66.7;
+  const rep = profile?.reproductiveEndPct ?? 83.3;
+  const mat = profile?.maturityEndPct ?? 91.7;
+
+  if (p >= 1.0) return 'HARVESTED';
+  if (p * 100 >= mat) return 'MATURITY';
+  if (p * 100 >= rep) return 'REPRODUCTIVE';
+  if (p * 100 >= veg) return 'REPRODUCTIVE'; // ป้องกัน gap ถ้า rep < veg
+  if (p * 100 >= est) return 'VEGETATIVE';
+  return 'ESTABLISHMENT';
+}
+
+/** ดึง VarietyProfile ของ field — fallback ไป default ถ้าไม่มี */
+function getFieldProfile(field: AWDField): VarietyProfile | undefined {
+  return VARIETY_PROFILES[field.profileKey];
+}
+
+/**
+ * ตรวจสอบว่า AWD ควรเปิดทำงานหรือไม่ในช่วง growth stage ปัจจุบัน
+ * ตามแนวทาง TGO/T-VER:
+ *   ESTABLISHMENT  → AWD ปิด (ขังน้ำ +3..+5 ซม. ให้ต้นก้าตั้งท้อง)
+ *   VEGETATIVE     → AWD เปิด (เปียกสลับแห้ง +5..-15 ซม. ลด CH4)
+ *   REPRODUCTIVE   → AWD ปิด (รักษาน้ำ ป้องกันช่องเกสรแห้ง ผลผลิตตก)
+ *   MATURITY       → AWD ปิด + force DRAIN (ระบายน้ำเพื่อเก็บเกี่ยว)
+ *   HARVESTED      → AWD ปิด
+ */
+function isAWDActive(field: AWDField): boolean {
+  const stage = getGrowthStage(field.currentDAP, field.totalDays, field.profileKey);
+  return stage === 'VEGETATIVE';
+}
+
+/** บอกว่า growth stage ปัจจุบันบังคับระบายน้ำหรือไม่ (ช่วงสุกแก่) */
+function isDrainForced(field: AWDField): boolean {
+  const stage = getGrowthStage(field.currentDAP, field.totalDays, field.profileKey);
+  return stage === 'MATURITY' || stage === 'HARVESTED';
 }
 
 // ─── Temperature Model ───────────────────────────────────────────────
@@ -548,28 +674,32 @@ function getRainfallMm(field: AWDField, dap: number, hour: number): number {
 // CH4 ปล่อยมากตอนน้ำท่วม ลดลงมากตอนแห้ง (AWD ช่วยลด CH4)
 // หน่วย: mg/m²/hr → แปลงเป็น kg CH₄/ha/day สำหรับ T-VER
 function getCH4Emission(field: AWDField, hour: number): number {
-  const stage = getGrowthStage(field.currentDAP, field.totalDays);
-  // อัตราปล่อยพื้นฐานตามช่วงเจริญเติบโต (mg/m²/hr)
-  // อ้างอิง: T-VER-P-AG-001 EF scaling by growth stage
+  const stage = getGrowthStage(field.currentDAP, field.totalDays, field.profileKey);
+  // อัตราปล่อยพื้นฐานตามช่วง growth stage (mg/m²/hr)
+  // อ้างอิง: T-VER-P-AG-001 EF scaling — สูงสุดในช่วง Vegetative และ Reproductive
   let baseFlux = 0;
   switch (stage) {
-    case 'GERMINATION': baseFlux = 2; break;
-    case 'TILLERING': baseFlux = 15; break;
-    case 'STEM_ELONGATION': baseFlux = 25; break;
-    case 'BOOTING': baseFlux = 30; break;
-    case 'FLOWERING': baseFlux = 28; break;
-    case 'GRAIN_FILLING': baseFlux = 18; break;
-    case 'MATURITY': baseFlux = 8; break;
-    case 'HARVESTED': baseFlux = 1; break;
+    case 'ESTABLISHMENT': baseFlux = 5; break;   // ตั้งตัว: ปานกลาง (น้ำขัง)
+    case 'VEGETATIVE':    baseFlux = 25; break;  // แตกกอ: สูง (ช่วงที่ AWD active)
+    case 'REPRODUCTIVE':  baseFlux = 30; break; // ออกดอก: สูงสุด (AWD ปิด → ใช้ baseline)
+    case 'MATURITY':      baseFlux = 8; break;   // สุกแก่: ลดลง
+    case 'HARVESTED':     baseFlux = 1; break;
   }
 
-  // ปัจจัยระดับน้ำ
+  // ปัจจัยระดับน้ำ — ถ้า AWD ไม่ active ใช้ baseline (FLOODED = 1.0)
+  const awdOn = isAWDActive(field);
   let waterFactor = 1.0;
-  switch (field.currentAWDPhase) {
-    case 'FLOODED': waterFactor = 1.0; break;
-    case 'DRAINING': waterFactor = 0.6; break;
-    case 'DRY': waterFactor = 0.15; break; // ลดมากตอนแห้ง
-    case 'REFLOODING': waterFactor = 0.7; break;
+  if (awdOn) {
+    switch (field.currentAWDPhase) {
+      case 'FLOODED': waterFactor = 1.0; break;
+      case 'DRAINING': waterFactor = 0.6; break;
+      case 'DRY': waterFactor = 0.15; break; // ลดมากตอนแห้ง
+      case 'REFLOODING': waterFactor = 0.7; break;
+    }
+  } else {
+    // AWD ปิด → ถือว่าท่วมตลอด (baseline continuous flooding)
+    // ยกเว้นช่วง MATURITY ที่ force DRAIN → waterFactor = 0.2
+    waterFactor = isDrainForced(field) ? 0.2 : 1.0;
   }
 
   // อุณหภูมิ affect: สูงขึ้น = CH4 เพิ่ม
@@ -586,26 +716,29 @@ function getCH4Emission(field: AWDField, hour: number): number {
 // ─── N2O Emission Model (T-VER-P-AG-001) ────────────────────────────
 // N2O เพิ่มตอน drain/reflood (nitrification/denitrification)
 function getN2OEmission(field: AWDField): number {
-  const stage = getGrowthStage(field.currentDAP, field.totalDays);
+  const stage = getGrowthStage(field.currentDAP, field.totalDays, field.profileKey);
   let baseFlux = 0;
   switch (stage) {
-    case 'GERMINATION': baseFlux = 0.3; break;
-    case 'TILLERING': baseFlux = 1.2; break;
-    case 'STEM_ELONGATION': baseFlux = 1.5; break;
-    case 'BOOTING': baseFlux = 1.8; break;
-    case 'FLOWERING': baseFlux = 1.5; break;
-    case 'GRAIN_FILLING': baseFlux = 1.0; break;
-    case 'MATURITY': baseFlux = 0.5; break;
-    case 'HARVESTED': baseFlux = 0.1; break;
+    case 'ESTABLISHMENT': baseFlux = 0.4; break;
+    case 'VEGETATIVE':    baseFlux = 1.5; break;  // สูงตอนแตกกอ (AWD active → drain/reflood cycles)
+    case 'REPRODUCTIVE':  baseFlux = 1.2; break;
+    case 'MATURITY':      baseFlux = 0.5; break;
+    case 'HARVESTED':     baseFlux = 0.1; break;
   }
 
-  // N2O spike ตอน drain และ reflood
+  // N2O spike ตอน drain/reflood — แต่ถ้า AWD ปิด ใช้ phase factor 1.0 (baseline)
+  const awdOn = isAWDActive(field);
   let phaseFactor = 1.0;
-  switch (field.currentAWDPhase) {
-    case 'FLOODED': phaseFactor = 0.5; break;
-    case 'DRAINING': phaseFactor = 2.5; break;  // spike!
-    case 'DRY': phaseFactor = 1.2; break;
-    case 'REFLOODING': phaseFactor = 2.8; break; // spike!
+  if (awdOn) {
+    switch (field.currentAWDPhase) {
+      case 'FLOODED': phaseFactor = 0.5; break;
+      case 'DRAINING': phaseFactor = 2.5; break;  // spike!
+      case 'DRY': phaseFactor = 1.2; break;
+      case 'REFLOODING': phaseFactor = 2.8; break; // spike!
+    }
+  } else {
+    // AWD ปิด → baseline (FLOODED) ตลอด ยกเว้น MATURITY ที่ force drain
+    phaseFactor = isDrainForced(field) ? 1.8 : 0.5; // drain ตอนสุกแก่ ก็เกิด N2O
   }
 
   // ดินทราย = N2O มากกว่า (leaching)
@@ -616,8 +749,15 @@ function getN2OEmission(field: AWDField): number {
 }
 
 // ─── Water Level Update ──────────────────────────────────────────────
+// Gated by growth stage (ปรับตามพันธุ์ + สภาพแวดล้อม):
+//   ESTABLISHMENT → hold FLOODED (+3..+5 cm), no AWD cycling
+//   VEGETATIVE    → run normal AWD cycling (FLOODED→DRAINING→DRY→REFLOODING)
+//   REPRODUCTIVE  → hold FLOODED, no AWD cycling (protect flowering)
+//   MATURITY      → force DRAIN to dry out field for harvest
 function updateWaterLevel(field: AWDField, rainfall: number): void {
   const hour = field.currentHour;
+  const awdOn = isAWDActive(field);
+  const drainForced = isDrainForced(field);
 
   // การระเหย (ET) ขึ้นกับอุณหภูมิและช่วงเวลา
   const temp = getTemperature(field, hour);
@@ -630,21 +770,24 @@ function updateWaterLevel(field: AWDField, rainfall: number): void {
 
   // น้ำเข้า: ฝน
   const inflowMm = rainfall;
-  // น้ำออก: ระเหย + ซึม
-  const outflowMm = hourETmm + percMmPerHr;
+  // น้ำออก: ระเหย + ซึม (เร่งซึมตอน force-drain ช่วงสุกแก่)
+  const drainBoost = drainForced ? 3.0 : 1.0;
+  const outflowMm = hourETmm + percMmPerHr * drainBoost;
 
   // แปลง mm → cm
   const waterChangeCm = (inflowMm - outflowMm) / 10;
 
-  // ชลประทาน: เติมน้ำตอน FLOODED/REFLOODING
+  // ชลประทาน: เติมน้ำตอน FLOODED/REFLOODING — เฉพาะเมื่อ AWD active หรือ establishment/flowering
   let irrigationCm = 0;
   if (field.waterSource.includes('ชลประทาน') &&
+      !drainForced &&
       (field.currentAWDPhase === 'FLOODED' || field.currentAWDPhase === 'REFLOODING') &&
       hour === 7) { // เติมน้ำตอนเช้า
     irrigationCm = 0.5; // cm/hr เมื่อเปิดประตูน้ำ
   }
   // สูบน้ำสำรอง (สุพรรณ)
   if (field.waterSource.includes('สำรอง') &&
+      !drainForced &&
       field.currentAWDPhase === 'FLOODED' && field.waterLevelCm < 3 &&
       hour === 8) {
     irrigationCm = 0.3;
@@ -652,51 +795,70 @@ function updateWaterLevel(field: AWDField, rainfall: number): void {
 
   field.waterLevelCm += waterChangeCm + irrigationCm;
 
-  // AWD Phase transitions
-  field.awdPhaseDayCounter += 1 / 24; // เพิ่ม 1 ชม. เป็นเศษของวัน
+  // AWD Phase transitions — gated by growth stage
+  if (drainForced) {
+    // MATURITY: force DRY (no FLOODED/REFLOODING cycles) → ระบายน้ำเพื่อเก็บเกี่ยว
+    field.currentAWDPhase = 'DRY';
+    field.awdPhaseDayCounter = 0;
+    // ปล่อยให้น้ำลดลงตามธรรมชาติ (drainBoost เร่งซึม)
+  } else if (!awdOn) {
+    // ESTABLISHMENT / REPRODUCTIVE: hold FLOODED, no cycling
+    field.currentAWDPhase = 'FLOODED';
+    field.awdPhaseDayCounter = 0;
+    // รักษาระดับน้ำ +3..+5 ซม.
+    if (field.waterLevelCm < 3) {
+      field.waterLevelCm = Math.max(field.waterLevelCm, 3);
+    }
+    if (field.waterLevelCm > field.floodTargetCm + 2) {
+      field.waterLevelCm = field.floodTargetCm + 2; // ไม่ให้ท่วมลึกเกินไป
+    }
+  } else {
+    // VEGETATIVE: normal AWD cycling
+    field.awdPhaseDayCounter += 1 / 24; // เพิ่ม 1 ชม. เป็นเศษของวัน
 
-  switch (field.currentAWDPhase) {
-    case 'FLOODED':
-      if (field.awdPhaseDayCounter >= field.floodDays) {
-        field.currentAWDPhase = 'DRAINING';
-        field.awdPhaseDayCounter = 0;
-      }
-      // รักษาระดับน้ำถ้าต่ำเกิน
-      if (field.waterLevelCm < 2 && field.waterSource.includes('ชลประทาน')) {
-        field.waterLevelCm = Math.max(field.waterLevelCm, 3);
-      }
-      break;
+    switch (field.currentAWDPhase) {
+      case 'FLOODED':
+        if (field.awdPhaseDayCounter >= field.floodDays) {
+          field.currentAWDPhase = 'DRAINING';
+          field.awdPhaseDayCounter = 0;
+        }
+        // รักษาระดับน้ำถ้าต่ำเกิน
+        if (field.waterLevelCm < 2 && field.waterSource.includes('ชลประทาน')) {
+          field.waterLevelCm = Math.max(field.waterLevelCm, 3);
+        }
+        break;
 
-    case 'DRAINING':
-      if (field.waterLevelCm <= field.dryThresholdCm) {
-        field.currentAWDPhase = 'DRY';
-        field.awdPhaseDayCounter = 0;
-      }
-      break;
+      case 'DRAINING':
+        if (field.waterLevelCm <= field.dryThresholdCm) {
+          field.currentAWDPhase = 'DRY';
+          field.awdPhaseDayCounter = 0;
+        }
+        break;
 
-    case 'DRY':
-      if (field.awdPhaseDayCounter >= field.dryDays) {
-        field.currentAWDPhase = 'REFLOODING';
-        field.awdPhaseDayCounter = 0;
-      }
-      // ฝนตกหนักอาจเติมน้ำให้เร็วขึ้น
-      if (rainfall > 5 && field.waterLevelCm > 0) {
-        field.currentAWDPhase = 'REFLOODING';
-        field.awdPhaseDayCounter = 0;
-      }
-      break;
+      case 'DRY':
+        if (field.awdPhaseDayCounter >= field.dryDays) {
+          field.currentAWDPhase = 'REFLOODING';
+          field.awdPhaseDayCounter = 0;
+        }
+        // ฝนตกหนักอาจเติมน้ำให้เร็วขึ้น
+        if (rainfall > 5 && field.waterLevelCm > 0) {
+          field.currentAWDPhase = 'REFLOODING';
+          field.awdPhaseDayCounter = 0;
+        }
+        break;
 
-    case 'REFLOODING':
-      if (field.waterLevelCm >= field.floodTargetCm) {
-        field.currentAWDPhase = 'FLOODED';
-        field.awdPhaseDayCounter = 0;
-        field.totalAWDCycles++;
-      }
-      // ชลประทานช่วยเติมน้ำ
-      if (field.waterSource.includes('ชลประทาน') && field.waterLevelCm < 5) {
-        field.waterLevelCm += 0.3;
-      }
-      break;
+      case 'REFLOODING':
+        if (field.waterLevelCm >= field.floodTargetCm) {
+          field.currentAWDPhase = 'FLOODED';
+          field.awdPhaseDayCounter = 0;
+          field.totalAWDCycles++;
+        }
+        // ชลประทานช่วยเติมน้ำ
+        if (field.waterSource.includes('ชลประทาน') && field.waterLevelCm < 5) {
+          field.waterLevelCm += 0.3;
+        }
+        break;
+    }
   }
 
   // Clamp water level
@@ -737,15 +899,14 @@ function estimateYieldKgPerHa(field: AWDField): number {
 // ─── CO2 from Soil Respiration ───────────────────────────────────────
 function getCO2Flux(field: AWDField, hour: number): number {
   const temp = getTemperature(field, hour);
-  const stage = getGrowthStage(field.currentDAP, field.totalDays);
+  const stage = getGrowthStage(field.currentDAP, field.totalDays, field.profileKey);
   let baseFlux = 50; // mg/m²/hr พื้นฐาน
   switch (stage) {
-    case 'TILLERING': baseFlux = 120; break;
-    case 'STEM_ELONGATION': baseFlux = 150; break;
-    case 'BOOTING': baseFlux = 160; break;
-    case 'FLOWERING': baseFlux = 140; break;
-    case 'GRAIN_FILLING': baseFlux = 110; break;
-    default: baseFlux = 60;
+    case 'ESTABLISHMENT': baseFlux = 60; break;
+    case 'VEGETATIVE':    baseFlux = 150; break;  // สูงสุดช่วงแตกกอ (root respiration peak)
+    case 'REPRODUCTIVE':  baseFlux = 140; break;
+    case 'MATURITY':      baseFlux = 80; break;
+    case 'HARVESTED':     baseFlux = 30; break;
   }
   // อุณหภูมิ
   const tempFactor = Math.exp(0.05 * (temp - 25));
@@ -807,7 +968,7 @@ function simTick() {
     const soilTempC = temp - 2 + Math.sin(field.currentDAP * 0.3) * 0.5;
 
     // Growth
-    const growthStage = getGrowthStage(field.currentDAP, field.totalDays);
+    const growthStage = getGrowthStage(field.currentDAP, field.totalDays, field.profileKey);
     const yieldKgPerHa = estimateYieldKgPerHa(field);
 
     // Accumulate — T-VER standard units
@@ -856,6 +1017,13 @@ function simTick() {
       simDAP: field.currentDAP,
       simHour: field.currentHour,
       growthStage,
+      // Variety + profile metadata (ปรับตามพันธุ์ + สภาพแวดล้อม)
+      profileKey: field.profileKey,
+      varietyName: getFieldProfile(field)?.varietyName ?? field.riceVariety,
+      photosensitive: getFieldProfile(field)?.photosensitive ?? false,
+      // AWD state — บอกว่า growth stage ปัจจุบันอนุญาตให้ AWD ทำงานหรือไม่
+      awdActive: isAWDActive(field),
+      drainForced: isDrainForced(field),
       awdPhase: field.currentAWDPhase,
       awdCycles: field.totalAWDCycles,
       // Water
@@ -949,13 +1117,26 @@ function getStatus() {
       waterSource: f.waterSource,
       riceVariety: f.riceVariety,
       totalDays: f.totalDays,
+      profileKey: f.profileKey,
+      varietyName: getFieldProfile(f)?.varietyName ?? f.riceVariety,
+      photosensitive: getFieldProfile(f)?.photosensitive ?? false,
+      // growth stage thresholds (เปอร์เซ็นต์ของ totalDays) ส่งไปให้ frontend แสดง
+      stageThresholds: getFieldProfile(f) ? {
+        establishmentEndPct: getFieldProfile(f)!.establishmentEndPct,
+        vegetativeEndPct: getFieldProfile(f)!.vegetativeEndPct,
+        reproductiveEndPct: getFieldProfile(f)!.reproductiveEndPct,
+        maturityEndPct: getFieldProfile(f)!.maturityEndPct,
+      } : undefined,
       boundary: f.boundary,
       currentDAP: f.currentDAP,
       currentHour: f.currentHour,
       waterLevelCm: Math.round(f.waterLevelCm * 10) / 10,
       currentAWDPhase: f.currentAWDPhase,
+      // AWD state flags (ปรับตาม growth stage)
+      awdActive: isAWDActive(f),
+      drainForced: isDrainForced(f),
       awdCycles: f.totalAWDCycles,
-      growthStage: getGrowthStage(f.currentDAP, f.totalDays),
+      growthStage: getGrowthStage(f.currentDAP, f.totalDays, f.profileKey),
       cumulativeCH4kg: Math.round(f.totalCH4kg * 1000) / 1000,
       cumulativeN2Okg: Math.round(f.totalN2Okg * 1000) / 1000,
       cumulativeCH4tCO2e: Math.round(f.totalCH4tCO2e * 10000) / 10000,
