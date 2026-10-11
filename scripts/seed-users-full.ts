@@ -4,9 +4,17 @@
  * different statuses, and varied last-login timestamps.
  *
  * Usage: npx tsx scripts/seed-users-full.ts
+ *   (tsx used because bun can't load @prisma/adapter-better-sqlite3 native module)
  */
 import bcrypt from 'bcryptjs';
-import { db } from '../src/lib/db';
+import { PrismaClient } from '../src/generated/prisma/client';
+import { PrismaBetterSqlite3 } from '@prisma/adapter-better-sqlite3';
+
+// Create PrismaClient directly (avoids '@/...' alias that tsx can't resolve)
+const adapter = new PrismaBetterSqlite3({
+  url: process.env.DATABASE_URL || 'file:./db/custom.db',
+});
+const db = new PrismaClient({ adapter });
 
 interface SeedUser {
   username: string;

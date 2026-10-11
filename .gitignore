@@ -52,9 +52,9 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# database
-/db/*.db
-/db/*.db-journal
+# database (SQLite binary files — created by db:push, do NOT commit)
+/db/
+db/
 
 # prisma generated client
 /src/generated/

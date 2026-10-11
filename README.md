@@ -75,38 +75,69 @@ The dMRV Platform streamlines the entire carbon credit lifecycle — from projec
 ### Installation
 
 ```bash
-# Clone the repository
-git clone https://github.com/<your-org>/dmrv-platform.git
+# 1. Clone the repository
+git clone https://github.com/sungkomp-ai/dmrv-platform.git
 cd dmrv-platform
 
-# Install dependencies
+# 2. Install dependencies
 bun install
 
-# Set up environment
+# 3. Set up environment
 cp .env.example .env
+#    → Edit .env and set NEXTAUTH_SECRET to a random string
+#    → (generate one with: openssl rand -base64 32)
 
-# Initialize the database
+# 4. Initialize the database (creates db/custom.db + pushes schema)
 bun run db:push
 
-# Start the development server
+# 5. Seed demo users + sample data (25 users, 6 projects, 26 plots, etc.)
+bun run db:seed
+
+# 6. Start the development server
 bun run dev
 ```
 
 The app will be available at `http://localhost:3000`.
 
+### Default Login Credentials
+
+After running `bun run db:seed`, you can log in with any of these accounts:
+
+| Username | Password | Role |
+|----------|----------|------|
+| `admin` | `Admin@123` | System Administrator |
+| `validator` | `Validator@123` | VVB Validator |
+| `developer` | `Developer@123` | Project Developer |
+| `buyer` | `Buyer@123` | Carbon Buyer |
+| `auditor` | `Auditor@123` | Compliance Auditor |
+| `viewer` | `Viewer@123` | Public Viewer |
+
+### Database Setup Notes
+
+- **SQLite** is used (file-based, no server needed) — DB file at `db/custom.db`
+- **Prisma 7** generates the client to `src/generated/prisma/` (gitignored, created by `db:push`)
+- The `db:seed` script uses `npx tsx` because Bun cannot load `@prisma/adapter-better-sqlite3` native module
+- To reset the database: `bun run db:reset` (⚠️ destructive — wipes all data)
+
 ### Mini-Services (Simulators)
 
-Each simulator runs as an independent Bun service:
+Each simulator runs as an independent Bun service with socket.io for real-time data streaming:
 
 ```bash
-# Pyrolysis Simulator (port 3999)
+# Pyrolysis Simulator (port 3031) — Biochar production
 cd mini-services/pyrolysis-simulator && bun install && bun --hot index.ts
 
-# LiDAR Simulator (port 3998)
+# AWD Rice Simulator (port 3032) — Rice cultivation with 4-stage growth model
+cd mini-services/awd-simulator && bun install && bun --hot index.ts
+
+# LiDAR Simulator (port 3033) — Forest biomass monitoring
 cd mini-services/lidar-simulator && bun install && bun --hot index.ts
 
-# AWD Simulator (port 3032)
-cd mini-services/awd-simulator && bun install && bun --hot index.ts
+# Bio Simulator (port 3034) — Microbial carbon cycling
+cd mini-services/bio-simulator && bun install && bun --hot index.ts
+
+# IoT Gateway (port 3035) — Edge device management
+cd mini-services/iot-gateway && bun install && bun index.ts
 ```
 
 ---
@@ -261,10 +292,11 @@ The Prisma schema includes 20+ models organized into:
 | `bun run build` | Build for production (standalone output) |
 | `bun run start` | Start production server |
 | `bun run lint` | Run ESLint |
-| `bun run db:push` | Push schema changes to database |
-| `bun run db:generate` | Generate Prisma client |
-| `bun run db:migrate` | Run database migrations |
-| `bun run db:reset` | Reset database |
+| `bun run db:push` | Create SQLite DB + push Prisma schema |
+| `bun run db:generate` | Generate Prisma client (to `src/generated/prisma/`) |
+| `bun run db:seed` | Seed 25 demo users + sample data (via `npx tsx`) |
+| `bun run db:reset` | ⚠️ Reset database (destructive — wipes all data) |
+| `bun run db:studio` | Open Prisma Studio GUI at http://localhost:5555 |
 
 ---
 
